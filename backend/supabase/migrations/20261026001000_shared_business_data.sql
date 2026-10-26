@@ -148,6 +148,9 @@ create policy cloud_expenses_delete_authorized on public.cloud_expenses
   using (public.has_business_permission(business_id, 'expenses.delete'));
 
 -- Do not allow clients to change stock balances or create sales/items/movements directly.
+-- Revoke table-level grants first; column-level grants below are intentional allowlists.
+revoke insert, update, delete on public.cloud_products from anon, authenticated;
+revoke insert, update, delete on public.cloud_expenses from anon, authenticated;
 revoke insert, update, delete on public.cloud_inventory_movements from anon, authenticated;
 revoke insert, update, delete on public.cloud_sales from anon, authenticated;
 revoke insert, update, delete on public.cloud_sale_items from anon, authenticated;
