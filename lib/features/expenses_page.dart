@@ -49,7 +49,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
           TextFormField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(labelText: 'القيمة بالجنيه *'),
             validator: (v) { final n = v == null ? null : _parse(v); return n == null || n <= 0 ? 'أدخل قيمة أكبر من صفر' : null; }),
-        ]))),
+        ])))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           FilledButton(onPressed: () { if (form.currentState!.validate()) Navigator.pop(ctx, {
