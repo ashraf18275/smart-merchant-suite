@@ -267,11 +267,11 @@ class _DataTransferPageState extends State<DataTransferPage> {
         throw StateError('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
-        final originalCount = Sqflite.firstIntValue(
+        final originalCount = sqflite.Sqflite.firstIntValue(
               await widget.database.rawQuery('SELECT COUNT(*) FROM ${spec.table}'),
             ) ??
             0;
-        final backupCount = Sqflite.firstIntValue(
+        final backupCount = sqflite.Sqflite.firstIntValue(
               await opened.rawQuery('SELECT COUNT(*) FROM ${spec.table}'),
             ) ??
             0;
