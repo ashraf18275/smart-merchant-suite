@@ -318,6 +318,8 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (verificationDb != null) {
         try {
           await verificationDb.close();
+        } catch (_) {
+          // Preserve the original backup error and continue best-effort cleanup.
         } finally {
           verificationDb = null;
         }
