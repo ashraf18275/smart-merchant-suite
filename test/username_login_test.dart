@@ -23,7 +23,7 @@ void main() {
     test('validates password length before sending request', () {
       expect(isValidNewPassword('short'), isFalse);
       expect(isValidNewPassword('1234567890'), isTrue);
-      expect(isValidNewPassword('x' * 129), isFalse);
+      expect(isValidNewPassword(List.filled(129, 'x').join()), isFalse);
     });
   });
 }
