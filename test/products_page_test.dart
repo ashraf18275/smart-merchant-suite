@@ -4,6 +4,16 @@ import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/features/products_page.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+Future<void> pumpDatabaseResult(WidgetTester tester) async {
+  // SQLite FFI completes work on a real asynchronous isolate; let it run
+  // outside the widget test's fake clock before pumping the resulting state.
+  await tester.pump();
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 100)),
+  );
+  await tester.pump();
+}
+
 void main() {
   late Database database;
   late ProductRepository repository;
@@ -30,7 +40,7 @@ void main() {
         child: ProductsPage(repository: repository),
       ),
     ));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     expect(find.text('المنتجات والمخزون'), findsOneWidget);
     expect(find.text('لا توجد منتجات بعد. اضغط «إضافة منتج» للبدء.'), findsOneWidget);
@@ -43,7 +53,7 @@ void main() {
         child: ProductsPage(repository: repository),
       ),
     ));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     await tester.tap(find.text('إضافة منتج'));
     await tester.pumpAndSettle();
@@ -56,7 +66,7 @@ void main() {
     await tester.enterText(fields.at(3), '20.00');
     await tester.enterText(fields.at(4), '3');
     await tester.tap(find.text('حفظ المنتج'));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     expect(find.text('كابل USB'), findsOneWidget);
     expect(find.textContaining('12.50 ج.م'), findsOneWidget);
@@ -84,10 +94,10 @@ void main() {
         child: ProductsPage(repository: repository),
       ),
     ));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     await tester.enterText(find.byType(TextField), 'USB');
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     expect(find.text('كابل USB'), findsOneWidget);
     expect(find.text('شاحن سريع'), findsNothing);
@@ -107,7 +117,7 @@ void main() {
         child: ProductsPage(repository: repository),
       ),
     ));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     await tester.tap(find.byTooltip('تعديل المخزون'));
     await tester.pumpAndSettle();
@@ -117,7 +127,7 @@ void main() {
     await tester.enterText(fields.at(0), '-1');
     await tester.enterText(fields.at(1), 'تصحيح جرد');
     await tester.tap(find.text('تسجيل الحركة'));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     expect(find.text('2'), findsOneWidget);
     final movements = await database.query('inventory_movements');
