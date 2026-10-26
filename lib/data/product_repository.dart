@@ -62,10 +62,12 @@ class Product {
   final bool isActive;
   final DateTime? createdAt;
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap() {
+    final normalizedSku = sku?.trim();
+    return {
         if (id != null) 'id': id,
         'name': name.trim(),
-        'sku': (sku == null || sku.trim().isEmpty) ? null : sku.trim(),
+        'sku': normalizedSku == null || normalizedSku.isEmpty ? null : normalizedSku,
         'cost_minor': costMinor,
         'price_minor': priceMinor,
         'stock_quantity': stockQuantity,
@@ -73,6 +75,7 @@ class Product {
         'created_at':
             (createdAt ?? DateTime.now()).toUtc().toIso8601String(),
       };
+  }
 
   factory Product.fromMap(Map<String, Object?> map) => Product(
         id: map['id']! as int,
