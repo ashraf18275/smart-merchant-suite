@@ -92,4 +92,38 @@ void main() {
     expect(find.text('كابل USB'), findsOneWidget);
     expect(find.text('شاحن سريع'), findsNothing);
   });
+  testWidgets('records stock adjustments and refreshes the quantity',
+      (tester) async {
+    await repository.add(const Product(
+      name: 'شاحن',
+      costMinor: 500,
+      priceMinor: 900,
+      stockQuantity: 3,
+    ));
+
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: ProductsPage(repository: repository),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('تعديل المخزون'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
+    expect(fields, findsNWidgets(2));
+    await tester.enterText(fields.at(0), '-1');
+    await tester.enterText(fields.at(1), 'تصحيح جرد');
+    await tester.tap(find.text('تسجيل الحركة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2'), findsOneWidget);
+    final movements = await database.query('inventory_movements');
+    expect(movements, hasLength(1));
+    expect(movements.single['quantity_delta'], -1);
+    expect(movements.single['reason'], 'تصحيح جرد');
+  });
+
 }
