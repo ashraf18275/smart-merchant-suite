@@ -203,6 +203,35 @@ void main() {
     expect((await expenses.all()).single.description, 'إيجار المحل');
   });
 
+  test('filters profit summary and expenses by inclusive calendar dates', () async {
+    final id = await products.add(const Product(
+      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
+    ));
+    await SalesRepository(database).createSingleProductSale(
+      productId: id, quantity: 2, paidMinor: 1800,
+    );
+    await database.update('sales', {'created_at': '2025-01-10T12:00:00.000Z'});
+    await database.update('sale_items', {'quantity': 2});
+    final expenses = ExpenseRepository(database);
+    await expenses.add(description: 'مصروف داخل الفترة', category: 'أخرى', amountMinor: 300);
+    await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700);
+    await database.update('expenses', {'created_at': '2025-01-10T09:00:00.000Z'},
+      where: 'description = ?', whereArgs: ['مصروف داخل الفترة']);
+    await database.update('expenses', {'created_at': '2025-01-11T09:00:00.000Z'},
+      where: 'description = ?', whereArgs: ['مصروف خارج الفترة']);
+
+    final from = DateTime(2025, 1, 10);
+    final to = DateTime(2025, 1, 10);
+    final summary = await expenses.summary(from: from, to: to);
+    expect(summary.salesMinor, 1800);
+    expect(summary.costOfGoodsMinor, 1000);
+    expect(summary.expensesMinor, 300);
+    expect(summary.netProfitMinor, 500);
+    final rows = await expenses.all(from: from, to: to);
+    expect(rows, hasLength(1));
+    expect(rows.single.description, 'مصروف داخل الفترة');
+  });
+
   test('rejects empty product names', () async {
     await expectLater(
       products.add(const Product(
