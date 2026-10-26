@@ -5,15 +5,11 @@ import 'package:smart_merchant_suite/features/products_page.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 Future<void> pumpDatabaseResult(WidgetTester tester) async {
-  // SQLite FFI completes work on a real asynchronous isolate; let it run
-  // outside the widget test's fake clock before pumping the resulting state.
+  // Use the no-isolate SQLite FFI backend below so database futures can
+  // complete deterministically inside Flutter's widget-test fake async zone.
   await tester.pump();
-  await tester.runAsync(
-    () => Future<void>.delayed(const Duration(milliseconds: 100)),
-  );
+  await tester.pump(const Duration(milliseconds: 100));
   await tester.pump();
-  // Advance dialog/route animations without waiting on the infinite loading spinner.
-  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -25,7 +21,7 @@ void main() {
   });
 
   setUp(() async {
-    database = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    database = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(database);
     repository = ProductRepository(database);
   });
