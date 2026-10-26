@@ -5,6 +5,7 @@ import 'data/product_repository.dart';
 import 'features/products_page.dart';
 import 'features/sales_page.dart';
 import 'features/expenses_page.dart';
+import 'features/data_transfer_page.dart';
 
 void main() {
   runApp(const SmartMerchantApp());
@@ -59,7 +60,7 @@ class HomeDashboard extends StatelessWidget {
     (
       icon: Icons.backup_outlined,
       title: 'النسخ الاحتياطي والمزامنة',
-      subtitle: 'حماية البيانات والعمل بين الأجهزة — قيد التطوير',
+      subtitle: 'تصدير CSV وإنشاء نسخة احتياطية محلية',
     ),
   ];
 
@@ -94,7 +95,7 @@ class HomeDashboard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'تتوفر إدارة أولية للمنتجات والمخزون. المبيعات والفواتير والمصروفات والتقارير ما زالت قيد التطوير.',
+                        'تتوفر إدارة المنتجات والمخزون والمبيعات والمصروفات والتقارير، مع أدوات لتصدير البيانات وإنشاء نسخة احتياطية.',
                       ),
                       const SizedBox(height: 12),
                       const Chip(
@@ -178,6 +179,21 @@ class HomeDashboard extends StatelessWidget {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('تعذر فتح قاعدة البيانات المحلية: $error')),
+                          );
+                        }
+                      } : index == 3 ? () async {
+                        try {
+                          final database = await openLocalDatabase();
+                          if (!context.mounted) { await database.close(); return; }
+                          try {
+                            await Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => DataTransferPage(database: database),
+                            ));
+                          } finally { await database.close(); }
+                        } catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('تعذر فتح أدوات تصدير البيانات: $error')),
                           );
                         }
                       } : null,
