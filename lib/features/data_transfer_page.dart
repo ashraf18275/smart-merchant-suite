@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common/sqlite_api.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -106,10 +108,15 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final directory = await getTemporaryDirectory();
       final candidate = File(p.join(directory.path, 'restore_candidate_' + _timestamp() + '.db'));
       await candidate.writeAsBytes(bytes, flush: true);
-      final opened = await databaseFactoryFfi.openDatabase(
-        candidate.path,
-        options: OpenDatabaseOptions(readOnly: true),
-      );
+      final isMobile = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS);
+      final opened = isMobile
+          ? await sqflite.openDatabase(candidate.path, readOnly: true)
+          : await databaseFactoryFfi.openDatabase(
+              candidate.path,
+              options: OpenDatabaseOptions(readOnly: true),
+            );
       source = opened;
 
       final integrity = await opened.rawQuery('PRAGMA integrity_check');
