@@ -76,6 +76,27 @@ create table if not exists public.cloud_expenses (
 create index if not exists cloud_expenses_business_created_idx
   on public.cloud_expenses(business_id, created_at desc);
 
+create or replace function public.set_cloud_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+begin
+  new.updated_at = now();
+  return new;
+end;
+$;
+
+drop trigger if exists cloud_products_updated_at on public.cloud_products;
+create trigger cloud_products_updated_at
+  before update on public.cloud_products
+  for each row execute function public.set_cloud_updated_at();
+
+drop trigger if exists cloud_expenses_updated_at on public.cloud_expenses;
+create trigger cloud_expenses_updated_at
+  before update on public.cloud_expenses
+  for each row execute function public.set_cloud_updated_at();
+
 alter table public.cloud_products enable row level security;
 alter table public.cloud_inventory_movements enable row level security;
 alter table public.cloud_sales enable row level security;
