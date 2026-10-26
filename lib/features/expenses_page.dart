@@ -157,7 +157,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
         if (_items.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('لا توجد مصروفات في الفترة المحددة.')),
         ..._items.map((e) => Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.receipt_outlined)),
           title: Text(e.description), subtitle: Text('${e.category} • ${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')}'),
-          trailing: Text(_money(e.amountMinor)))),
+          trailing: Text(_money(e.amountMinor))))),
       ]),
   );
 }
