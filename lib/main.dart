@@ -128,10 +128,17 @@ class HomeDashboard extends StatelessWidget {
                       onTap: index == 0 ? () async {
                         try {
                           final database = await openLocalDatabase();
-                          if (!context.mounted) return;
-                          await Navigator.of(context).push(MaterialPageRoute<void>(
-                            builder: (_) => ProductsPage(repository: ProductRepository(database)),
-                          ));
+                          if (!context.mounted) {
+                            await database.close();
+                            return;
+                          }
+                          try {
+                            await Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => ProductsPage(repository: ProductRepository(database)),
+                            ));
+                          } finally {
+                            await database.close();
+                          }
                         } catch (error) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
