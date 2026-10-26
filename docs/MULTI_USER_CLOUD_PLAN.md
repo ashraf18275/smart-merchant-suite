@@ -1,0 +1,45 @@
+# Multi-user and cloud synchronization implementation plan
+
+## Accepted requirements
+- Unlimited user accounts per business; no fixed job roles.
+- Each user has an independent login and a permission checklist managed by the business owner.
+- Enforce authorization in the data/API layer, not only by hiding UI controls.
+- Multiple computers and phones use one shared source of truth concurrently.
+- The owner can view current business activity remotely.
+- Preserve the existing Flutter/SQLite work and do not merge changes into `main` without explicit approval.
+- Prefer a low-cost setup, but do not promise a free tier or production readiness before checking current limits and testing.
+
+## Architecture
+- Flutter remains the Android/desktop client.
+- Supabase Auth provides identity; PostgreSQL stores shared business data; Row Level Security (RLS) protects tenant data.
+- The app must never contain a Supabase service-role key. Privileged user creation/invitations must be implemented through a server-side Edge Function.
+- Existing SQLite remains local storage/cache during transition. It is not yet synchronized by this migration.
+- Business operations need server-side transactions and idempotency keys before concurrent sales/inventory are production-safe.
+- Offline-first operation is a target: queued writes should be synchronized after reconnection, with conflict handling and duplicate-sale prevention. This is not implemented yet.
+
+## Permission keys
+The initial permission catalogue is deliberately granular and editable per user:
+- dashboard.view
+- products.view/create/edit/archive
+- inventory.view/adjust/count
+- sales.view/create/cancel/return
+- expenses.view/create/edit/delete
+- reports.view, reports.profit.view
+- data.export, data.backup
+- users.view/create/edit/deactivate
+- settings.view/edit
+- audit.view
+
+The business owner is the only account that can administer membership and permissions. Owner access is protected from accidental deactivation or permission lockout. Other members have only explicitly granted permissions.
+
+## Delivery stages
+1. Database access-control foundation and permission catalogue.
+2. Secure owner onboarding and server-side member invitation/creation.
+3. Flutter sign-in, session handling, user list, user editor, and permission checklist.
+4. Move business entities to tenant-scoped cloud tables and enforce RLS for every table.
+5. Implement realtime updates, server transactions, idempotent writes, and concurrency tests.
+6. Add offline outbox, retry policy, conflict resolution, and reconnection tests.
+7. Add owner remote dashboard, audit history, deployment configuration, and device testing.
+
+## Current status
+The first SQL access-control migration has been added on the feature branch. It establishes businesses, members, per-member permissions, audit-event storage, helper functions, and initial RLS policies. It does **not** yet create accounts, connect the Flutter app, migrate SQLite business records, or enable multi-device synchronization. SQL must be applied to a test Supabase project and security-reviewed before production use.
