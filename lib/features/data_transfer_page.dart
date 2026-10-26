@@ -211,31 +211,93 @@ class _DataTransferPageState extends State<DataTransferPage> {
   Future<void> _createBackup() async {
     if (_working) return;
     setState(() => _working = true);
+    File? backup;
+    Database? verificationDb;
     try {
       final integrity = await widget.database.rawQuery('PRAGMA integrity_check');
       if (integrity.isEmpty || integrity.first.values.first != 'ok') {
         throw StateError('فشل فحص سلامة قاعدة البيانات؛ لم يتم إنشاء النسخة.');
       }
-      // Flush SQLite's write-ahead log before copying the database file.
-      await widget.database.rawQuery('PRAGMA wal_checkpoint(FULL)');
-      final source = File(widget.database.path);
-      if (!await source.exists()) {
+
+      final versionRows = await widget.database.rawQuery('PRAGMA user_version');
+      final schemaVersion = versionRows.isEmpty
+          ? 0
+          : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
+      if (schemaVersion != 3) {
+        throw StateError('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
+      }
+
+      // Require SQLite to finish checkpointing before copying the database file.
+      final checkpoint = await widget.database.rawQuery('PRAGMA wal_checkpoint(FULL)');
+      if (checkpoint.isNotEmpty) {
+        final busy = (checkpoint.first['busy'] as num?)?.toInt() ?? 0;
+        if (busy != 0) {
+          throw StateError('قاعدة البيانات مشغولة؛ أغلق العمليات الجارية ثم أعد المحاولة.');
+        }
+      }
+
+      final sourceFile = File(widget.database.path);
+      if (!await sourceFile.exists()) {
         throw StateError('لم يتم العثور على ملف قاعدة البيانات.');
       }
       final directory = await getTemporaryDirectory();
-      final backup = File(p.join(directory.path, 'smart_merchant_backup_${_timestamp()}.db'));
-      await source.copy(backup.path);
-      if (!await backup.exists() || await backup.length() == 0) {
-        throw StateError('لم يتم إنشاء ملف النسخة الاحتياطية بصورة سليمة.');
+      backup = File(p.join(directory.path, 'smart_merchant_backup_${_timestamp()}.db'));
+      await sourceFile.copy(backup.path);
+
+      // Validate the actual copied file, not just the live database.
+      final isMobile = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS);
+      final opened = isMobile
+          ? await sqflite.openDatabase(backup.path, readOnly: true)
+          : await databaseFactoryFfi.openDatabase(
+              backup.path,
+              options: OpenDatabaseOptions(readOnly: true),
+            );
+      verificationDb = opened;
+      final backupIntegrity = await opened.rawQuery('PRAGMA integrity_check');
+      if (backupIntegrity.isEmpty || backupIntegrity.first.values.first != 'ok') {
+        throw StateError('فشل فحص سلامة ملف النسخة الاحتياطية بعد إنشائه.');
       }
+      final backupVersionRows = await opened.rawQuery('PRAGMA user_version');
+      final backupVersion = backupVersionRows.isEmpty
+          ? 0
+          : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
+      if (backupVersion != 3) {
+        throw StateError('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
+      }
+      for (final spec in _tables) {
+        final originalCount = Sqflite.firstIntValue(
+              await widget.database.rawQuery('SELECT COUNT(*) FROM ${spec.table}'),
+            ) ??
+            0;
+        final backupCount = Sqflite.firstIntValue(
+              await opened.rawQuery('SELECT COUNT(*) FROM ${spec.table}'),
+            ) ??
+            0;
+        if (originalCount != backupCount) {
+          throw StateError('لم تتطابق سجلات جدول ${spec.label} في النسخة الاحتياطية.');
+        }
+      }
+      final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
+      if (foreignKeyErrors.isNotEmpty) {
+        throw StateError('ملف النسخة الاحتياطية يحتوي على روابط غير سليمة.');
+      }
+      await opened.close();
+      verificationDb = null;
+
       if (!mounted) return;
       await Share.shareXFiles(
         [XFile(backup.path, mimeType: 'application/octet-stream')],
         text: 'نسخة احتياطية من عدة التاجر الذكي. احتفظ بها في مكان آمن.',
       );
     } catch (error) {
-      _showError('تعذر إنشاء النسخة الاحتياطية: $error');
+      if (backup != null && await backup.exists()) {
+        await backup.delete();
+      }
+      _showError('تعذر إنشاء نسخة احتياطية موثوقة: $error');
     } finally {
+      if (verificationDb != null) await verificationDb.close();
       if (mounted) setState(() => _working = false);
     }
   }
