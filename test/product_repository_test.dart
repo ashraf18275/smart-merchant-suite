@@ -189,6 +189,54 @@ void main() {
     expect(await database.query('inventory_movements'), isEmpty);
   });
 
+  test('creates multi-item invoice and deducts stock for every line', () async {
+    final charger = await products.add(const Product(
+      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
+    ));
+    final headset = await products.add(const Product(
+      name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 3,
+    ));
+
+    final sales = SalesRepository(database);
+    final id = await sales.createSale(
+      quantities: {charger: 2, headset: 1},
+      paidMinor: 3000,
+    );
+
+    expect((await products.all()).firstWhere((p) => p.id == charger).stockQuantity, 3);
+    expect((await products.all()).firstWhere((p) => p.id == headset).stockQuantity, 2);
+    final invoice = (await sales.all()).single;
+    expect(invoice.id, id);
+    expect(invoice.totalMinor, 3300);
+    expect(invoice.paidMinor, 3000);
+    expect(invoice.remainingMinor, 300);
+    expect(invoice.itemCount, 2);
+    expect(await database.query('sale_items'), hasLength(2));
+    expect(await database.query('inventory_movements'), hasLength(2));
+  });
+
+  test('multi-item sale rolls back all changes if any line has insufficient stock', () async {
+    final first = await products.add(const Product(
+      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
+    ));
+    final second = await products.add(const Product(
+      name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 1,
+    ));
+
+    await expectLater(
+      SalesRepository(database).createSale(
+        quantities: {first: 2, second: 2},
+        paidMinor: 0,
+      ),
+      throwsA(isA<StateError>()),
+    );
+    expect(await database.query('sales'), isEmpty);
+    expect(await database.query('sale_items'), isEmpty);
+    expect(await database.query('inventory_movements'), isEmpty);
+    expect((await products.all()).firstWhere((p) => p.id == first).stockQuantity, 5);
+    expect((await products.all()).firstWhere((p) => p.id == second).stockQuantity, 1);
+  });
+
   test('records expenses and calculates all-time profit summary', () async {
     final id = await products.add(const Product(name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5));
     await SalesRepository(database).createSingleProductSale(productId: id, quantity: 2, paidMinor: 1800);
