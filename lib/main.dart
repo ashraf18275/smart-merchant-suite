@@ -112,7 +112,8 @@ class HomeDashboard extends StatelessWidget {
                   crossAxisCount: columns,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  mainAxisExtent: 132,
+                  // Give Arabic titles and subtitles enough room on narrow screens.
+                  mainAxisExtent: constraints.maxWidth < 560 ? 180 : 164,
                 ),
                 itemCount: modules.length,
                 itemBuilder: (context, index) {
