@@ -105,6 +105,39 @@ void main() {
     expect(await database.query('inventory_movements'), isEmpty);
   });
 
+  test('deactivates product without deleting stock history', () async {
+    final id = await products.add(const Product(
+      name: 'شاحن',
+      costMinor: 500,
+      priceMinor: 900,
+      stockQuantity: 4,
+    ));
+    await products.changeStock(
+      productId: id,
+      quantityDelta: 2,
+      reason: 'توريد',
+    );
+
+    await products.setActive(productId: id, isActive: false);
+
+    expect(await products.all(), isEmpty);
+    final archived = (await products.all(includeInactive: true)).single;
+    expect(archived.isActive, isFalse);
+    expect(archived.stockQuantity, 6);
+    expect(await database.query('inventory_movements'), hasLength(1));
+    await expectLater(
+      products.changeStock(
+        productId: id,
+        quantityDelta: 1,
+        reason: 'محاولة بعد الإيقاف',
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    await products.setActive(productId: id, isActive: true);
+    expect((await products.all()).single.isActive, isTrue);
+  });
+
   test('rejects empty product names', () async {
     await expectLater(
       products.add(const Product(
