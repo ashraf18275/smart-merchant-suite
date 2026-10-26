@@ -334,8 +334,11 @@ class _DataTransferPageState extends State<DataTransferPage> {
       }
       _showError('تعذر إنشاء نسخة احتياطية موثوقة: $error');
     } finally {
-      if (verificationDb != null) await verificationDb.close();
-      if (mounted) setState(() => _working = false);
+      try {
+        if (verificationDb != null) await verificationDb.close();
+      } finally {
+        if (mounted) setState(() => _working = false);
+      }
     }
   }
 
