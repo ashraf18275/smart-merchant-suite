@@ -65,7 +65,7 @@ class Product {
   Map<String, Object?> toMap() => {
         if (id != null) 'id': id,
         'name': name.trim(),
-        'sku': sku?.trim().isEmpty ?? true ? null : sku!.trim(),
+        'sku': (sku == null || sku.trim().isEmpty) ? null : sku.trim(),
         'cost_minor': costMinor,
         'price_minor': priceMinor,
         'stock_quantity': stockQuantity,
