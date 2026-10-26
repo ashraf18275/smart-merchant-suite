@@ -97,6 +97,10 @@ class _ProductsPageState extends State<ProductsPage> {
       ),
     );
 
+    // showDialog completes when the route is popped, while its reverse
+    // transition can still keep TextFormFields attached to these controllers.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+
     if (ok == true) {
       try {
         await widget.repository.add(Product(
@@ -138,6 +142,8 @@ class _ProductsPageState extends State<ProductsPage> {
         ],
       ),
     );
+    // Keep controllers alive until the dialog's reverse transition finishes.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     if (ok == true) {
       try {
         await widget.repository.changeStock(productId: product.id!, quantityDelta: int.parse(delta.text.trim()), reason: reason.text.trim());
