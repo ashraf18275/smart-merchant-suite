@@ -21,6 +21,29 @@ create table if not exists public.business_members (
   unique (id, business_id)
 );
 
+-- Automatically create the non-removable owner membership for each new business.
+-- This avoids a bootstrap deadlock where RLS would otherwise prevent the first membership.
+create or replace function public.bootstrap_business_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  insert into public.business_members (
+    business_id, user_id, display_name, is_owner, is_active
+  ) values (
+    new.id, new.owner_user_id, 'صاحب المحل', true, true
+  );
+  return new;
+end;
+$;
+
+drop trigger if exists businesses_bootstrap_owner on public.businesses;
+create trigger businesses_bootstrap_owner
+  after insert on public.businesses
+  for each row execute function public.bootstrap_business_owner();
+
 create table if not exists public.member_permissions (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null,
