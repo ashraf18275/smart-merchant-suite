@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite_common/sqlite_api.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../data/csv_encoder.dart';
 
@@ -105,16 +106,17 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final directory = await getTemporaryDirectory();
       final candidate = File(p.join(directory.path, 'restore_candidate_' + _timestamp() + '.db'));
       await candidate.writeAsBytes(bytes, flush: true);
-      source = await databaseFactory.openDatabase(
+      final opened = await databaseFactoryFfi.openDatabase(
         candidate.path,
         options: OpenDatabaseOptions(readOnly: true),
       );
+      source = opened;
 
-      final integrity = await source.rawQuery('PRAGMA integrity_check');
+      final integrity = await opened.rawQuery('PRAGMA integrity_check');
       if (integrity.isEmpty || integrity.first.values.first != 'ok') {
         throw StateError('الملف لا يجتاز فحص سلامة SQLite.');
       }
-      final migrations = await source.query(
+      final migrations = await opened.query(
         'schema_migrations',
         columns: ['version'],
         where: 'version = ?',
@@ -127,18 +129,18 @@ class _DataTransferPageState extends State<DataTransferPage> {
 
       final data = <String, List<Map<String, Object?>>>{};
       for (final spec in _tables) {
-        final tableInfo = await source.rawQuery('PRAGMA table_info(' + spec.table + ')');
+        final tableInfo = await opened.rawQuery('PRAGMA table_info(' + spec.table + ')');
         final available = tableInfo.map((column) => column['name'] as String).toSet();
         if (!spec.columns.every(available.contains)) {
           throw StateError('النسخة لا تحتوي على بنية جدول ' + spec.label + ' المتوقعة.');
         }
-        data[spec.table] = await source.query(spec.table, orderBy: 'id ASC');
+        data[spec.table] = await opened.query(spec.table, orderBy: 'id ASC');
       }
-      final foreignKeyErrors = await source.rawQuery('PRAGMA foreign_key_check');
+      final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
       if (foreignKeyErrors.isNotEmpty) {
         throw StateError('النسخة تحتوي على روابط غير سليمة بين السجلات.');
       }
-      await source.close();
+      await opened.close();
       source = null;
 
       if (!mounted) return;
