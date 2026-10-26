@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -139,7 +138,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
                 const Text('اختر جدولًا لتصديره كملف CSV بترميز UTF-8 مناسب لعرض العربية في برامج الجداول. المبالغ محفوظة بوحدات العملة الصغرى.'),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: _selectedTable,
+                  initialValue: _selectedTable,
                   decoration: const InputDecoration(labelText: 'البيانات المطلوب تصديرها'),
                   items: [
                     for (var i = 0; i < _tables.length; i++)
