@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 import '../data/product_repository.dart';
 import '../data/sales_repository.dart';
-import 'package:sqflite_common/sqlite_api.dart';
 
 class SalesPage extends StatefulWidget {
   const SalesPage({super.key, required this.database});
   final Database database;
-
   @override
   State<SalesPage> createState() => _SalesPageState();
 }
@@ -20,13 +19,9 @@ class _SalesPageState extends State<SalesPage> {
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void initState() { super.initState(); _load(); }
 
-  String _money(int minor) =>
-      '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')} ج.م';
+  String _money(int minor) => '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')} ج.م';
 
   int? _parseMoney(String value) {
     final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?$').firstMatch(value.trim());
@@ -53,98 +48,103 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _createSale() async {
-    if (_productsList.isEmpty) {
+    final availableProducts = _productsList.where((p) => p.stockQuantity > 0).toList();
+    if (availableProducts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أضف منتجًا نشطًا وبكمية متاحة أولًا')),
+        const SnackBar(content: Text('أضف منتجًا نشطًا بكمية متاحة أولًا')),
       );
       return;
     }
-    int? selectedId = _productsList.first.id;
-    final quantity = TextEditingController(text: '1');
+    final quantityControllers = <int, TextEditingController>{
+      for (final p in availableProducts) p.id!: TextEditingController(text: '0'),
+    };
     final paid = TextEditingController(text: '0.00');
     final key = GlobalKey<FormState>();
-    final result = await showDialog<Map<String, int>?>(
+    final result = await showDialog<Map<String, Object?>?>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('تسجيل فاتورة بيع'),
-          content: SizedBox(
-            width: 420,
-            child: Form(
-              key: key,
-              child: SingleChildScrollView(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  DropdownButtonFormField<int>(
-                    initialValue: selectedId,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'المنتج'),
-                    items: _productsList.map((p) => DropdownMenuItem<int>(
-                      value: p.id,
-                      child: Text('${p.name} — المتاح ${p.stockQuantity}'),
-                    )).toList(),
-                    onChanged: (value) => setDialogState(() => selectedId = value),
-                  ),
-                  TextFormField(
-                    controller: quantity,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'الكمية'),
-                    validator: (v) {
-                      final n = int.tryParse(v?.trim() ?? '');
-                      return n == null || n <= 0 ? 'أدخل كمية صحيحة' : null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: paid,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'المبلغ المدفوع بالجنيه'),
-                    validator: (v) => v == null || _parseMoney(v) == null
-                        ? 'أدخل مبلغًا صحيحًا'
-                        : null,
-                  ),
-                ]),
-              ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('فاتورة بيع متعددة الأصناف'),
+        content: SizedBox(
+          width: 520,
+          child: Form(
+            key: key,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Align(alignment: Alignment.centerRight, child: Text('أدخل الكمية المطلوبة أمام كل صنف، واترك غير المطلوب صفرًا.')),
+                const SizedBox(height: 8),
+                ...availableProducts.map((p) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Expanded(child: Text('${p.name}\nالمتاح: ${p.stockQuantity} • السعر: ${_money(p.priceMinor)}')),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 92, child: TextFormField(
+                      controller: quantityControllers[p.id],
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'الكمية', isDense: true),
+                      validator: (v) {
+                        final n = int.tryParse(v?.trim() ?? '');
+                        if (n == null || n < 0) return 'عدد صحيح';
+                        if (n > p.stockQuantity) return 'المتاح ${p.stockQuantity}';
+                        return null;
+                      },
+                    )),
+                  ]),
+                )),
+                const Divider(),
+                TextFormField(
+                  controller: paid,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'المبلغ المدفوع بالجنيه'),
+                  validator: (v) => v == null || _parseMoney(v) == null ? 'أدخل مبلغًا صحيحًا' : null,
+                ),
+              ]),
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            FilledButton(
-              onPressed: () {
-                if (key.currentState!.validate() && selectedId != null) {
-                  Navigator.pop(ctx, {
-                    'productId': selectedId!,
-                    'quantity': int.parse(quantity.text.trim()),
-                    'paidMinor': _parseMoney(paid.text)!,
-                  });
-                }
-              },
-              child: const Text('حفظ الفاتورة'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () {
+              if (!key.currentState!.validate()) return;
+              final quantities = <int, int>{};
+              for (final entry in quantityControllers.entries) {
+                final n = int.parse(entry.value.text.trim());
+                if (n > 0) quantities[entry.key] = n;
+              }
+              if (quantities.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('أدخل كمية لصنف واحد على الأقل')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, {
+                'quantities': quantities,
+                'paidMinor': _parseMoney(paid.text)!,
+              });
+            },
+            child: const Text('حفظ الفاتورة'),
+          ),
+        ],
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    quantity.dispose();
+    for (final controller in quantityControllers.values) { controller.dispose(); }
     paid.dispose();
     if (result == null) return;
     try {
-      final id = await _sales.createSingleProductSale(
-        productId: result['productId']!,
-        quantity: result['quantity']!,
-        paidMinor: result['paidMinor']!,
+      final id = await _sales.createSale(
+        quantities: Map<int, int>.from(result['quantities']! as Map),
+        paidMinor: result['paidMinor']! as int,
       );
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم حفظ الفاتورة رقم $id وتحديث المخزون')),
+          SnackBar(content: Text('تم حفظ الفاتورة رقم $id وتحديث مخزون الأصناف')),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('لم يتم حفظ الفاتورة: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('لم يتم حفظ الفاتورة: $e')),
+      );
     }
   }
 
@@ -172,17 +172,15 @@ class _SalesPageState extends State<SalesPage> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final sale = _salesList[index];
-                        return Card(
-                          child: ListTile(
-                            leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
-                            title: Text('فاتورة رقم ${sale.id}'),
-                            subtitle: Text(
-                              '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • البنود: ${sale.itemCount}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
-                            ),
-                            isThreeLine: true,
-                            trailing: Text(_money(sale.totalMinor)),
+                        return Card(child: ListTile(
+                          leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
+                          title: Text('فاتورة رقم ${sale.id}'),
+                          subtitle: Text(
+                            '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
                           ),
-                        );
+                          isThreeLine: true,
+                          trailing: Text(_money(sale.totalMinor)),
+                        ));
                       },
                     ),
     ),
