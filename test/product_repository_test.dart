@@ -38,6 +38,32 @@ void main() {
     expect(result.single.stockQuantity, 3);
   });
 
+  test('updates product details without changing stock', () async {
+    final id = await products.add(const Product(
+      name: 'كابل USB',
+      sku: 'USB-01',
+      costMinor: 1250,
+      priceMinor: 2000,
+      stockQuantity: 7,
+    ));
+
+    await products.update(Product(
+      id: id,
+      name: 'كابل USB-C',
+      sku: 'USBC-01',
+      costMinor: 1500,
+      priceMinor: 2500,
+      stockQuantity: 7,
+    ));
+
+    final updated = (await products.all()).single;
+    expect(updated.name, 'كابل USB-C');
+    expect(updated.sku, 'USBC-01');
+    expect(updated.costMinor, 1500);
+    expect(updated.priceMinor, 2500);
+    expect(updated.stockQuantity, 7);
+  });
+
   test('stock change and movement are recorded together', () async {
     final id = await products.add(const Product(
       name: 'شاحن',
