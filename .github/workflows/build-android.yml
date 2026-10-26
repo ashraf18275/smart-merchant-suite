@@ -25,6 +25,25 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android .
 
+      - name: Set Android compile SDK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          found = False
+          for path in candidates:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              updated = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              updated = updated.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              if updated != text:
+                  path.write_text(updated)
+                  found = True
+          if not found:
+              raise SystemExit("Could not find the generated Android compileSdk setting.")
+          PY
+
       - name: Resolve dependencies
         run: flutter pub get
 
