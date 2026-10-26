@@ -126,6 +126,7 @@ void main() {
     await tester.enterText(fields.at(0), '-1');
     await tester.enterText(fields.at(1), 'تصحيح جرد');
     await tester.tap(find.text('تسجيل الحركة'));
+    await tester.pumpAndSettle();
     await pumpDatabaseResult(tester);
 
     expect(find.text('2'), findsOneWidget);
