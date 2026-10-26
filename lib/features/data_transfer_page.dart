@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -78,6 +80,123 @@ class _DataTransferPageState extends State<DataTransferPage> {
     } catch (error) {
       _showError('تعذر تصدير CSV: $error');
     } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+
+  Future<void> _restoreBackup() async {
+    if (_working) return;
+    setState(() => _working = true);
+    Database? source;
+    try {
+      final selection = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['db', 'sqlite'],
+        withData: true,
+        allowMultiple: false,
+      );
+      if (selection == null || selection.files.isEmpty) return;
+      final bytes = selection.files.single.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('تعذر قراءة الملف المختار.');
+      }
+
+      final directory = await getTemporaryDirectory();
+      final candidate = File(p.join(directory.path, 'restore_candidate_' + _timestamp() + '.db'));
+      await candidate.writeAsBytes(bytes, flush: true);
+      source = await databaseFactory.openDatabase(
+        candidate.path,
+        options: OpenDatabaseOptions(readOnly: true),
+      );
+
+      final integrity = await source.rawQuery('PRAGMA integrity_check');
+      if (integrity.isEmpty || integrity.first.values.first != 'ok') {
+        throw StateError('الملف لا يجتاز فحص سلامة SQLite.');
+      }
+      final migrations = await source.query(
+        'schema_migrations',
+        columns: ['version'],
+        where: 'version = ?',
+        whereArgs: [3],
+        limit: 1,
+      );
+      if (migrations.isEmpty) {
+        throw StateError('النسخة غير متوافقة: يلزم مخطط قاعدة البيانات الإصدار 3.');
+      }
+
+      final data = <String, List<Map<String, Object?>>>{};
+      for (final spec in _tables) {
+        final tableInfo = await source.rawQuery('PRAGMA table_info(' + spec.table + ')');
+        final available = tableInfo.map((column) => column['name'] as String).toSet();
+        if (!spec.columns.every(available.contains)) {
+          throw StateError('النسخة لا تحتوي على بنية جدول ' + spec.label + ' المتوقعة.');
+        }
+        data[spec.table] = await source.query(spec.table, orderBy: 'id ASC');
+      }
+      final foreignKeyErrors = await source.rawQuery('PRAGMA foreign_key_check');
+      if (foreignKeyErrors.isNotEmpty) {
+        throw StateError('النسخة تحتوي على روابط غير سليمة بين السجلات.');
+      }
+      await source.close();
+      source = null;
+
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('تأكيد استعادة البيانات'),
+          content: Text(
+            'سيتم استبدال بيانات التطبيق الحالية بالبيانات الموجودة في النسخة المختارة. '
+            'عدد المنتجات: ' + data['products']!.length.toString() + '، '
+            'الفواتير: ' + data['sales']!.length.toString() + '، '
+            'المصروفات: ' + data['expenses']!.length.toString() + '. '
+            'أنشئ نسخة احتياطية من البيانات الحالية قبل المتابعة.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('استبدال البيانات'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      await widget.database.transaction((txn) async {
+        for (final table in [
+          'inventory_movements',
+          'sale_items',
+          'sales',
+          'expenses',
+          'products',
+        ]) {
+          await txn.delete(table);
+        }
+        for (final table in [
+          'products',
+          'sales',
+          'sale_items',
+          'expenses',
+          'inventory_movements',
+        ]) {
+          for (final row in data[table]!) {
+            await txn.insert(table, row, conflictAlgorithm: ConflictAlgorithm.abort);
+          }
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تمت استعادة البيانات بنجاح.')),
+      );
+    } catch (error) {
+      _showError('تعذرت استعادة النسخة الاحتياطية: ' + error.toString());
+    } finally {
+      if (source != null) await source.close();
       if (mounted) setState(() => _working = false);
     }
   }
@@ -191,7 +310,31 @@ class _DataTransferPageState extends State<DataTransferPage> {
           child: Center(child: CircularProgressIndicator()),
         ),
         const SizedBox(height: 12),
-        const Text('ملاحظة: استعادة النسخة الاحتياطية داخل التطبيق لم تُنفّذ بعد. لا تحذف قاعدة البيانات الحالية ولا تستبدلها يدويًا قبل توفير مسار استعادة آمن.'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.settings_backup_restore_outlined, size: 32),
+                const SizedBox(height: 8),
+                Text('استعادة نسخة احتياطية', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                const Text('اختر ملف نسخة احتياطية صادرًا من هذا التطبيق. يفحص التطبيق سلامة الملف وتوافق المخطط قبل عرض تأكيد الاستبدال. ستتم عملية الاستعادة داخل معاملة واحدة.'),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _working ? null : _restoreBackup,
+                    icon: const Icon(Icons.restore),
+                    label: const Text('اختيار نسخة واستعادتها'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const Text('تنبيه: الاستعادة تستبدل البيانات الحالية. احتفظ بنسخة احتياطية منفصلة قبل التأكيد.'),
       ],
     ),
   );
