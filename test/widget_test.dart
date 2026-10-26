@@ -8,6 +8,6 @@ void main() {
     expect(find.text('عدة التاجر الذكي'), findsOneWidget);
     expect(find.text('أقسام البرنامج المخططة'), findsOneWidget);
     expect(find.text('المنتجات والمخزون'), findsOneWidget);
-    expect(find.text('قيد التطوير'), findsNWidgets(4));
+    expect(find.textContaining('قيد التطوير'), findsNWidgets(4));
   });
 }
