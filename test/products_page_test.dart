@@ -101,6 +101,44 @@ void main() {
     expect(find.text('كابل USB'), findsOneWidget);
     expect(find.text('شاحن سريع'), findsNothing);
   });
+  testWidgets('edits product details without changing its quantity',
+      (tester) async {
+    await repository.add(const Product(
+      name: 'كابل USB',
+      sku: 'USB-01',
+      costMinor: 1250,
+      priceMinor: 2000,
+      stockQuantity: 7,
+    ));
+
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: ProductsPage(repository: repository),
+      ),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.byTooltip('تعديل بيانات المنتج'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
+    expect(fields, findsNWidgets(4));
+    await tester.enterText(fields.at(0), 'كابل USB-C');
+    await tester.enterText(fields.at(1), 'USBC-01');
+    await tester.enterText(fields.at(2), '15.00');
+    await tester.enterText(fields.at(3), '25.00');
+    await tester.tap(find.text('حفظ التعديلات'));
+    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
+
+    expect(find.text('كابل USB-C'), findsOneWidget);
+    expect(find.text('كابل USB'), findsNothing);
+    expect(find.textContaining('15.00 ج.م'), findsOneWidget);
+    expect(find.textContaining('25.00 ج.م'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+  });
+
   testWidgets('records stock adjustments and refreshes the quantity',
       (tester) async {
     await repository.add(const Product(
