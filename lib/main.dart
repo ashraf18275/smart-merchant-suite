@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'data/local_database.dart';
+import 'data/product_repository.dart';
+import 'features/products_page.dart';
+
 void main() {
   runApp(const SmartMerchantApp());
 }
@@ -119,7 +123,23 @@ class HomeDashboard extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final module = modules[index];
                   return Card(
-                    child: Padding(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: index == 0 ? () async {
+                        try {
+                          final database = await openLocalDatabase();
+                          if (!context.mounted) return;
+                          await Navigator.of(context).push(MaterialPageRoute<void>(
+                            builder: (_) => ProductsPage(repository: ProductRepository(database)),
+                          ));
+                        } catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('تعذر فتح قاعدة البيانات المحلية: $error')),
+                          );
+                        }
+                      } : null,
+                      child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,6 +159,7 @@ class HomeDashboard extends StatelessWidget {
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
+                      ),
                       ),
                     ),
                   );
