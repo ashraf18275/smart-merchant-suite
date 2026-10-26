@@ -205,11 +205,20 @@ class _DataTransferPageState extends State<DataTransferPage> {
     } catch (error) {
       _showError('تعذرت استعادة النسخة الاحتياطية: ' + error.toString());
     } finally {
-      if (source != null) await source.close();
-      if (restoreCandidate != null && await restoreCandidate.exists()) {
-        await restoreCandidate.delete();
+      try {
+        if (source != null) {
+          await source.close();
+          source = null;
+        }
+      } finally {
+        try {
+          if (restoreCandidate != null && await restoreCandidate.exists()) {
+            await restoreCandidate.delete();
+          }
+        } finally {
+          if (mounted) setState(() => _working = false);
+        }
       }
-      if (mounted) setState(() => _working = false);
     }
   }
 
@@ -234,11 +243,19 @@ class _DataTransferPageState extends State<DataTransferPage> {
 
       // Require SQLite to finish checkpointing before copying the database file.
       final checkpoint = await widget.database.rawQuery('PRAGMA wal_checkpoint(FULL)');
-      if (checkpoint.isNotEmpty) {
-        final busy = (checkpoint.first['busy'] as num?)?.toInt() ?? 0;
-        if (busy != 0) {
-          throw StateError('قاعدة البيانات مشغولة؛ أغلق العمليات الجارية ثم أعد المحاولة.');
-        }
+      if (checkpoint.isEmpty) {
+        throw StateError('تعذر التأكد من اكتمال تجهيز قاعدة البيانات للنسخ الاحتياطي.');
+      }
+      final checkpointRow = checkpoint.first;
+      final busy = (checkpointRow['busy'] as num?)?.toInt() ?? 0;
+      final walFrames = (checkpointRow['log'] as num?)?.toInt() ?? -1;
+      final checkpointedFrames =
+          (checkpointRow['checkpointed'] as num?)?.toInt() ?? -1;
+      if (busy != 0 ||
+          (walFrames >= 0 &&
+              checkpointedFrames >= 0 &&
+              checkpointedFrames < walFrames)) {
+        throw StateError('تعذر إكمال تجهيز قاعدة البيانات للنسخ؛ أغلق العمليات الجارية ثم أعد المحاولة.');
       }
 
       final sourceFile = File(widget.database.path);
@@ -297,6 +314,14 @@ class _DataTransferPageState extends State<DataTransferPage> {
         text: 'نسخة احتياطية من عدة التاجر الذكي. احتفظ بها في مكان آمن.',
       );
     } catch (error) {
+      // Close the validation handle before deleting the temporary database file.
+      if (verificationDb != null) {
+        try {
+          await verificationDb.close();
+        } finally {
+          verificationDb = null;
+        }
+      }
       if (backup != null && await backup.exists()) {
         await backup.delete();
       }
