@@ -141,14 +141,35 @@ class ProductRepository {
     }
   }
 
-  Future<List<Product>> all({String search = ''}) async {
+  /// Deactivates/reactivates a product without deleting its history or stock.
+  Future<void> setActive({required int productId, required bool isActive}) async {
+    final changed = await _db.update(
+      'products',
+      {'is_active': isActive ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+    if (changed == 0) {
+      throw StateError('المنتج غير موجود');
+    }
+  }
+
+  Future<List<Product>> all({
+    String search = '',
+    bool includeInactive = false,
+  }) async {
     final normalized = search.trim();
+    final conditions = <String>[];
+    final args = <Object?>[];
+    if (!includeInactive) conditions.add('is_active = 1');
+    if (normalized.isNotEmpty) {
+      conditions.add('(name LIKE ? OR sku LIKE ?)');
+      args.addAll(['%$normalized%', '%$normalized%']);
+    }
     final rows = await _db.query(
       'products',
-      where: normalized.isEmpty ? null : 'name LIKE ? OR sku LIKE ?',
-      whereArgs: normalized.isEmpty
-          ? null
-          : <Object?>['%$normalized%', '%$normalized%'],
+      where: conditions.isEmpty ? null : conditions.join(' AND '),
+      whereArgs: args.isEmpty ? null : args,
       orderBy: 'name COLLATE NOCASE ASC',
     );
     return rows.map(Product.fromMap).toList(growable: false);
