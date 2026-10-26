@@ -1,4 +1,5 @@
 import 'package:sqflite_common/sqlite_api.dart';
+import 'expense_repository.dart';
 
 /// Creates the first version of the local schema.
 Future<void> createLocalSchema(Database db) async {
@@ -38,6 +39,7 @@ Future<void> createLocalSchema(Database db) async {
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   });
   await createSalesSchema(db);
+  await createExpensesSchema(db);
 }
 
 /// Adds the sales schema. Safe to call when upgrading an existing version-1 DB.

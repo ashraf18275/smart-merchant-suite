@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
+import 'package:smart_merchant_suite/data/expense_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -186,6 +187,20 @@ void main() {
     expect(await database.query('sale_items'), isEmpty);
     expect((await products.all()).single.stockQuantity, 1);
     expect(await database.query('inventory_movements'), isEmpty);
+  });
+
+  test('records expenses and calculates all-time profit summary', () async {
+    final id = await products.add(const Product(name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5));
+    await SalesRepository(database).createSingleProductSale(productId: id, quantity: 2, paidMinor: 1800);
+    final expenses = ExpenseRepository(database);
+    await expenses.add(description: 'إيجار المحل', category: 'إيجار', amountMinor: 4000);
+    final s = await expenses.summary();
+    expect(s.salesMinor, 1800);
+    expect(s.costOfGoodsMinor, 1000);
+    expect(s.expensesMinor, 4000);
+    expect(s.grossProfitMinor, 800);
+    expect(s.netProfitMinor, -3200);
+    expect((await expenses.all()).single.description, 'إيجار المحل');
   });
 
   test('rejects empty product names', () async {

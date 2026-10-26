@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'product_repository.dart';
+import 'expense_repository.dart';
 
 /// Opens the app's private local database on Android and desktop.
 /// Desktop uses SQLite FFI; mobile uses the platform SQLite plugin.
@@ -20,10 +21,11 @@ Future<sqflite.Database> openLocalDatabase() async {
   if (isMobile) {
     return sqflite.openDatabase(
       databasePath,
-      version: 2,
+      version: 3,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
+        if (oldVersion < 3) await createExpensesSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
@@ -41,10 +43,11 @@ Future<sqflite.Database> openLocalDatabase() async {
   return databaseFactoryFfi.openDatabase(
     databasePath,
     options: OpenDatabaseOptions(
-      version: 2,
+      version: 3,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
+        if (oldVersion < 3) await createExpensesSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');

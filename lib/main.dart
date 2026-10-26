@@ -4,6 +4,7 @@ import 'data/local_database.dart';
 import 'data/product_repository.dart';
 import 'features/products_page.dart';
 import 'features/sales_page.dart';
+import 'features/expenses_page.dart';
 
 void main() {
   runApp(const SmartMerchantApp());
@@ -53,7 +54,7 @@ class HomeDashboard extends StatelessWidget {
     (
       icon: Icons.account_balance_wallet_outlined,
       title: 'المصروفات والأرباح',
-      subtitle: 'تقارير مالية دقيقة — قيد التطوير',
+      subtitle: 'تسجيل المصروفات وملخص الأرباح',
     ),
     (
       icon: Icons.backup_outlined,
@@ -126,7 +127,20 @@ class HomeDashboard extends StatelessWidget {
                   return Card(
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: index == 1 ? () async {
+                      onTap: index == 2 ? () async {
+                        try {
+                          final database = await openLocalDatabase();
+                          if (!context.mounted) { await database.close(); return; }
+                          try {
+                            await Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => ExpensesPage(database: database),
+                            ));
+                          } finally { await database.close(); }
+                        } catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر فتح شاشة المصروفات: $error')));
+                        }
+                      } : index == 1 ? () async {
                         try {
                           final database = await openLocalDatabase();
                           if (!context.mounted) {
