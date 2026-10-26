@@ -13,6 +13,7 @@ class _ProductsPageState extends State<ProductsPage> {
   final _search = TextEditingController();
   List<Product> _items = [];
   bool _loading = true;
+  bool _showInactive = false;
   String? _error;
 
   @override
@@ -31,7 +32,10 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Future<void> _load() async {
     try {
-      final result = await widget.repository.all(search: _search.text);
+      final result = await widget.repository.all(
+        search: _search.text,
+        includeInactive: _showInactive,
+      );
       if (!mounted) return;
       setState(() { _items = result; _loading = false; _error = null; });
     } catch (e) {
@@ -256,6 +260,52 @@ class _ProductsPageState extends State<ProductsPage> {
     delta.dispose(); reason.dispose();
   }
 
+  Future<void> _setProductActive(Product product) async {
+    final nextActive = !product.isActive;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(nextActive ? 'إعادة تفعيل المنتج' : 'إيقاف المنتج'),
+        content: Text(
+          nextActive
+              ? 'هل تريد إعادة تفعيل «${product.name}»؟'
+              : 'سيختفي «${product.name}» من القائمة المعتادة ولن يمكن تسجيل حركات مخزون له. لن تُحذف بياناته أو حركاته السابقة.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(nextActive ? 'إعادة التفعيل' : 'إيقاف المنتج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.repository.setActive(
+        productId: product.id!,
+        isActive: nextActive,
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(nextActive ? 'تمت إعادة تفعيل المنتج' : 'تم إيقاف المنتج دون حذف سجلاته'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تغيير حالة المنتج: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('المنتجات والمخزون')),
@@ -266,7 +316,16 @@ class _ProductsPageState extends State<ProductsPage> {
         border: const OutlineInputBorder(),
         suffixIcon: IconButton(tooltip: 'مسح البحث', onPressed: _search.clear, icon: const Icon(Icons.clear)),
       )),
-      const SizedBox(height: 12),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('عرض المنتجات الموقوفة'),
+        value: _showInactive,
+        onChanged: (value) {
+          setState(() => _showInactive = value);
+          _load();
+        },
+      ),
+      const SizedBox(height: 4),
       Expanded(child: _loading ? const Center(child: CircularProgressIndicator())
         : _error != null ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text(_error!, textAlign: TextAlign.center), OutlinedButton(onPressed: _load, child: const Text('إعادة المحاولة')),
@@ -278,7 +337,7 @@ class _ProductsPageState extends State<ProductsPage> {
               final code = p.sku == null ? '' : '\nالكود: ' + p.sku!;
               return Card(child: ListTile(
                 leading: CircleAvatar(child: Text(p.stockQuantity.toString())),
-                title: Text(p.name),
+                title: Text(p.isActive ? p.name : '${p.name} (موقوف)'),
                 subtitle: Text('التكلفة: ' + _money(p.costMinor) + ' • البيع: ' + _money(p.priceMinor) + code),
                 isThreeLine: p.sku != null,
                 trailing: Row(
@@ -291,8 +350,13 @@ class _ProductsPageState extends State<ProductsPage> {
                     ),
                     IconButton(
                       tooltip: 'تعديل المخزون',
-                      onPressed: () => _stock(p),
+                      onPressed: p.isActive ? () => _stock(p) : null,
                       icon: const Icon(Icons.inventory_outlined),
+                    ),
+                    IconButton(
+                      tooltip: p.isActive ? 'إيقاف المنتج' : 'إعادة تفعيل المنتج',
+                      onPressed: () => _setProductActive(p),
+                      icon: Icon(p.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline),
                     ),
                   ],
                 ),
