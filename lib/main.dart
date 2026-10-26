@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/local_database.dart';
 import 'data/product_repository.dart';
 import 'features/products_page.dart';
+import 'features/sales_page.dart';
 
 void main() {
   runApp(const SmartMerchantApp());
@@ -125,7 +126,27 @@ class HomeDashboard extends StatelessWidget {
                   return Card(
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: index == 0 ? () async {
+                      onTap: index == 1 ? () async {
+                        try {
+                          final database = await openLocalDatabase();
+                          if (!context.mounted) {
+                            await database.close();
+                            return;
+                          }
+                          try {
+                            await Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => SalesPage(database: database),
+                            ));
+                          } finally {
+                            await database.close();
+                          }
+                        } catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('تعذر فتح شاشة المبيعات: $error')),
+                          );
+                        }
+                      } : index == 0 ? () async {
                         try {
                           final database = await openLocalDatabase();
                           if (!context.mounted) {

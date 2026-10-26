@@ -37,6 +37,45 @@ Future<void> createLocalSchema(Database db) async {
     'version': 1,
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   });
+  await createSalesSchema(db);
+}
+
+/// Adds the sales schema. Safe to call when upgrading an existing version-1 DB.
+Future<void> createSalesSchema(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS sales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      total_minor INTEGER NOT NULL CHECK (total_minor >= 0),
+      paid_minor INTEGER NOT NULL CHECK (paid_minor >= 0 AND paid_minor <= total_minor),
+      created_at TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS sale_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_price_minor INTEGER NOT NULL CHECK (unit_price_minor >= 0),
+      unit_cost_minor INTEGER NOT NULL CHECK (unit_cost_minor >= 0),
+      line_total_minor INTEGER NOT NULL CHECK (line_total_minor >= 0),
+      FOREIGN KEY (sale_id) REFERENCES sales (id),
+      FOREIGN KEY (product_id) REFERENCES products (id)
+    )
+  ''');
+  final applied = await db.query(
+    'schema_migrations',
+    columns: ['version'],
+    where: 'version = ?',
+    whereArgs: [2],
+    limit: 1,
+  );
+  if (applied.isEmpty) {
+    await db.insert('schema_migrations', {
+      'version': 2,
+      'applied_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
 }
 
 class Product {

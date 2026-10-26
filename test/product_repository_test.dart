@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
+import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -136,6 +137,55 @@ void main() {
 
     await products.setActive(productId: id, isActive: true);
     expect((await products.all()).single.isActive, isTrue);
+  });
+
+  test('sale atomically records invoice and deducts stock', () async {
+    final id = await products.add(const Product(
+      name: 'شاحن',
+      costMinor: 500,
+      priceMinor: 900,
+      stockQuantity: 5,
+    ));
+    final sales = SalesRepository(database);
+    final saleId = await sales.createSingleProductSale(
+      productId: id,
+      quantity: 2,
+      paidMinor: 1000,
+    );
+
+    expect((await products.all()).single.stockQuantity, 3);
+    final invoices = await database.query('sales');
+    expect(invoices, hasLength(1));
+    expect(invoices.single['id'], saleId);
+    expect(invoices.single['total_minor'], 1800);
+    expect(invoices.single['paid_minor'], 1000);
+    final lines = await database.query('sale_items');
+    expect(lines, hasLength(1));
+    expect(lines.single['unit_cost_minor'], 500);
+    final movements = await database.query('inventory_movements');
+    expect(movements, hasLength(1));
+    expect(movements.single['quantity_delta'], -2);
+  });
+
+  test('sale rejects insufficient stock without partial invoice', () async {
+    final id = await products.add(const Product(
+      name: 'سماعة',
+      costMinor: 1000,
+      priceMinor: 1500,
+      stockQuantity: 1,
+    ));
+    await expectLater(
+      SalesRepository(database).createSingleProductSale(
+        productId: id,
+        quantity: 2,
+        paidMinor: 0,
+      ),
+      throwsA(isA<StateError>()),
+    );
+    expect(await database.query('sales'), isEmpty);
+    expect(await database.query('sale_items'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 1);
+    expect(await database.query('inventory_movements'), isEmpty);
   });
 
   test('rejects empty product names', () async {
