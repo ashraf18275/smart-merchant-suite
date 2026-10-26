@@ -42,7 +42,7 @@ class HomeDashboard extends StatelessWidget {
     (
       icon: Icons.inventory_2_outlined,
       title: 'المنتجات والمخزون',
-      subtitle: 'إدارة الأصناف والكميات — قيد التطوير',
+      subtitle: 'إدارة أولية للمنتجات والمخزون',
     ),
     (
       icon: Icons.point_of_sale_outlined,
@@ -92,7 +92,7 @@ class HomeDashboard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'نسخة تأسيسية قيد التطوير. لم تُفعّل وظائف البيع أو المخزون أو الحسابات بعد.',
+                        'تتوفر إدارة أولية للمنتجات والمخزون. المبيعات والفواتير والمصروفات والتقارير ما زالت قيد التطوير.',
                       ),
                       const SizedBox(height: 12),
                       const Chip(
@@ -105,7 +105,7 @@ class HomeDashboard extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                'أقسام البرنامج المخططة',
+                'أقسام البرنامج',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
