@@ -306,6 +306,20 @@ class _DataTransferPageState extends State<DataTransferPage> {
           throw StateError('لم تتطابق بيانات جدول ${spec.label} في النسخة الاحتياطية.');
         }
       }
+      final originalMigrations = await widget.database.query(
+        'schema_migrations',
+        columns: ['version', 'applied_at'],
+        orderBy: 'version ASC',
+      );
+      final backupMigrations = await opened.query(
+        'schema_migrations',
+        columns: ['version', 'applied_at'],
+        orderBy: 'version ASC',
+      );
+      if (jsonEncode(originalMigrations) != jsonEncode(backupMigrations)) {
+        throw StateError('لم تتطابق بيانات إصدارات المخطط في النسخة الاحتياطية.');
+      }
+
       final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
       if (foreignKeyErrors.isNotEmpty) {
         throw StateError('ملف النسخة الاحتياطية يحتوي على روابط غير سليمة.');
