@@ -122,15 +122,14 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (integrity.isEmpty || integrity.first.values.first != 'ok') {
         throw StateError('الملف لا يجتاز فحص سلامة SQLite.');
       }
-      final migrations = await opened.query(
-        'schema_migrations',
-        columns: ['version'],
-        where: 'version = ?',
-        whereArgs: [3],
-        limit: 1,
-      );
-      if (migrations.isEmpty) {
-        throw StateError('النسخة غير متوافقة: يلزم مخطط قاعدة البيانات الإصدار 3.');
+      final versionRows = await opened.rawQuery('PRAGMA user_version');
+      final schemaVersion = versionRows.isEmpty
+          ? 0
+          : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
+      if (schemaVersion != 3) {
+        throw StateError(
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المطلوب: 3).',
+        );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
