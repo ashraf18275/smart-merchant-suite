@@ -12,6 +12,8 @@ Future<void> pumpDatabaseResult(WidgetTester tester) async {
     () => Future<void>.delayed(const Duration(milliseconds: 100)),
   );
   await tester.pump();
+  // Advance dialog/route animations without waiting on the infinite loading spinner.
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -66,6 +68,7 @@ void main() {
     await tester.enterText(fields.at(3), '20.00');
     await tester.enterText(fields.at(4), '3');
     await tester.tap(find.text('حفظ المنتج'));
+    await tester.pumpAndSettle();
     await pumpDatabaseResult(tester);
 
     expect(find.text('كابل USB'), findsOneWidget);
