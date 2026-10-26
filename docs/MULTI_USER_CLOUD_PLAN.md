@@ -35,7 +35,7 @@ The business owner is the only account that can administer membership and permis
 ## Delivery stages
 1. Database access-control foundation and permission catalogue.
 2. Secure owner onboarding and server-side member invitation/creation.
-3. Flutter sign-in, session handling, user list, user editor, and permission checklist.
+3. The owner-authorized `invite-member` Edge Function and Supabase project config have been added. Real invitation delivery requires configuring Supabase Auth email delivery/SMTP and the `INVITE_REDIRECT_URL` secret. Next: Flutter sign-in, session handling, user list, user editor, and permission checklist.
 4. Move business entities to tenant-scoped cloud tables and enforce RLS for every table.
 5. Implement realtime updates, server transactions, idempotent writes, and concurrency tests.
 6. Add offline outbox, retry policy, conflict resolution, and reconnection tests.
