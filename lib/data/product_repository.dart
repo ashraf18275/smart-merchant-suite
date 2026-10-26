@@ -109,6 +109,38 @@ class ProductRepository {
     return _db.insert('products', product.toMap());
   }
 
+  /// Updates editable product details without changing the stock balance.
+  Future<void> update(Product product) async {
+    final id = product.id;
+    if (id == null) {
+      throw ArgumentError('معرّف المنتج مطلوب للتعديل');
+    }
+    if (product.name.trim().isEmpty) {
+      throw ArgumentError('اسم المنتج مطلوب');
+    }
+    if (product.costMinor < 0 || product.priceMinor < 0) {
+      throw ArgumentError('السعر والتكلفة لا يمكن أن يكونا سالبين');
+    }
+
+    final normalizedSku = product.sku?.trim();
+    final changed = await _db.update(
+      'products',
+      {
+        'name': product.name.trim(),
+        'sku': normalizedSku == null || normalizedSku.isEmpty
+            ? null
+            : normalizedSku,
+        'cost_minor': product.costMinor,
+        'price_minor': product.priceMinor,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (changed == 0) {
+      throw StateError('المنتج غير موجود');
+    }
+  }
+
   Future<List<Product>> all({String search = ''}) async {
     final normalized = search.trim();
     final rows = await _db.query(
