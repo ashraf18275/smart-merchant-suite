@@ -91,6 +91,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
     if (_working) return;
     setState(() => _working = true);
     Database? source;
+    File? restoreCandidate;
     try {
       final selection = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -106,6 +107,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
 
       final directory = await getTemporaryDirectory();
       final candidate = File(p.join(directory.path, 'restore_candidate_' + _timestamp() + '.db'));
+      restoreCandidate = candidate;
       await candidate.writeAsBytes(bytes, flush: true);
       final isMobile = !kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.android ||
@@ -204,6 +206,9 @@ class _DataTransferPageState extends State<DataTransferPage> {
       _showError('تعذرت استعادة النسخة الاحتياطية: ' + error.toString());
     } finally {
       if (source != null) await source.close();
+      if (restoreCandidate != null && await restoreCandidate.exists()) {
+        await restoreCandidate.delete();
+      }
       if (mounted) setState(() => _working = false);
     }
   }
