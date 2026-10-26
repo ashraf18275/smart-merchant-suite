@@ -119,6 +119,106 @@ class _ProductsPageState extends State<ProductsPage> {
     name.dispose(); sku.dispose(); cost.dispose(); price.dispose(); stock.dispose();
   }
 
+  Future<void> _edit(Product product) async {
+    final key = GlobalKey<FormState>();
+    final name = TextEditingController(text: product.name);
+    final sku = TextEditingController(text: product.sku ?? '');
+    final cost = TextEditingController(text: _moneyInput(product.costMinor));
+    final price = TextEditingController(text: _moneyInput(product.priceMinor));
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('تعديل بيانات ' + product.name),
+        content: SizedBox(
+          width: 420,
+          child: Form(
+            key: key,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextFormField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'اسم المنتج *'),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'أدخل اسم المنتج'
+                      : null,
+                ),
+                TextFormField(
+                  controller: sku,
+                  decoration: const InputDecoration(labelText: 'كود المنتج (اختياري)'),
+                ),
+                TextFormField(
+                  controller: cost,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'التكلفة بالجنيه *'),
+                  validator: (v) => v == null || _minor(v) == null
+                      ? 'أدخل تكلفة صحيحة'
+                      : null,
+                ),
+                TextFormField(
+                  controller: price,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'سعر البيع بالجنيه *'),
+                  validator: (v) => v == null || _minor(v) == null
+                      ? 'أدخل سعرًا صحيحًا'
+                      : null,
+                ),
+              ]),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (key.currentState!.validate()) Navigator.pop(ctx, true);
+            },
+            child: const Text('حفظ التعديلات'),
+          ),
+        ],
+      ),
+    );
+
+    // Keep dialog-owned controllers alive until the reverse route transition ends.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (ok == true) {
+      try {
+        await widget.repository.update(Product(
+          id: product.id,
+          name: name.text.trim(),
+          sku: sku.text.trim().isEmpty ? null : sku.text.trim(),
+          costMinor: _minor(cost.text)!,
+          priceMinor: _minor(price.text)!,
+          stockQuantity: product.stockQuantity,
+          isActive: product.isActive,
+          createdAt: product.createdAt,
+        ));
+        await _load();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم تحديث بيانات المنتج')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تعذر تعديل المنتج: $e')),
+          );
+        }
+      }
+    }
+    name.dispose();
+    sku.dispose();
+    cost.dispose();
+    price.dispose();
+  }
+
+  String _moneyInput(int minor) =>
+      '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')}';
+
   Future<void> _stock(Product product) async {
     final key = GlobalKey<FormState>();
     final delta = TextEditingController();
@@ -181,7 +281,21 @@ class _ProductsPageState extends State<ProductsPage> {
                 title: Text(p.name),
                 subtitle: Text('التكلفة: ' + _money(p.costMinor) + ' • البيع: ' + _money(p.priceMinor) + code),
                 isThreeLine: p.sku != null,
-                trailing: IconButton(tooltip: 'تعديل المخزون', onPressed: () => _stock(p), icon: const Icon(Icons.inventory_outlined)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'تعديل بيانات المنتج',
+                      onPressed: () => _edit(p),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'تعديل المخزون',
+                      onPressed: () => _stock(p),
+                      icon: const Icon(Icons.inventory_outlined),
+                    ),
+                  ],
+                ),
               ));
             })),
     ])),
