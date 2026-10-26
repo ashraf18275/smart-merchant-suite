@@ -139,6 +139,46 @@ void main() {
     expect(find.text('7'), findsOneWidget);
   });
 
+  testWidgets('deactivates and reactivates a product from inventory',
+      (tester) async {
+    await repository.add(const Product(
+      name: 'شاحن',
+      costMinor: 500,
+      priceMinor: 900,
+      stockQuantity: 3,
+    ));
+
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: ProductsPage(repository: repository),
+      ),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.byTooltip('إيقاف المنتج'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('لن تُحذف'), findsOneWidget);
+    await tester.tap(find.text('إيقاف المنتج').last);
+    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
+
+    expect(find.text('شاحن'), findsNothing);
+
+    await tester.tap(find.text('عرض المنتجات الموقوفة'));
+    await pumpDatabaseResult(tester);
+    expect(find.text('شاحن (موقوف)'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('إعادة تفعيل المنتج'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إعادة التفعيل').last);
+    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
+
+    expect(find.text('شاحن'), findsOneWidget);
+    expect((await repository.all()).single.isActive, isTrue);
+  });
+
   testWidgets('records stock adjustments and refreshes the quantity',
       (tester) async {
     await repository.add(const Product(
