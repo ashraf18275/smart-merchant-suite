@@ -1,4 +1,4 @@
 project_id = "smart-merchant-suite"
 
-[functions.invite-member]
+[functions.create-member]
 verify_jwt = true
