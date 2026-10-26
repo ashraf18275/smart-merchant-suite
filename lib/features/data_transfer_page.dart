@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -289,16 +290,20 @@ class _DataTransferPageState extends State<DataTransferPage> {
         throw StateError('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
-        final originalCount = sqflite.Sqflite.firstIntValue(
-              await widget.database.rawQuery('SELECT COUNT(*) FROM ${spec.table}'),
-            ) ??
-            0;
-        final backupCount = sqflite.Sqflite.firstIntValue(
-              await opened.rawQuery('SELECT COUNT(*) FROM ${spec.table}'),
-            ) ??
-            0;
-        if (originalCount != backupCount) {
-          throw StateError('لم تتطابق سجلات جدول ${spec.label} في النسخة الاحتياطية.');
+        final originalRows = await widget.database.query(
+          spec.table,
+          columns: spec.columns,
+          orderBy: 'id ASC',
+        );
+        final backupRows = await opened.query(
+          spec.table,
+          columns: spec.columns,
+          orderBy: 'id ASC',
+        );
+        // Compare actual row contents as well as counts; equal counts alone
+        // cannot detect a stale or mismatched copy.
+        if (jsonEncode(originalRows) != jsonEncode(backupRows)) {
+          throw StateError('لم تتطابق بيانات جدول ${spec.label} في النسخة الاحتياطية.');
         }
       }
       final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
