@@ -75,7 +75,7 @@ class _SalesPageState extends State<SalesPage> {
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   DropdownButtonFormField<int>(
-                    value: selectedId,
+                    initialValue: selectedId,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'المنتج'),
                     items: _productsList.map((p) => DropdownMenuItem<int>(
