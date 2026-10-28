@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'application/services/expense_application_service.dart';
+import 'application/services/product_application_service.dart';
+import 'application/services/sales_application_service.dart';
 import 'core/app_error.dart';
-import 'data/local_database.dart';
 import 'data/expense_repository.dart';
+import 'data/local_database.dart';
 import 'data/product_repository.dart';
 import 'data/sales_repository.dart';
+import 'features/data_transfer_page.dart';
+import 'features/expenses_page.dart';
 import 'features/products_page.dart';
 import 'features/sales_page.dart';
-import 'features/expenses_page.dart';
-import 'features/data_transfer_page.dart';
 
 void main() {
   runApp(const SmartMerchantApp());
@@ -138,7 +141,9 @@ class HomeDashboard extends StatelessWidget {
                           try {
                             await Navigator.of(context).push(MaterialPageRoute<void>(
                               builder: (_) => ExpensesPage(
-                                repository: ExpenseRepository(database),
+                                repository: ExpenseApplicationService(
+                                  ExpenseRepository(database),
+                                ),
                               ),
                             ));
                           } finally { await database.close(); }
@@ -156,8 +161,12 @@ class HomeDashboard extends StatelessWidget {
                           try {
                             await Navigator.of(context).push(MaterialPageRoute<void>(
                               builder: (_) => SalesPage(
-                                products: ProductRepository(database),
-                                sales: SalesRepository(database),
+                                products: ProductApplicationService(
+                                  ProductRepository(database),
+                                ),
+                                sales: SalesApplicationService(
+                                  SalesRepository(database),
+                                ),
                               ),
                             ));
                           } finally {
@@ -178,7 +187,11 @@ class HomeDashboard extends StatelessWidget {
                           }
                           try {
                             await Navigator.of(context).push(MaterialPageRoute<void>(
-                              builder: (_) => ProductsPage(repository: ProductRepository(database)),
+                              builder: (_) => ProductsPage(
+                                repository: ProductApplicationService(
+                                  ProductRepository(database),
+                                ),
+                              ),
                             ));
                           } finally {
                             await database.close();

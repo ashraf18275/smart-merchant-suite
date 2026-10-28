@@ -1,19 +1,12 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
-import '../application/ports/sales_service.dart';
+import '../application/ports/sales_store.dart';
 import '../core/app_error.dart';
 import '../domain/sale_record.dart';
 
-class SalesRepository implements SalesService {
+class SalesRepository implements SalesStore {
   SalesRepository(this._db);
   final Database _db;
-
-  /// Backward-compatible helper for a single-item invoice.
-  Future<int> createSingleProductSale({
-    required int productId,
-    required int quantity,
-    required int paidMinor,
-  }) => createSale(quantities: {productId: quantity}, paidMinor: paidMinor);
 
   /// Creates a multi-item invoice, deducts stock and writes movement audit rows
   /// in one transaction. Keys are product IDs and values are positive quantities.
@@ -21,12 +14,6 @@ class SalesRepository implements SalesService {
     required Map<int, int> quantities,
     required int paidMinor,
   }) async {
-    if (quantities.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل');
-    if (quantities.values.any((quantity) => quantity <= 0)) {
-      throw AppException('كل كميات البيع يجب أن تكون أكبر من صفر');
-    }
-    if (paidMinor < 0) throw AppException('المبلغ المدفوع لا يمكن أن يكون سالبًا');
-
     return _db.transaction((txn) async {
       final items = <Map<String, int>>[];
       var total = 0;

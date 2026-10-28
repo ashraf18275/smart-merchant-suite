@@ -43,6 +43,8 @@ jobs:
           cache: true
       - name: Resolve dependencies
         run: flutter pub get
+      - name: Check application-layer formatting
+        run: dart format --output=none --set-exit-if-changed lib/application
       - name: Analyze
         run: flutter analyze
       - name: Run tests

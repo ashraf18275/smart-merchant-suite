@@ -5,9 +5,15 @@ abstract interface class ProductCatalog {
 
   Future<void> update(Product product);
 
-  Future<void> setActive({required int productId, required bool isActive});
+  Future<void> setActive({
+    required int productId,
+    required bool isActive,
+  });
 
-  Future<List<Product>> all({String search = '', bool includeInactive = false});
+  Future<List<Product>> all({
+    String search = '',
+    bool includeInactive = false,
+  });
 
   Future<void> changeStock({
     required int productId,

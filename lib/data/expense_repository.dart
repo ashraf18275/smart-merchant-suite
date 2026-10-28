@@ -1,11 +1,10 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
-import '../application/ports/expense_service.dart';
-import '../core/app_error.dart';
+import '../application/ports/expense_store.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
 
-class ExpenseRepository implements ExpenseService {
+class ExpenseRepository implements ExpenseStore {
   ExpenseRepository(this._db);
   final Database _db;
 
@@ -31,9 +30,6 @@ class ExpenseRepository implements ExpenseService {
 
   Future<int> add({required String description, required String category, required int amountMinor}) async {
     final d = description.trim(), c = category.trim();
-    if (d.isEmpty) throw AppException('وصف المصروف مطلوب');
-    if (c.isEmpty) throw AppException('تصنيف المصروف مطلوب');
-    if (amountMinor <= 0) throw AppException('قيمة المصروف يجب أن تكون أكبر من صفر');
     return _db.insert('expenses', {
       'description': d, 'category': c, 'amount_minor': amountMinor,
       'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -41,9 +37,6 @@ class ExpenseRepository implements ExpenseService {
   }
 
   Future<List<ExpenseRecord>> all({DateTime? from, DateTime? to}) async {
-    if (from != null && to != null && from.isAfter(to)) {
-      throw AppException('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');
-    }
     final bounds = _dateBounds(from, to);
     final where = _whereDateRange(from, to, 'created_at');
     final rows = await _db.rawQuery(
@@ -56,9 +49,6 @@ class ExpenseRepository implements ExpenseService {
   }
 
   Future<ProfitSummary> summary({DateTime? from, DateTime? to}) async {
-    if (from != null && to != null && from.isAfter(to)) {
-      throw AppException('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');
-    }
     final bounds = _dateBounds(from, to);
     final salesWhere = _whereDateRange(from, to, 'created_at');
     final sales = await _db.rawQuery(

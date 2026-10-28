@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_merchant_suite/application/services/product_application_service.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
@@ -16,7 +17,7 @@ Future<void> pumpDatabaseResult(WidgetTester tester) async {
 
 void main() {
   late Database database;
-  late ProductRepository repository;
+  late ProductApplicationService repository;
 
   setUpAll(() {
     sqfliteFfiInit();
@@ -25,7 +26,7 @@ void main() {
   setUp(() async {
     database = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(database);
-    repository = ProductRepository(database);
+    repository = ProductApplicationService(ProductRepository(database));
   });
 
   tearDown(() async {

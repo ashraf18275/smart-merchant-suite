@@ -1,6 +1,6 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
-import '../application/ports/product_catalog.dart';
+import '../application/ports/product_store.dart';
 import '../core/app_error.dart';
 import '../domain/product.dart';
 
@@ -30,39 +30,18 @@ Product _productFromRow(Map<String, Object?> row) => Product(
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
     );
 
-class ProductRepository implements ProductCatalog {
+class ProductRepository implements ProductStore {
   ProductRepository(this._db);
 
   final Database _db;
 
   Future<int> add(Product product) async {
-    final name = product.name.trim();
-    if (name.isEmpty) {
-      throw AppException('اسم المنتج مطلوب');
-    }
-    if (product.costMinor < 0 || product.priceMinor < 0) {
-      throw AppException('السعر والتكلفة لا يمكن أن يكونا سالبين');
-    }
-    if (product.stockQuantity < 0) {
-      throw AppException('كمية المخزون لا يمكن أن تكون سالبة');
-    }
-
     return _db.insert('products', _productToRow(product));
   }
 
   /// Updates editable product details without changing the stock balance.
   Future<void> update(Product product) async {
     final id = product.id;
-    if (id == null) {
-      throw AppException('معرّف المنتج مطلوب للتعديل');
-    }
-    if (product.name.trim().isEmpty) {
-      throw AppException('اسم المنتج مطلوب');
-    }
-    if (product.costMinor < 0 || product.priceMinor < 0) {
-      throw AppException('السعر والتكلفة لا يمكن أن يكونا سالبين');
-    }
-
     final normalizedSku = product.sku?.trim();
     final changed = await _db.update(
       'products',
@@ -123,13 +102,6 @@ class ProductRepository implements ProductCatalog {
     required int quantityDelta,
     required String reason,
   }) async {
-    if (quantityDelta == 0) {
-      throw AppException('يجب أن تكون حركة المخزون أكبر من صفر أو أقل من صفر');
-    }
-    if (reason.trim().isEmpty) {
-      throw AppException('سبب حركة المخزون مطلوب');
-    }
-
     await _db.transaction((txn) async {
       final rows = await txn.query(
         'products',

@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_merchant_suite/application/services/expense_application_service.dart';
+import 'package:smart_merchant_suite/application/services/product_application_service.dart';
+import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
@@ -9,7 +12,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   late Database database;
-  late ProductRepository products;
+  late ProductApplicationService products;
 
   setUpAll(() {
     sqfliteFfiInit();
@@ -18,7 +21,7 @@ void main() {
   setUp(() async {
     database = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(database);
-    products = ProductRepository(database);
+    products = ProductApplicationService(ProductRepository(database));
   });
 
   tearDown(() async {
@@ -150,10 +153,9 @@ void main() {
       priceMinor: 900,
       stockQuantity: 5,
     ));
-    final sales = SalesRepository(database);
-    final saleId = await sales.createSingleProductSale(
-      productId: id,
-      quantity: 2,
+    final sales = SalesApplicationService(SalesRepository(database));
+    final saleId = await sales.createSale(
+      quantities: {id: 2},
       paidMinor: 1000,
     );
 
@@ -179,9 +181,8 @@ void main() {
       stockQuantity: 1,
     ));
     await expectLater(
-      SalesRepository(database).createSingleProductSale(
-        productId: id,
-        quantity: 2,
+      SalesApplicationService(SalesRepository(database)).createSale(
+        quantities: {id: 2},
         paidMinor: 0,
       ),
       throwsA(isA<AppException>()),
@@ -200,7 +201,7 @@ void main() {
       name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 3,
     ));
 
-    final sales = SalesRepository(database);
+    final sales = SalesApplicationService(SalesRepository(database));
     final id = await sales.createSale(
       quantities: {charger: 2, headset: 1},
       paidMinor: 3000,
@@ -227,7 +228,7 @@ void main() {
     ));
 
     await expectLater(
-      SalesRepository(database).createSale(
+      SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {first: 2, second: 2},
         paidMinor: 0,
       ),
@@ -242,8 +243,10 @@ void main() {
 
   test('records expenses and calculates all-time profit summary', () async {
     final id = await products.add(const Product(name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5));
-    await SalesRepository(database).createSingleProductSale(productId: id, quantity: 2, paidMinor: 1800);
-    final expenses = ExpenseRepository(database);
+    await SalesApplicationService(SalesRepository(database)).createSale(
+      quantities: {id: 2}, paidMinor: 1800,
+    );
+    final expenses = ExpenseApplicationService(ExpenseRepository(database));
     await expenses.add(description: 'إيجار المحل', category: 'إيجار', amountMinor: 4000);
     final s = await expenses.summary();
     expect(s.salesMinor, 1800);
@@ -258,12 +261,12 @@ void main() {
     final id = await products.add(const Product(
       name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
     ));
-    await SalesRepository(database).createSingleProductSale(
-      productId: id, quantity: 2, paidMinor: 1800,
+    await SalesApplicationService(SalesRepository(database)).createSale(
+      quantities: {id: 2}, paidMinor: 1800,
     );
     await database.update('sales', {'created_at': '2025-01-10T12:00:00.000Z'});
     await database.update('sale_items', {'quantity': 2});
-    final expenses = ExpenseRepository(database);
+    final expenses = ExpenseApplicationService(ExpenseRepository(database));
     await expenses.add(description: 'مصروف داخل الفترة', category: 'أخرى', amountMinor: 300);
     await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700);
     await database.update('expenses', {'created_at': '2025-01-10T09:00:00.000Z'},
@@ -292,5 +295,41 @@ void main() {
       )),
       throwsA(isA<AppException>()),
     );
+  });
+
+  test('sales application service rejects an empty or invalid request', () async {
+    final sales = SalesApplicationService(SalesRepository(database));
+
+    await expectLater(
+      sales.createSale(quantities: const {}, paidMinor: 0),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      sales.createSale(quantities: {1: 0}, paidMinor: 0),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      sales.createSale(quantities: {1: 1}, paidMinor: -1),
+      throwsA(isA<AppException>()),
+    );
+    expect(await database.query('sales'), isEmpty);
+  });
+
+  test('expense application service validates entries and date ranges', () async {
+    final expenses = ExpenseApplicationService(ExpenseRepository(database));
+
+    await expectLater(
+      expenses.add(description: ' ', category: 'أخرى', amountMinor: 100),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      expenses.add(description: 'قلم', category: 'أخرى', amountMinor: 0),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      expenses.all(from: DateTime(2025, 2, 2), to: DateTime(2025, 2, 1)),
+      throwsA(isA<AppException>()),
+    );
+    expect(await database.query('expenses'), isEmpty);
   });
 }
