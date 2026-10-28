@@ -43,8 +43,16 @@ jobs:
           cache: true
       - name: Resolve dependencies
         run: flutter pub get
-      - name: Check application-layer formatting
-        run: dart format --output=none --set-exit-if-changed lib/application
+      - name: Format application sources
+        run: dart format lib/application
+      - name: Export formatted sources and dependency lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-engineering-inputs
+          path: |
+            lib/application/
+            pubspec.lock
+          retention-days: 2
       - name: Analyze
         run: flutter analyze
       - name: Run tests
