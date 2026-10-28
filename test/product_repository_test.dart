@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
@@ -100,7 +101,7 @@ void main() {
         quantityDelta: -2,
         reason: 'اختبار المخزون السالب',
       ),
-      throwsA(isA<StateError>()),
+      throwsA(isA<AppException>()),
     );
 
     expect((await products.all()).single.stockQuantity, 1);
@@ -133,7 +134,7 @@ void main() {
         quantityDelta: 1,
         reason: 'محاولة بعد الإيقاف',
       ),
-      throwsA(isA<StateError>()),
+      throwsA(isA<AppException>()),
     );
 
     await products.setActive(productId: id, isActive: true);
@@ -181,7 +182,7 @@ void main() {
         quantity: 2,
         paidMinor: 0,
       ),
-      throwsA(isA<StateError>()),
+      throwsA(isA<AppException>()),
     );
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('sale_items'), isEmpty);
@@ -228,7 +229,7 @@ void main() {
         quantities: {first: 2, second: 2},
         paidMinor: 0,
       ),
-      throwsA(isA<StateError>()),
+      throwsA(isA<AppException>()),
     );
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('sale_items'), isEmpty);
@@ -287,7 +288,7 @@ void main() {
         costMinor: 0,
         priceMinor: 100,
       )),
-      throwsArgumentError,
+      throwsA(isA<AppException>()),
     );
   });
 }

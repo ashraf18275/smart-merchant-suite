@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite_common/sqlite_api.dart';
+
+import '../core/app_error.dart';
 import '../data/expense_repository.dart';
 
 class ExpensesPage extends StatefulWidget {
@@ -46,7 +48,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
       setState(() { _items = v[0] as List<ExpenseRecord>; _summary = v[1] as ProfitSummary; _loading = false; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = 'تعذر تحميل التقرير: $e'; });
+      setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل التقرير.', operation: 'expenses.load'); });
     }
   }
 
@@ -122,7 +124,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
       await _repo.add(description: result['description']! as String, category: result['category']! as String, amountMinor: result['amount']! as int);
       await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المصروف')));
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر حفظ المصروف: $e'))); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر حفظ المصروف.', operation: 'expenses.create')))); }
   }
 
   Widget _tile(String title, int amount, IconData icon) => Card(child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [

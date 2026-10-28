@@ -3,13 +3,14 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import '../core/app_error.dart';
 
 import '../data/csv_encoder.dart';
 
@@ -81,7 +82,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
         text: 'تصدير ${spec.label} من عدة التاجر الذكي',
       );
     } catch (error) {
-      _showError('تعذر تصدير CSV: $error');
+      _showError(appErrorMessage(error, fallback: 'تعذر تصدير ملف CSV.', operation: 'data.export_csv'));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -103,7 +104,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (selection == null || selection.files.isEmpty) return;
       final bytes = selection.files.single.bytes;
       if (bytes == null || bytes.isEmpty) {
-        throw StateError('تعذر قراءة الملف المختار.');
+        throw AppException('تعذر قراءة الملف المختار.');
       }
 
       final directory = await getTemporaryDirectory();
@@ -123,14 +124,14 @@ class _DataTransferPageState extends State<DataTransferPage> {
 
       final integrity = await opened.rawQuery('PRAGMA integrity_check');
       if (integrity.isEmpty || integrity.first.values.first != 'ok') {
-        throw StateError('الملف لا يجتاز فحص سلامة SQLite.');
+        throw AppException('الملف لا يجتاز فحص سلامة SQLite.');
       }
       final versionRows = await opened.rawQuery('PRAGMA user_version');
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (schemaVersion != 3) {
-        throw StateError(
+        throw AppException(
           'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المطلوب: 3).',
         );
       }
@@ -140,13 +141,13 @@ class _DataTransferPageState extends State<DataTransferPage> {
         final tableInfo = await opened.rawQuery('PRAGMA table_info(' + spec.table + ')');
         final available = tableInfo.map((column) => column['name'] as String).toSet();
         if (!spec.columns.every(available.contains)) {
-          throw StateError('النسخة لا تحتوي على بنية جدول ' + spec.label + ' المتوقعة.');
+          throw AppException('النسخة لا تحتوي على بنية جدول ' + spec.label + ' المتوقعة.');
         }
         data[spec.table] = await opened.query(spec.table, orderBy: 'id ASC');
       }
       final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
       if (foreignKeyErrors.isNotEmpty) {
-        throw StateError('النسخة تحتوي على روابط غير سليمة بين السجلات.');
+        throw AppException('النسخة تحتوي على روابط غير سليمة بين السجلات.');
       }
       await opened.close();
       source = null;
@@ -204,7 +205,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
         const SnackBar(content: Text('تمت استعادة البيانات بنجاح.')),
       );
     } catch (error) {
-      _showError('تعذرت استعادة النسخة الاحتياطية: ' + error.toString());
+      _showError(appErrorMessage(error, fallback: 'تعذرت استعادة النسخة الاحتياطية.', operation: 'data.restore'));
     } finally {
       try {
         if (source != null) {
@@ -231,7 +232,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
     try {
       final integrity = await widget.database.rawQuery('PRAGMA integrity_check');
       if (integrity.isEmpty || integrity.first.values.first != 'ok') {
-        throw StateError('فشل فحص سلامة قاعدة البيانات؛ لم يتم إنشاء النسخة.');
+        throw AppException('فشل فحص سلامة قاعدة البيانات؛ لم يتم إنشاء النسخة.');
       }
 
       final versionRows = await widget.database.rawQuery('PRAGMA user_version');
@@ -239,13 +240,13 @@ class _DataTransferPageState extends State<DataTransferPage> {
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (schemaVersion != 3) {
-        throw StateError('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
+        throw AppException('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
       }
 
       // Require SQLite to finish checkpointing before copying the database file.
       final checkpoint = await widget.database.rawQuery('PRAGMA wal_checkpoint(FULL)');
       if (checkpoint.isEmpty) {
-        throw StateError('تعذر التأكد من اكتمال تجهيز قاعدة البيانات للنسخ الاحتياطي.');
+        throw AppException('تعذر التأكد من اكتمال تجهيز قاعدة البيانات للنسخ الاحتياطي.');
       }
       final checkpointRow = checkpoint.first;
       final busy = (checkpointRow['busy'] as num?)?.toInt() ?? 0;
@@ -256,12 +257,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
           (walFrames >= 0 &&
               checkpointedFrames >= 0 &&
               checkpointedFrames < walFrames)) {
-        throw StateError('تعذر إكمال تجهيز قاعدة البيانات للنسخ؛ أغلق العمليات الجارية ثم أعد المحاولة.');
+        throw AppException('تعذر إكمال تجهيز قاعدة البيانات للنسخ؛ أغلق العمليات الجارية ثم أعد المحاولة.');
       }
 
       final sourceFile = File(widget.database.path);
       if (!await sourceFile.exists()) {
-        throw StateError('لم يتم العثور على ملف قاعدة البيانات.');
+        throw AppException('لم يتم العثور على ملف قاعدة البيانات.');
       }
       final directory = await getTemporaryDirectory();
       backup = File(p.join(directory.path, 'smart_merchant_backup_${_timestamp()}.db'));
@@ -280,14 +281,14 @@ class _DataTransferPageState extends State<DataTransferPage> {
       verificationDb = opened;
       final backupIntegrity = await opened.rawQuery('PRAGMA integrity_check');
       if (backupIntegrity.isEmpty || backupIntegrity.first.values.first != 'ok') {
-        throw StateError('فشل فحص سلامة ملف النسخة الاحتياطية بعد إنشائه.');
+        throw AppException('فشل فحص سلامة ملف النسخة الاحتياطية بعد إنشائه.');
       }
       final backupVersionRows = await opened.rawQuery('PRAGMA user_version');
       final backupVersion = backupVersionRows.isEmpty
           ? 0
           : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (backupVersion != 3) {
-        throw StateError('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
+        throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
         final originalRows = await widget.database.query(
@@ -303,7 +304,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
         // Compare actual row contents as well as counts; equal counts alone
         // cannot detect a stale or mismatched copy.
         if (jsonEncode(originalRows) != jsonEncode(backupRows)) {
-          throw StateError('لم تتطابق بيانات جدول ${spec.label} في النسخة الاحتياطية.');
+          throw AppException('لم تتطابق بيانات جدول ${spec.label} في النسخة الاحتياطية.');
         }
       }
       final originalMigrations = await widget.database.query(
@@ -317,12 +318,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
         orderBy: 'version ASC',
       );
       if (jsonEncode(originalMigrations) != jsonEncode(backupMigrations)) {
-        throw StateError('لم تتطابق بيانات إصدارات المخطط في النسخة الاحتياطية.');
+        throw AppException('لم تتطابق بيانات إصدارات المخطط في النسخة الاحتياطية.');
       }
 
       final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
       if (foreignKeyErrors.isNotEmpty) {
-        throw StateError('ملف النسخة الاحتياطية يحتوي على روابط غير سليمة.');
+        throw AppException('ملف النسخة الاحتياطية يحتوي على روابط غير سليمة.');
       }
       await opened.close();
       verificationDb = null;
@@ -346,7 +347,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (backup != null && await backup.exists()) {
         await backup.delete();
       }
-      _showError('تعذر إنشاء نسخة احتياطية موثوقة: $error');
+      _showError(appErrorMessage(error, fallback: 'تعذر إنشاء نسخة احتياطية موثوقة.', operation: 'data.backup'));
     } finally {
       try {
         if (verificationDb != null) await verificationDb.close();

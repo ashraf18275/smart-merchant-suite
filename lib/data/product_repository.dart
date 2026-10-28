@@ -1,4 +1,6 @@
 import 'package:sqflite_common/sqlite_api.dart';
+
+import '../core/app_error.dart';
 import 'expense_repository.dart';
 
 /// Creates the first version of the local schema.
@@ -138,13 +140,13 @@ class ProductRepository {
   Future<int> add(Product product) async {
     final name = product.name.trim();
     if (name.isEmpty) {
-      throw ArgumentError('اسم المنتج مطلوب');
+      throw AppException('اسم المنتج مطلوب');
     }
     if (product.costMinor < 0 || product.priceMinor < 0) {
-      throw ArgumentError('السعر والتكلفة لا يمكن أن يكونا سالبين');
+      throw AppException('السعر والتكلفة لا يمكن أن يكونا سالبين');
     }
     if (product.stockQuantity < 0) {
-      throw ArgumentError('كمية المخزون لا يمكن أن تكون سالبة');
+      throw AppException('كمية المخزون لا يمكن أن تكون سالبة');
     }
 
     return _db.insert('products', product.toMap());
@@ -154,13 +156,13 @@ class ProductRepository {
   Future<void> update(Product product) async {
     final id = product.id;
     if (id == null) {
-      throw ArgumentError('معرّف المنتج مطلوب للتعديل');
+      throw AppException('معرّف المنتج مطلوب للتعديل');
     }
     if (product.name.trim().isEmpty) {
-      throw ArgumentError('اسم المنتج مطلوب');
+      throw AppException('اسم المنتج مطلوب');
     }
     if (product.costMinor < 0 || product.priceMinor < 0) {
-      throw ArgumentError('السعر والتكلفة لا يمكن أن يكونا سالبين');
+      throw AppException('السعر والتكلفة لا يمكن أن يكونا سالبين');
     }
 
     final normalizedSku = product.sku?.trim();
@@ -178,7 +180,7 @@ class ProductRepository {
       whereArgs: [id],
     );
     if (changed == 0) {
-      throw StateError('المنتج غير موجود');
+      throw AppException('المنتج غير موجود');
     }
   }
 
@@ -191,7 +193,7 @@ class ProductRepository {
       whereArgs: [productId],
     );
     if (changed == 0) {
-      throw StateError('المنتج غير موجود');
+      throw AppException('المنتج غير موجود');
     }
   }
 
@@ -224,10 +226,10 @@ class ProductRepository {
     required String reason,
   }) async {
     if (quantityDelta == 0) {
-      throw ArgumentError('يجب أن تكون حركة المخزون أكبر من صفر أو أقل من صفر');
+      throw AppException('يجب أن تكون حركة المخزون أكبر من صفر أو أقل من صفر');
     }
     if (reason.trim().isEmpty) {
-      throw ArgumentError('سبب حركة المخزون مطلوب');
+      throw AppException('سبب حركة المخزون مطلوب');
     }
 
     await _db.transaction((txn) async {
@@ -239,13 +241,13 @@ class ProductRepository {
         limit: 1,
       );
       if (rows.isEmpty) {
-        throw StateError('المنتج غير موجود أو غير نشط');
+        throw AppException('المنتج غير موجود أو غير نشط');
       }
 
       final current = rows.single['stock_quantity']! as int;
       final next = current + quantityDelta;
       if (next < 0) {
-        throw StateError('الكمية غير كافية؛ لا يسمح بالمخزون السالب');
+        throw AppException('الكمية غير كافية؛ لا يسمح بالمخزون السالب');
       }
 
       await txn.update(

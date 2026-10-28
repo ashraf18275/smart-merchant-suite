@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../core/app_error.dart';
 import '../data/product_repository.dart';
 
 class ProductsPage extends StatefulWidget {
@@ -40,7 +42,7 @@ class _ProductsPageState extends State<ProductsPage> {
       setState(() { _items = result; _loading = false; _error = null; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = 'تعذر تحميل المنتجات: $e'; });
+      setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل المنتجات.', operation: 'products.load'); });
     }
   }
 
@@ -117,7 +119,7 @@ class _ProductsPageState extends State<ProductsPage> {
         await _load();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المنتج محليًا')));
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر حفظ المنتج: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر حفظ المنتج.', operation: 'products.create'))));
       }
     }
     name.dispose(); sku.dispose(); cost.dispose(); price.dispose(); stock.dispose();
@@ -209,7 +211,7 @@ class _ProductsPageState extends State<ProductsPage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('تعذر تعديل المنتج: $e')),
+            SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر تعديل المنتج.', operation: 'products.edit'))),
           );
         }
       }
@@ -254,7 +256,7 @@ class _ProductsPageState extends State<ProductsPage> {
         await _load();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث المخزون وتسجيل الحركة')));
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('لم يتم تعديل المخزون: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(e, fallback: 'لم يتم تعديل المخزون.', operation: 'inventory.adjust'))));
       }
     }
     delta.dispose(); reason.dispose();
@@ -300,7 +302,7 @@ class _ProductsPageState extends State<ProductsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذر تغيير حالة المنتج: $e')),
+          SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر تغيير حالة المنتج.', operation: 'products.archive'))),
         );
       }
     }

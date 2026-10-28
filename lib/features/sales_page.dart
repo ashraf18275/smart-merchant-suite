@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite_common/sqlite_api.dart';
+
+import '../core/app_error.dart';
 import '../data/product_repository.dart';
 import '../data/sales_repository.dart';
 
@@ -43,7 +45,7 @@ class _SalesPageState extends State<SalesPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = 'تعذر تحميل المبيعات: $e'; });
+      setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل المبيعات.', operation: 'sales.load'); });
     }
   }
 
@@ -143,7 +145,7 @@ class _SalesPageState extends State<SalesPage> {
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('لم يتم حفظ الفاتورة: $e')),
+        SnackBar(content: Text(appErrorMessage(e, fallback: 'لم يتم حفظ الفاتورة.', operation: 'sales.create'))),
       );
     }
   }

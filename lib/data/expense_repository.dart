@@ -1,5 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../core/app_error.dart';
+
 Future<void> createExpensesSchema(Database db) async {
   await db.execute('''
     CREATE TABLE IF NOT EXISTS expenses (
@@ -64,9 +66,9 @@ class ExpenseRepository {
 
   Future<int> add({required String description, required String category, required int amountMinor}) async {
     final d = description.trim(), c = category.trim();
-    if (d.isEmpty) throw ArgumentError('وصف المصروف مطلوب');
-    if (c.isEmpty) throw ArgumentError('تصنيف المصروف مطلوب');
-    if (amountMinor <= 0) throw ArgumentError('قيمة المصروف يجب أن تكون أكبر من صفر');
+    if (d.isEmpty) throw AppException('وصف المصروف مطلوب');
+    if (c.isEmpty) throw AppException('تصنيف المصروف مطلوب');
+    if (amountMinor <= 0) throw AppException('قيمة المصروف يجب أن تكون أكبر من صفر');
     return _db.insert('expenses', {
       'description': d, 'category': c, 'amount_minor': amountMinor,
       'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -75,7 +77,7 @@ class ExpenseRepository {
 
   Future<List<ExpenseRecord>> all({DateTime? from, DateTime? to}) async {
     if (from != null && to != null && from.isAfter(to)) {
-      throw ArgumentError('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');
+      throw AppException('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');
     }
     final bounds = _dateBounds(from, to);
     final where = _whereDateRange(from, to, 'created_at');
@@ -90,7 +92,7 @@ class ExpenseRepository {
 
   Future<ProfitSummary> summary({DateTime? from, DateTime? to}) async {
     if (from != null && to != null && from.isAfter(to)) {
-      throw ArgumentError('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');
+      throw AppException('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');
     }
     final bounds = _dateBounds(from, to);
     final salesWhere = _whereDateRange(from, to, 'created_at');

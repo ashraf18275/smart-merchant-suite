@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/app_error.dart';
 import 'data/local_database.dart';
 import 'data/product_repository.dart';
 import 'features/products_page.dart';
@@ -139,7 +140,7 @@ class HomeDashboard extends StatelessWidget {
                           } finally { await database.close(); }
                         } catch (error) {
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر فتح شاشة المصروفات: $error')));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(error, fallback: 'تعذر فتح شاشة المصروفات.', operation: 'expenses.open'))));
                         }
                       } : index == 1 ? () async {
                         try {
@@ -158,7 +159,7 @@ class HomeDashboard extends StatelessWidget {
                         } catch (error) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('تعذر فتح شاشة المبيعات: $error')),
+                            SnackBar(content: Text(appErrorMessage(error, fallback: 'تعذر فتح شاشة المبيعات.', operation: 'sales.open'))),
                           );
                         }
                       } : index == 0 ? () async {
@@ -178,7 +179,7 @@ class HomeDashboard extends StatelessWidget {
                         } catch (error) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('تعذر فتح قاعدة البيانات المحلية: $error')),
+                            SnackBar(content: Text(appErrorMessage(error, fallback: 'تعذر فتح قاعدة البيانات المحلية.', operation: 'database.open'))),
                           );
                         }
                       } : index == 3 ? () async {
@@ -193,7 +194,7 @@ class HomeDashboard extends StatelessWidget {
                         } catch (error) {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('تعذر فتح أدوات تصدير البيانات: $error')),
+                            SnackBar(content: Text(appErrorMessage(error, fallback: 'تعذر فتح أدوات تصدير البيانات.', operation: 'data_transfer.open'))),
                           );
                         }
                       } : null,

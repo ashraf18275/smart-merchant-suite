@@ -1,5 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../core/app_error.dart';
+
 class SaleRecord {
   const SaleRecord({
     required this.id,
@@ -34,11 +36,11 @@ class SalesRepository {
     required Map<int, int> quantities,
     required int paidMinor,
   }) async {
-    if (quantities.isEmpty) throw ArgumentError('أضف صنفًا واحدًا على الأقل');
+    if (quantities.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل');
     if (quantities.values.any((quantity) => quantity <= 0)) {
-      throw ArgumentError('كل كميات البيع يجب أن تكون أكبر من صفر');
+      throw AppException('كل كميات البيع يجب أن تكون أكبر من صفر');
     }
-    if (paidMinor < 0) throw ArgumentError('المبلغ المدفوع لا يمكن أن يكون سالبًا');
+    if (paidMinor < 0) throw AppException('المبلغ المدفوع لا يمكن أن يكون سالبًا');
 
     return _db.transaction((txn) async {
       final items = <Map<String, int>>[];
@@ -51,10 +53,10 @@ class SalesRepository {
           whereArgs: [entry.key],
           limit: 1,
         );
-        if (rows.isEmpty) throw StateError('أحد المنتجات غير موجود أو غير نشط');
+        if (rows.isEmpty) throw AppException('أحد المنتجات غير موجود أو غير نشط');
         final product = rows.single;
         final stock = product['stock_quantity']! as int;
-        if (stock < entry.value) throw StateError('الكمية غير كافية للمنتج رقم ${entry.key}');
+        if (stock < entry.value) throw AppException('الكمية غير كافية لأحد المنتجات.');
         final price = product['price_minor']! as int;
         final cost = product['cost_minor']! as int;
         final lineTotal = price * entry.value;
@@ -68,7 +70,7 @@ class SalesRepository {
           'lineTotal': lineTotal,
         });
       }
-      if (paidMinor > total) throw ArgumentError('المبلغ المدفوع أكبر من إجمالي الفاتورة');
+      if (paidMinor > total) throw AppException('المبلغ المدفوع أكبر من إجمالي الفاتورة');
 
       final createdAt = DateTime.now().toUtc().toIso8601String();
       final saleId = await txn.insert('sales', {
