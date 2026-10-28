@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'core/app_error.dart';
 import 'data/local_database.dart';
+import 'data/expense_repository.dart';
 import 'data/product_repository.dart';
+import 'data/sales_repository.dart';
 import 'features/products_page.dart';
 import 'features/sales_page.dart';
 import 'features/expenses_page.dart';
@@ -135,7 +137,9 @@ class HomeDashboard extends StatelessWidget {
                           if (!context.mounted) { await database.close(); return; }
                           try {
                             await Navigator.of(context).push(MaterialPageRoute<void>(
-                              builder: (_) => ExpensesPage(database: database),
+                              builder: (_) => ExpensesPage(
+                                repository: ExpenseRepository(database),
+                              ),
                             ));
                           } finally { await database.close(); }
                         } catch (error) {
@@ -151,7 +155,10 @@ class HomeDashboard extends StatelessWidget {
                           }
                           try {
                             await Navigator.of(context).push(MaterialPageRoute<void>(
-                              builder: (_) => SalesPage(database: database),
+                              builder: (_) => SalesPage(
+                                products: ProductRepository(database),
+                                sales: SalesRepository(database),
+                              ),
                             ));
                           } finally {
                             await database.close();

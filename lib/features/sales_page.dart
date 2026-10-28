@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite_common/sqlite_api.dart';
 
+import '../application/ports/product_catalog.dart';
+import '../application/ports/sales_service.dart';
 import '../core/app_error.dart';
-import '../data/product_repository.dart';
-import '../data/sales_repository.dart';
 import '../domain/product.dart';
 import '../domain/sale_record.dart';
 
 class SalesPage extends StatefulWidget {
-  const SalesPage({super.key, required this.database});
-  final Database database;
+  const SalesPage({
+    super.key,
+    required this.products,
+    required this.sales,
+  });
+
+  final ProductCatalog products;
+  final SalesService sales;
+
   @override
   State<SalesPage> createState() => _SalesPageState();
 }
 
 class _SalesPageState extends State<SalesPage> {
-  late final ProductRepository _products = ProductRepository(widget.database);
-  late final SalesRepository _sales = SalesRepository(widget.database);
+  ProductCatalog get _products => widget.products;
+  SalesService get _sales => widget.sales;
   List<Product> _productsList = [];
   List<SaleRecord> _salesList = [];
   bool _loading = true;

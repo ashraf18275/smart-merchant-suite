@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../application/ports/product_catalog.dart';
 import '../core/app_error.dart';
-import '../data/product_repository.dart';
 import '../domain/product.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key, required this.repository});
-  final ProductRepository repository;
+  final ProductCatalog repository;
 
   @override
   State<ProductsPage> createState() => _ProductsPageState();

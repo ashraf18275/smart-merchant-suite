@@ -1,9 +1,10 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../application/ports/sales_service.dart';
 import '../core/app_error.dart';
 import '../domain/sale_record.dart';
 
-class SalesRepository {
+class SalesRepository implements SalesService {
   SalesRepository(this._db);
   final Database _db;
 

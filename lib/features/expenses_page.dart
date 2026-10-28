@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite_common/sqlite_api.dart';
 
+import '../application/ports/expense_service.dart';
 import '../core/app_error.dart';
-import '../data/expense_repository.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
 
 class ExpensesPage extends StatefulWidget {
-  const ExpensesPage({super.key, required this.database});
-  final Database database;
+  const ExpensesPage({super.key, required this.repository});
+  final ExpenseService repository;
+
   @override
   State<ExpensesPage> createState() => _ExpensesPageState();
 }
 
 class _ExpensesPageState extends State<ExpensesPage> {
-  late final ExpenseRepository _repo = ExpenseRepository(widget.database);
+  ExpenseService get _repo => widget.repository;
   List<ExpenseRecord> _items = [];
   ProfitSummary _summary = const ProfitSummary(salesMinor: 0, costOfGoodsMinor: 0, expensesMinor: 0);
   bool _loading = true;

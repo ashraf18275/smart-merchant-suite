@@ -1,5 +1,6 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../application/ports/product_catalog.dart';
 import '../core/app_error.dart';
 import '../domain/product.dart';
 
@@ -29,7 +30,7 @@ Product _productFromRow(Map<String, Object?> row) => Product(
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
     );
 
-class ProductRepository {
+class ProductRepository implements ProductCatalog {
   ProductRepository(this._db);
 
   final Database _db;
