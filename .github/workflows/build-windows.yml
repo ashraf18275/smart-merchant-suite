@@ -1,0 +1,52 @@
+name: Build Windows desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "feature/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Windows runner
+        run: flutter create --platforms=windows --project-name smart_merchant_suite .
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package Windows app
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$releaseDir/smart_merchant_suite.exe")) {
+            throw "The Windows executable was not produced."
+          }
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath "dist/smart-merchant-suite-windows-x64.zip" -CompressionLevel Optimal
+          $hash = (Get-FileHash "dist/smart-merchant-suite-windows-x64.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  smart-merchant-suite-windows-x64.zip" | Set-Content "dist/SHA256SUMS.txt"
+
+      - name: Upload downloadable Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-merchant-suite-windows-x64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
