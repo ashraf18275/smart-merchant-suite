@@ -1,136 +1,33 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
-import 'expense_repository.dart';
+import '../domain/product.dart';
 
-/// Creates the first version of the local schema.
-Future<void> createLocalSchema(Database db) async {
-  await db.execute('''
-    CREATE TABLE products (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
-      sku TEXT UNIQUE,
-      cost_minor INTEGER NOT NULL CHECK (cost_minor >= 0),
-      price_minor INTEGER NOT NULL CHECK (price_minor >= 0),
-      stock_quantity INTEGER NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
-      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
-      created_at TEXT NOT NULL
-    )
-  ''');
-
-  await db.execute('''
-    CREATE TABLE inventory_movements (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      product_id INTEGER NOT NULL,
-      quantity_delta INTEGER NOT NULL CHECK (quantity_delta != 0),
-      reason TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (product_id) REFERENCES products (id)
-    )
-  ''');
-
-  await db.execute('''
-    CREATE TABLE schema_migrations (
-      version INTEGER PRIMARY KEY,
-      applied_at TEXT NOT NULL
-    )
-  ''');
-
-  await db.insert('schema_migrations', {
-    'version': 1,
-    'applied_at': DateTime.now().toUtc().toIso8601String(),
-  });
-  await createSalesSchema(db);
-  await createExpensesSchema(db);
+Map<String, Object?> _productToRow(Product product) {
+  final normalizedSku = product.sku?.trim();
+  return {
+    if (product.id != null) 'id': product.id,
+    'name': product.name.trim(),
+    'sku': normalizedSku == null || normalizedSku.isEmpty ? null : normalizedSku,
+    'cost_minor': product.costMinor,
+    'price_minor': product.priceMinor,
+    'stock_quantity': product.stockQuantity,
+    'is_active': product.isActive ? 1 : 0,
+    'created_at':
+        (product.createdAt ?? DateTime.now()).toUtc().toIso8601String(),
+  };
 }
 
-/// Adds the sales schema. Safe to call when upgrading an existing version-1 DB.
-Future<void> createSalesSchema(Database db) async {
-  await db.execute('''
-    CREATE TABLE IF NOT EXISTS sales (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      total_minor INTEGER NOT NULL CHECK (total_minor >= 0),
-      paid_minor INTEGER NOT NULL CHECK (paid_minor >= 0 AND paid_minor <= total_minor),
-      created_at TEXT NOT NULL
-    )
-  ''');
-  await db.execute('''
-    CREATE TABLE IF NOT EXISTS sale_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sale_id INTEGER NOT NULL,
-      product_id INTEGER NOT NULL,
-      quantity INTEGER NOT NULL CHECK (quantity > 0),
-      unit_price_minor INTEGER NOT NULL CHECK (unit_price_minor >= 0),
-      unit_cost_minor INTEGER NOT NULL CHECK (unit_cost_minor >= 0),
-      line_total_minor INTEGER NOT NULL CHECK (line_total_minor >= 0),
-      FOREIGN KEY (sale_id) REFERENCES sales (id),
-      FOREIGN KEY (product_id) REFERENCES products (id)
-    )
-  ''');
-  final applied = await db.query(
-    'schema_migrations',
-    columns: ['version'],
-    where: 'version = ?',
-    whereArgs: [2],
-    limit: 1,
-  );
-  if (applied.isEmpty) {
-    await db.insert('schema_migrations', {
-      'version': 2,
-      'applied_at': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-}
-
-class Product {
-  const Product({
-    this.id,
-    required this.name,
-    this.sku,
-    required this.costMinor,
-    required this.priceMinor,
-    this.stockQuantity = 0,
-    this.isActive = true,
-    this.createdAt,
-  });
-
-  final int? id;
-  final String name;
-  final String? sku;
-
-  /// Money is stored as integer minor units (for example, piastres), never double.
-  final int costMinor;
-  final int priceMinor;
-  final int stockQuantity;
-  final bool isActive;
-  final DateTime? createdAt;
-
-  Map<String, Object?> toMap() {
-    final normalizedSku = sku?.trim();
-    return {
-        if (id != null) 'id': id,
-        'name': name.trim(),
-        'sku': normalizedSku == null || normalizedSku.isEmpty ? null : normalizedSku,
-        'cost_minor': costMinor,
-        'price_minor': priceMinor,
-        'stock_quantity': stockQuantity,
-        'is_active': isActive ? 1 : 0,
-        'created_at':
-            (createdAt ?? DateTime.now()).toUtc().toIso8601String(),
-      };
-  }
-
-  factory Product.fromMap(Map<String, Object?> map) => Product(
-        id: map['id']! as int,
-        name: map['name']! as String,
-        sku: map['sku'] as String?,
-        costMinor: map['cost_minor']! as int,
-        priceMinor: map['price_minor']! as int,
-        stockQuantity: map['stock_quantity']! as int,
-        isActive: map['is_active'] == 1,
-        createdAt: DateTime.parse(map['created_at']! as String).toLocal(),
-      );
-}
+Product _productFromRow(Map<String, Object?> row) => Product(
+      id: row['id']! as int,
+      name: row['name']! as String,
+      sku: row['sku'] as String?,
+      costMinor: row['cost_minor']! as int,
+      priceMinor: row['price_minor']! as int,
+      stockQuantity: row['stock_quantity']! as int,
+      isActive: row['is_active'] == 1,
+      createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
+    );
 
 class ProductRepository {
   ProductRepository(this._db);
@@ -149,7 +46,7 @@ class ProductRepository {
       throw AppException('كمية المخزون لا يمكن أن تكون سالبة');
     }
 
-    return _db.insert('products', product.toMap());
+    return _db.insert('products', _productToRow(product));
   }
 
   /// Updates editable product details without changing the stock balance.
@@ -215,7 +112,7 @@ class ProductRepository {
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'name COLLATE NOCASE ASC',
     );
-    return rows.map(Product.fromMap).toList(growable: false);
+    return rows.map(_productFromRow).toList(growable: false);
   }
 
   /// Applies stock change and writes its audit movement atomically.

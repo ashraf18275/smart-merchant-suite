@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_error.dart';
 import '../data/product_repository.dart';
+import '../domain/product.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key, required this.repository});

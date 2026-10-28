@@ -3,6 +3,8 @@ import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
+import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
+import 'package:smart_merchant_suite/domain/product.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {

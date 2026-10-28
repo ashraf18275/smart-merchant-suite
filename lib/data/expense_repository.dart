@@ -2,25 +2,6 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
 
-Future<void> createExpensesSchema(Database db) async {
-  await db.execute('''
-    CREATE TABLE IF NOT EXISTS expenses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      description TEXT NOT NULL CHECK (length(trim(description)) > 0),
-      category TEXT NOT NULL,
-      amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
-      created_at TEXT NOT NULL
-    )
-  ''');
-  final rows = await db.query('schema_migrations', columns: ['version'],
-      where: 'version = ?', whereArgs: [3], limit: 1);
-  if (rows.isEmpty) {
-    await db.insert('schema_migrations', {
-      'version': 3, 'applied_at': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-}
-
 class ExpenseRecord {
   const ExpenseRecord({required this.id, required this.description, required this.category,
     required this.amountMinor, required this.createdAt});

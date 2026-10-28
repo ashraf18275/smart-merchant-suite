@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
+import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
+import 'package:smart_merchant_suite/domain/product.dart';
 import 'package:smart_merchant_suite/features/products_page.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 

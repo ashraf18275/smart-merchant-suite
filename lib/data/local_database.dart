@@ -4,8 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'product_repository.dart';
-import 'expense_repository.dart';
+import 'migrations/local_schema.dart';
 
 /// Opens the app's private local database on Android and desktop.
 /// Desktop uses SQLite FFI; mobile uses the platform SQLite plugin.
