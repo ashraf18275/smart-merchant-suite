@@ -1,25 +1,8 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
-
-class ExpenseRecord {
-  const ExpenseRecord({required this.id, required this.description, required this.category,
-    required this.amountMinor, required this.createdAt});
-  final int id;
-  final String description;
-  final String category;
-  final int amountMinor;
-  final DateTime createdAt;
-}
-
-class ProfitSummary {
-  const ProfitSummary({required this.salesMinor, required this.costOfGoodsMinor, required this.expensesMinor});
-  final int salesMinor;
-  final int costOfGoodsMinor;
-  final int expensesMinor;
-  int get grossProfitMinor => salesMinor - costOfGoodsMinor;
-  int get netProfitMinor => grossProfitMinor - expensesMinor;
-}
+import '../domain/expense_record.dart';
+import '../domain/profit_summary.dart';
 
 class ExpenseRepository {
   ExpenseRepository(this._db);

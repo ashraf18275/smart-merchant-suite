@@ -3,6 +3,8 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
 import '../data/expense_repository.dart';
+import '../domain/expense_record.dart';
+import '../domain/profit_summary.dart';
 
 class ExpensesPage extends StatefulWidget {
   const ExpensesPage({super.key, required this.database});

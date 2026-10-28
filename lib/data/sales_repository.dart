@@ -1,23 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
-
-class SaleRecord {
-  const SaleRecord({
-    required this.id,
-    required this.totalMinor,
-    required this.paidMinor,
-    required this.createdAt,
-    required this.itemCount,
-  });
-
-  final int id;
-  final int totalMinor;
-  final int paidMinor;
-  final DateTime createdAt;
-  final int itemCount;
-  int get remainingMinor => totalMinor - paidMinor;
-}
+import '../domain/sale_record.dart';
 
 class SalesRepository {
   SalesRepository(this._db);
