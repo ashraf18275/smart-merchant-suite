@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - "feature/**"
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "windows/**"
+      - ".github/workflows/build-windows.yml"
 
 permissions:
   contents: read
@@ -15,35 +22,33 @@ jobs:
     steps:
       - name: Check out branch
         uses: actions/checkout@v4
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
       - name: Generate Windows runner
         run: flutter create --platforms=windows --project-name smart_merchant_suite .
-
       - name: Resolve dependencies
         run: flutter pub get
-
       - name: Build Windows release
         run: flutter build windows --release
-
       - name: Package Windows app
         shell: pwsh
         run: |
           $releaseDir = "build/windows/x64/runner/Release"
-          if (-not (Test-Path "$releaseDir/smart_merchant_suite.exe")) {
-            throw "The Windows executable was not produced."
+          if (-not (Test-Path "$releaseDir/smart_merchant_suite.exe")) { throw "Windows executable missing." }
+          foreach ($runtimeFile in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            $source = Join-Path (Join-Path $env:WINDIR "System32") $runtimeFile
+            if (-not (Test-Path $source)) { throw "Required Visual C++ runtime missing: $runtimeFile" }
+            Copy-Item -LiteralPath $source -Destination $releaseDir -Force
           }
           New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          @("Platform: Windows", "Architecture: x64", "Build: Release", "Commit: $env:GITHUB_SHA", "Workflow run: $env:GITHUB_RUN_ID", "Visual C++ runtime: bundled", (flutter --version | Select-Object -First 1)) | Set-Content "dist/BUILD_INFO.txt"
           Compress-Archive -Path "$releaseDir/*" -DestinationPath "dist/smart-merchant-suite-windows-x64.zip" -CompressionLevel Optimal
           $hash = (Get-FileHash "dist/smart-merchant-suite-windows-x64.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  smart-merchant-suite-windows-x64.zip" | Set-Content "dist/SHA256SUMS.txt"
-
-      - name: Upload downloadable Windows build
+      - name: Upload Windows build artifact
         uses: actions/upload-artifact@v4
         with:
           name: smart-merchant-suite-windows-x64

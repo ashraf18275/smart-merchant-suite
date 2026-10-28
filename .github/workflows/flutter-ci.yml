@@ -6,7 +6,21 @@ on:
       - main
       - "feature/**"
       - "foundation/**"
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "analysis_options.yaml"
+      - ".github/workflows/flutter-ci.yml"
   pull_request:
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "analysis_options.yaml"
+      - ".github/workflows/flutter-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -22,18 +36,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
       - name: Resolve dependencies
         run: flutter pub get
-
       - name: Analyze
         run: flutter analyze
-
       - name: Run tests
         run: flutter test

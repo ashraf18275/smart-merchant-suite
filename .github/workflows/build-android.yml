@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - "feature/**"
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "android/**"
+      - ".github/workflows/build-android.yml"
 
 permissions:
   contents: read
@@ -15,16 +22,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
       - name: Generate Android platform files
         run: flutter create --platforms=android .
-
       - name: Set Android compile SDK
         run: |
           python3 - <<'PY'
@@ -43,18 +47,16 @@ jobs:
           if not found:
               raise SystemExit("Could not find the generated Android compileSdk setting.")
           PY
-
       - name: Resolve dependencies
         run: flutter pub get
-
-      - name: Build smaller APKs per processor architecture
+      - name: Build debug APKs per architecture
         run: flutter build apk --debug --split-per-abi
-
-      - name: Create SHA-256 manifest
+      - name: Create checksums and build information
         run: |
           cd build/app/outputs/flutter-apk
           sha256sum *-debug.apk > SHA256SUMS.txt
-
+          printf 'Platform: Android\nBuild: debug only\nABIs: arm64-v8a, armeabi-v7a, x86_64\nCommit: %s\nWorkflow run: %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > BUILD_INFO.txt
+          flutter --version | head -n 1 >> BUILD_INFO.txt
       - name: Upload split APK artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -62,5 +64,6 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/*-debug.apk
             build/app/outputs/flutter-apk/SHA256SUMS.txt
+            build/app/outputs/flutter-apk/BUILD_INFO.txt
           if-no-files-found: error
           retention-days: 14
