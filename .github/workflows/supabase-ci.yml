@@ -1,15 +1,15 @@
-name: Supabase Edge Function Check
+name: Supabase and PostgreSQL checks
 
 on:
   push:
     branches:
       - "feature/**"
     paths:
-      - "backend/supabase/functions/**"
+      - "backend/supabase/**"
       - ".github/workflows/supabase-ci.yml"
   pull_request:
     paths:
-      - "backend/supabase/functions/**"
+      - "backend/supabase/**"
       - ".github/workflows/supabase-ci.yml"
   workflow_dispatch:
 
@@ -22,11 +22,51 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
-      - name: Type-check invitation function
+      - name: Type-check edge functions
         run: deno check backend/supabase/functions/create-member/index.ts
+
+  apply-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smart_merchant_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d smart_merchant_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Prepare minimal Supabase auth schema
+        run: |
+          psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (id uuid PRIMARY KEY);
+          CREATE FUNCTION auth.uid() RETURNS uuid
+          LANGUAGE sql STABLE
+          AS $$
+            SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+          $$;
+          SQL
+      - name: Apply all migrations in order
+        run: |
+          for migration in backend/supabase/migrations/*.sql; do
+            echo "Applying $migration"
+            psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f "$migration"
+          done
