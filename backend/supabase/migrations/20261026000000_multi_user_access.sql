@@ -28,7 +28,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 begin
   insert into public.business_members (
     business_id, user_id, display_name, is_owner, is_active
@@ -37,7 +37,7 @@ begin
   );
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists businesses_bootstrap_owner on public.businesses;
 create trigger businesses_bootstrap_owner

@@ -80,12 +80,12 @@ create or replace function public.set_cloud_updated_at()
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists cloud_products_updated_at on public.cloud_products;
 create trigger cloud_products_updated_at
