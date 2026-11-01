@@ -437,6 +437,8 @@ void main() {
     expect(invoice.paidMinor, 3000);
     expect(invoice.remainingMinor, 300);
     expect(invoice.itemCount, 2);
+    expect(invoice.warehouseName, 'المخزن الرئيسي');
+    expect(invoice.branchName, 'الفرع الرئيسي');
     expect(await database.query('sale_items'), hasLength(2));
     expect(await database.query('inventory_movements'), hasLength(4));
   });
