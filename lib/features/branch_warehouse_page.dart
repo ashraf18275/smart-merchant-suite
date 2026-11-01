@@ -34,13 +34,19 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
       final branches = await widget.store.branches(includeInactive: true);
       final warehouses = await widget.store.warehouses(includeInactive: true);
       final activeBranches = branches.where((x) => x.isActive).toList();
+      final defaultBranch = activeBranches.where((x) => x.name == 'الفرع الرئيسي');
       final branchId = activeBranches.any((x) => x.id == _branchId)
           ? _branchId
-          : (activeBranches.isEmpty ? null : activeBranches.first.id);
+          : (defaultBranch.isNotEmpty
+              ? defaultBranch.first.id
+              : (activeBranches.isEmpty ? null : activeBranches.first.id));
       final activeWarehouses = warehouses.where((x) => x.isActive && x.branchId == branchId).toList();
+      final defaultWarehouse = activeWarehouses.where((x) => x.name == 'المخزن الرئيسي');
       final warehouseId = activeWarehouses.any((x) => x.id == _warehouseId)
           ? _warehouseId
-          : (activeWarehouses.isEmpty ? null : activeWarehouses.first.id);
+          : (defaultWarehouse.isNotEmpty
+              ? defaultWarehouse.first.id
+              : (activeWarehouses.isEmpty ? null : activeWarehouses.first.id));
       final stock = warehouseId == null
           ? <WarehouseStock>[]
           : await widget.store.stock(warehouseId: warehouseId);
@@ -321,7 +327,12 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         value: _warehouseId,
         decoration: const InputDecoration(labelText: 'المخزن المحدد'),
         items: [for (final w in _warehouses.where((x) => x.isActive)) DropdownMenuItem(value: w.id, child: Text(w.branchName + ' — ' + w.name))],
-        onChanged: (v) async { _warehouseId = v; await _load(); },
+        onChanged: (v) async {
+          _warehouseId = v;
+          final selected = _warehouses.where((x) => x.id == v);
+          if (selected.isNotEmpty) _branchId = selected.first.branchId;
+          await _load();
+        },
       ),
     ),
     Expanded(
