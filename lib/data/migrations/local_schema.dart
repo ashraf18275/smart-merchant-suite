@@ -40,6 +40,7 @@ Future<void> createLocalSchema(Database db) async {
   await createSalesSchema(db);
   await createExpensesSchema(db);
   await createCatalogSchema(db);
+  await createBranchWarehouseSchema(db);
 }
 
 /// Adds sales tables for databases that were created at version 1.
@@ -183,6 +184,118 @@ Future<void> createCatalogSchema(Database db) async {
   if (applied.isEmpty) {
     await db.insert('schema_migrations', {
       'version': 4,
+      'applied_at': now,
+    });
+  }
+}
+
+
+/// Introduces branches, warehouses and per-warehouse product balances.
+/// Existing stock and movement history are assigned to the main warehouse.
+Future<void> createBranchWarehouseSchema(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS branches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE CHECK (length(trim(name)) > 0),
+      address TEXT,
+      phone TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL
+    )
+  ''');
+
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS warehouses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      branch_id INTEGER NOT NULL,
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL,
+      UNIQUE (branch_id, name),
+      FOREIGN KEY (branch_id) REFERENCES branches (id)
+    )
+  ''');
+
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS product_warehouse_stock (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      warehouse_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+      updated_at TEXT NOT NULL,
+      UNIQUE (product_id, warehouse_id),
+      FOREIGN KEY (product_id) REFERENCES products (id),
+      FOREIGN KEY (warehouse_id) REFERENCES warehouses (id)
+    )
+  ''');
+
+  final now = DateTime.now().toUtc().toIso8601String();
+  await db.insert('branches', {
+    'name': 'الفرع الرئيسي',
+    'is_active': 1,
+    'created_at': now,
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  final branchRows = await db.query(
+    'branches',
+    columns: ['id'],
+    where: 'name = ?',
+    whereArgs: ['الفرع الرئيسي'],
+    limit: 1,
+  );
+  final branchId = branchRows.single['id']! as int;
+
+  await db.insert('warehouses', {
+    'branch_id': branchId,
+    'name': 'المخزن الرئيسي',
+    'is_active': 1,
+    'created_at': now,
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  final warehouseRows = await db.query(
+    'warehouses',
+    columns: ['id'],
+    where: 'branch_id = ? AND name = ?',
+    whereArgs: [branchId, 'المخزن الرئيسي'],
+    limit: 1,
+  );
+  final warehouseId = warehouseRows.single['id']! as int;
+
+  final movementColumns = await db.rawQuery('PRAGMA table_info(inventory_movements)');
+  if (!movementColumns.any((row) => row['name'] == 'warehouse_id')) {
+    await db.execute(
+      'ALTER TABLE inventory_movements ADD COLUMN warehouse_id INTEGER '
+      'REFERENCES warehouses(id)',
+    );
+  }
+
+  final products = await db.query(
+    'products',
+    columns: ['id', 'stock_quantity'],
+    orderBy: 'id ASC',
+  );
+  for (final product in products) {
+    await db.insert('product_warehouse_stock', {
+      'product_id': product['id'],
+      'warehouse_id': warehouseId,
+      'quantity': product['stock_quantity'],
+      'updated_at': now,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+  await db.update(
+    'inventory_movements',
+    {'warehouse_id': warehouseId},
+    where: 'warehouse_id IS NULL',
+  );
+
+  final applied = await db.query(
+    'schema_migrations',
+    columns: ['version'],
+    where: 'version = ?',
+    whereArgs: [5],
+    limit: 1,
+  );
+  if (applied.isEmpty) {
+    await db.insert('schema_migrations', {
+      'version': 5,
       'applied_at': now,
     });
   }
