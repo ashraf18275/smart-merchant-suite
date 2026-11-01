@@ -46,6 +46,25 @@ void main() {
     expect(result.single.stockQuantity, 3);
   });
 
+  test('records an opening stock movement atomically when creating a product', () async {
+    final id = await products.add(const Product(
+      name: 'دفتر',
+      costMinor: 100,
+      priceMinor: 150,
+      stockQuantity: 8,
+    ));
+
+    final product = (await products.all()).single;
+    final movements = await database.query('inventory_movements');
+
+    expect(product.id, id);
+    expect(product.stockQuantity, 8);
+    expect(movements, hasLength(1));
+    expect(movements.single['product_id'], id);
+    expect(movements.single['quantity_delta'], 8);
+    expect(movements.single['reason'], 'رصيد افتتاحي');
+  });
+
   test('updates product details without changing stock', () async {
     final id = await products.add(const Product(
       name: 'كابل USB',
@@ -88,11 +107,12 @@ void main() {
 
     expect((await products.all()).single.stockQuantity, 6);
     final movements = await database.query('inventory_movements');
-    expect(movements, hasLength(1));
-    expect(movements.single['quantity_delta'], 4);
+    expect(movements, hasLength(2));
+    expect(movements[0]['quantity_delta'], 2);
+    expect(movements[1]['quantity_delta'], 4);
   });
 
-  test('rejects stock below zero without writing a movement', () async {
+  test('rejects stock below zero without writing an additional movement', () async {
     final id = await products.add(const Product(
       name: 'سماعة',
       costMinor: 1000,
@@ -110,7 +130,9 @@ void main() {
     );
 
     expect((await products.all()).single.stockQuantity, 1);
-    expect(await database.query('inventory_movements'), isEmpty);
+    final movements = await database.query('inventory_movements');
+    expect(movements, hasLength(1));
+    expect(movements.single['quantity_delta'], 1);
   });
 
   test('deactivates product without deleting stock history', () async {
@@ -132,7 +154,7 @@ void main() {
     final archived = (await products.all(includeInactive: true)).single;
     expect(archived.isActive, isFalse);
     expect(archived.stockQuantity, 6);
-    expect(await database.query('inventory_movements'), hasLength(1));
+    expect(await database.query('inventory_movements'), hasLength(2));
     await expectLater(
       products.changeStock(
         productId: id,
@@ -168,9 +190,10 @@ void main() {
     final lines = await database.query('sale_items');
     expect(lines, hasLength(1));
     expect(lines.single['unit_cost_minor'], 500);
-    final movements = await database.query('inventory_movements');
-    expect(movements, hasLength(1));
-    expect(movements.single['quantity_delta'], -2);
+    final movements = await database.query('inventory_movements', orderBy: 'id ASC');
+    expect(movements, hasLength(2));
+    expect(movements[0]['quantity_delta'], 5);
+    expect(movements[1]['quantity_delta'], -2);
   });
 
   test('sale rejects insufficient stock without partial invoice', () async {
@@ -190,7 +213,7 @@ void main() {
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('sale_items'), isEmpty);
     expect((await products.all()).single.stockQuantity, 1);
-    expect(await database.query('inventory_movements'), isEmpty);
+    expect(await database.query('inventory_movements'), hasLength(1));
   });
 
   test('creates multi-item invoice and deducts stock for every line', () async {
@@ -216,7 +239,7 @@ void main() {
     expect(invoice.remainingMinor, 300);
     expect(invoice.itemCount, 2);
     expect(await database.query('sale_items'), hasLength(2));
-    expect(await database.query('inventory_movements'), hasLength(2));
+    expect(await database.query('inventory_movements'), hasLength(4));
   });
 
   test('multi-item sale rolls back all changes if any line has insufficient stock', () async {
@@ -236,7 +259,7 @@ void main() {
     );
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('sale_items'), isEmpty);
-    expect(await database.query('inventory_movements'), isEmpty);
+    expect(await database.query('inventory_movements'), hasLength(2));
     expect((await products.all()).firstWhere((p) => p.id == first).stockQuantity, 5);
     expect((await products.all()).firstWhere((p) => p.id == second).stockQuantity, 1);
   });
