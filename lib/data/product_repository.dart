@@ -113,9 +113,23 @@ class ProductRepository implements ProductStore, CatalogStore {
       final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
         where: 'id = ?', whereArgs: [targetUnitId], limit: 1);
       if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
-      final stock = current.single['stock_quantity']! as int;
-      if (unitRows.single['allows_fraction'] != 1 && stock % Quantity.scale != 0) {
-        throw AppException('لا يمكن اختيار وحدة لا تقبل الكسور مع وجود رصيد كسري');
+      final currentUnitId = current.single['unit_id'] as int?;
+      if (targetUnitId != currentUnitId) {
+        final historicalSales = await txn.query('sale_items', columns: ['id'],
+          where: 'product_id = ?', whereArgs: [id], limit: 1);
+        if (historicalSales.isNotEmpty) {
+          throw AppException('لا يمكن تغيير وحدة المنتج بعد تسجيل مبيعات سابقة');
+        }
+      }
+      if (unitRows.single['allows_fraction'] != 1) {
+        final fractionalBalances = await txn.rawQuery('''
+          SELECT
+            (SELECT COUNT(*) FROM products WHERE id = ? AND stock_quantity % 1000 != 0) +
+            (SELECT COUNT(*) FROM product_warehouse_stock WHERE product_id = ? AND quantity % 1000 != 0) AS count
+        ''', [id, id]);
+        if ((fractionalBalances.single['count'] as num).toInt() > 0) {
+          throw AppException('لا يمكن اختيار وحدة لا تقبل الكسور مع وجود رصيد كسري');
+        }
       }
       final changed = await txn.update('products', {
         'name': product.name.trim(),
@@ -310,9 +324,11 @@ class ProductRepository implements ProductStore, CatalogStore {
     }
     if (!allowsFraction && current.single['allows_fraction'] == 1) {
       final fractionalBalances = await _db.rawQuery('''
-        SELECT COUNT(*) AS count FROM products p
-        WHERE p.unit_id = ? AND p.stock_quantity % 1000 != 0
-      ''', [id]);
+        SELECT
+          (SELECT COUNT(*) FROM products p WHERE p.unit_id = ? AND p.stock_quantity % 1000 != 0) +
+          (SELECT COUNT(*) FROM product_warehouse_stock s JOIN products p ON p.id = s.product_id
+            WHERE p.unit_id = ? AND s.quantity % 1000 != 0) AS count
+      ''', [id, id]);
       if ((fractionalBalances.single['count'] as num).toInt() > 0) {
         throw AppException('لا يمكن إيقاف الكسور قبل تسوية أرصدة المنتجات إلى كميات صحيحة');
       }
