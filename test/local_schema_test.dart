@@ -23,16 +23,21 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );
     final names = tables.map((row) => row['name']).toSet();
-    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units']));
+    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock']));
     final units = await database.query('product_units');
     expect(units, hasLength(1));
     expect(units.single['name'], 'قطعة');
+    final branches = await database.query('branches');
+    expect(branches.single['name'], 'الفرع الرئيسي');
+    final warehouses = await database.query('warehouses');
+    expect(warehouses.single['name'], 'المخزن الرئيسي');
+    expect(warehouses.single['branch_id'], branches.single['id']);
   });
 
   test('upgrades a version 1 database and safely reapplies later migrations', () async {
@@ -80,6 +85,7 @@ void main() {
       'created_at': DateTime.utc(2025).toIso8601String(),
     });
     await createCatalogSchema(database);
+    await createBranchWarehouseSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
@@ -93,6 +99,11 @@ void main() {
     expect(migratedProduct['stock_quantity'], 6);
     expect(migratedProduct['unit_id'], isNotNull);
     expect(migratedProduct['category_id'], isNull);
+    final stock = (await database.query('product_warehouse_stock')).single;
+    expect(stock['product_id'], migratedProduct['id']);
+    expect(stock['quantity'], 6);
+    final movementColumns = await database.rawQuery('PRAGMA table_info(inventory_movements)');
+    expect(movementColumns.map((row) => row['name']), contains('warehouse_id'));
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('expenses'), isEmpty);
   });
