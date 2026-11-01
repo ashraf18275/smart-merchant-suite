@@ -23,7 +23,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -105,6 +105,15 @@ void main() {
     await createCatalogSchema(database);
     await createBranchWarehouseSchema(database);
     await createSaleWarehouseSchema(database);
+    await database.insert('sale_items', {
+      'sale_id': oldSaleId,
+      'product_id': oldProductId,
+      'quantity': 2,
+      'unit_price_minor': 150,
+      'unit_cost_minor': 100,
+      'line_total_minor': 300,
+    });
+    await createFractionalQuantitiesSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
@@ -115,17 +124,18 @@ void main() {
     );
     expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6]);
     final migratedProduct = (await database.query('products')).single;
-    expect(migratedProduct['stock_quantity'], 6);
+    expect(migratedProduct['stock_quantity'], 6000);
     expect(migratedProduct['unit_id'], isNotNull);
     expect(migratedProduct['category_id'], isNull);
     final stock = (await database.query('product_warehouse_stock')).single;
     expect(stock['product_id'], migratedProduct['id']);
-    expect(stock['quantity'], 6);
+    expect(stock['quantity'], 6000);
     final movementColumns = await database.rawQuery('PRAGMA table_info(inventory_movements)');
     expect(movementColumns.map((row) => row['name']), contains('warehouse_id'));
     final migratedMovement = (await database.query('inventory_movements')).single;
     final defaultWarehouse = (await database.query('warehouses')).single;
     expect(migratedMovement['warehouse_id'], defaultWarehouse['id']);
+    expect(migratedMovement['quantity_delta'], 6000);
     expect(migratedMovement['product_id'], oldProductId);
     final migratedSale = (await database.query(
       'sales',
@@ -139,6 +149,11 @@ void main() {
       'sales', where: 'id = ?', whereArgs: [historicalSaleId],
     )).single;
     expect(historicalSale['warehouse_id'], isNull);
+    final migratedItem = (await database.query('sale_items', where: 'sale_id = ?', whereArgs: [oldSaleId])).single;
+    expect(migratedItem['quantity'], 2000);
+    expect(migratedItem['line_total_minor'], 300);
+    await createFractionalQuantitiesSchema(database);
+    expect((await database.query('products')).single['stock_quantity'], 6000);
     expect(await database.query('expenses'), isEmpty);
   });
 }
