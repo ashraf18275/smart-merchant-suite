@@ -29,14 +29,16 @@ class SalesRepository implements SalesStore {
       final items = <Map<String, int>>[];
       var total = 0;
       for (final entry in quantities.entries) {
-        final rows = await txn.query(
-          'products',
-          columns: ['cost_minor', 'price_minor'],
-          where: 'id = ? AND is_active = 1',
-          whereArgs: [entry.key],
-          limit: 1,
-        );
+        final rows = await txn.rawQuery('''
+          SELECT p.cost_minor, p.price_minor,
+                 COALESCE(u.allows_fraction, 0) AS allows_fraction
+          FROM products p LEFT JOIN product_units u ON u.id = p.unit_id
+          WHERE p.id = ? AND p.is_active = 1 LIMIT 1
+        ''', [entry.key]);
         if (rows.isEmpty) throw AppException('أحد المنتجات غير موجود أو غير نشط');
+        if (rows.single['allows_fraction'] != 1 && entry.value % Quantity.scale != 0) {
+          throw AppException('وحدة قياس أحد المنتجات لا تقبل الكميات الكسرية');
+        }
         final balances = await txn.query(
           'product_warehouse_stock',
           columns: ['quantity'],
