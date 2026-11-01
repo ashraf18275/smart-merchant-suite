@@ -11,6 +11,8 @@ class Product {
     required this.costMinor,
     required this.priceMinor,
     this.stockQuantity = 0,
+    this.categoryId,
+    this.unitId,
     this.isActive = true,
     this.createdAt,
   });
@@ -21,6 +23,8 @@ class Product {
   final int costMinor;
   final int priceMinor;
   final int stockQuantity;
+  final int? categoryId;
+  final int? unitId;
   final bool isActive;
   final DateTime? createdAt;
 }
