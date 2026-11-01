@@ -28,6 +28,67 @@ void main() {
     await database.close();
   });
 
+
+  test('manages categories and units without deleting historical references', () async {
+    final catalog = ProductRepository(database);
+    final categoryId = await catalog.addCategory('مشروبات');
+    final unitId = await catalog.addUnit(
+      name: 'زجاجة',
+      abbreviation: 'زجاجة',
+      allowsFraction: false,
+    );
+    final productId = await products.add(Product(
+      name: 'مياه',
+      costMinor: 100,
+      priceMinor: 150,
+      stockQuantity: 4,
+      categoryId: categoryId,
+      unitId: unitId,
+    ));
+
+    await catalog.updateCategory(id: categoryId, name: 'مشروبات باردة');
+    await catalog.updateUnit(
+      id: unitId,
+      name: 'عبوة',
+      abbreviation: 'عبوة',
+      allowsFraction: false,
+    );
+    await catalog.setCategoryActive(id: categoryId, isActive: false);
+    await catalog.setUnitActive(id: unitId, isActive: false);
+
+    final saved = (await products.all()).single;
+    expect(saved.categoryId, categoryId);
+    expect(saved.unitId, unitId);
+    expect((await catalog.categories(includeInactive: true)).single.name, 'مشروبات باردة');
+    expect((await catalog.units(includeInactive: true)).firstWhere((u) => u.id == unitId).name, 'عبوة');
+    expect(await catalog.categories(), isEmpty);
+    expect((await catalog.units()).map((u) => u.name), contains('قطعة'));
+
+    await products.update(Product(
+      id: productId,
+      name: 'مياه معدنية',
+      costMinor: 110,
+      priceMinor: 160,
+      stockQuantity: 4,
+      categoryId: categoryId,
+      unitId: unitId,
+    ));
+    final updated = (await products.all()).single;
+    expect(updated.categoryId, categoryId);
+    expect(updated.unitId, unitId);
+    expect(updated.stockQuantity, 4);
+  });
+
+  test('prevents disabling the default piece unit', () async {
+    final catalog = ProductRepository(database);
+    final unit = (await catalog.units()).single;
+    expect(unit.name, 'قطعة');
+    await expectLater(
+      catalog.setUnitActive(id: unit.id, isActive: false),
+      throwsA(isA<AppException>()),
+    );
+  });
+
   test('stores money as integer minor units and lists products', () async {
     await products.add(const Product(
       name: '  كابل USB  ',
