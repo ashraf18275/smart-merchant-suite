@@ -39,6 +39,7 @@ Future<void> createLocalSchema(Database db) async {
   });
   await createSalesSchema(db);
   await createExpensesSchema(db);
+  await createCatalogSchema(db);
 }
 
 /// Adds sales tables for databases that were created at version 1.
@@ -103,6 +104,86 @@ Future<void> createExpensesSchema(Database db) async {
     await db.insert('schema_migrations', {
       'version': 3,
       'applied_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+}
+
+
+/// Adds normalized product categories and units without discarding existing stock.
+Future<void> createCatalogSchema(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS product_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE CHECK (length(trim(name)) > 0),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL
+    )
+  ''');
+
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS product_units (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE CHECK (length(trim(name)) > 0),
+      abbreviation TEXT NOT NULL CHECK (length(trim(abbreviation)) > 0),
+      allows_fraction INTEGER NOT NULL DEFAULT 0 CHECK (allows_fraction IN (0, 1)),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL
+    )
+  ''');
+
+  final now = DateTime.now().toUtc().toIso8601String();
+  await db.insert(
+    'product_units',
+    {
+      'name': 'قطعة',
+      'abbreviation': 'قطعة',
+      'allows_fraction': 0,
+      'is_active': 1,
+      'created_at': now,
+    },
+    conflictAlgorithm: ConflictAlgorithm.ignore,
+  );
+
+  final productColumns = await db.rawQuery('PRAGMA table_info(products)');
+  final existingColumns = productColumns.map((row) => row['name']).toSet();
+  if (!existingColumns.contains('category_id')) {
+    await db.execute(
+      'ALTER TABLE products ADD COLUMN category_id INTEGER '
+      'REFERENCES product_categories(id)',
+    );
+  }
+  if (!existingColumns.contains('unit_id')) {
+    await db.execute(
+      'ALTER TABLE products ADD COLUMN unit_id INTEGER '
+      'REFERENCES product_units(id)',
+    );
+  }
+
+  final defaultUnit = await db.query(
+    'product_units',
+    columns: ['id'],
+    where: 'name = ?',
+    whereArgs: ['قطعة'],
+    limit: 1,
+  );
+  final defaultUnitId = defaultUnit.single['id']! as int;
+  await db.update(
+    'products',
+    {'unit_id': defaultUnitId},
+    where: 'unit_id IS NULL',
+  );
+
+  final applied = await db.query(
+    'schema_migrations',
+    columns: ['version'],
+    where: 'version = ?',
+    whereArgs: [4],
+    limit: 1,
+  );
+  if (applied.isEmpty) {
+    await db.insert('schema_migrations', {
+      'version': 4,
+      'applied_at': now,
     });
   }
 }
