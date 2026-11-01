@@ -34,6 +34,7 @@ Product _productFromRow(Map<String, Object?> row) => Product(
       defaultWarehouseStock: row['default_warehouse_stock'] as int?,
       categoryId: row['category_id'] as int?,
       unitId: row['unit_id'] as int?,
+      unitAllowsFraction: row['unit_allows_fraction'] == 1,
       isActive: row['is_active'] == 1,
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
     );
@@ -154,6 +155,7 @@ class ProductRepository implements ProductStore, CatalogStore {
           LIMIT 1
         ), 0) AS default_warehouse_stock
       FROM products p
+      LEFT JOIN product_units u ON u.id = p.unit_id
       ${conditions.isEmpty ? '' : 'WHERE ${conditions.join(' AND ')}'}
       ORDER BY p.name COLLATE NOCASE ASC
     ''', args);
