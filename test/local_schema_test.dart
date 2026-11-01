@@ -86,6 +86,11 @@ void main() {
       'is_active': 1,
       'created_at': DateTime.utc(2025).toIso8601String(),
     });
+    final historicalSaleId = await database.insert('sales', {
+      'total_minor': 300,
+      'paid_minor': 300,
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
     await database.insert('inventory_movements', {
       'product_id': oldProductId,
       'quantity_delta': 6,
@@ -119,7 +124,10 @@ void main() {
     expect(migratedMovement['product_id'], oldProductId);
     final salesColumns = await database.rawQuery('PRAGMA table_info(sales)');
     expect(salesColumns.map((row) => row['name']), contains('warehouse_id'));
-    expect(await database.query('sales'), isEmpty);
+    final historicalSale = (await database.query(
+      'sales', where: 'id = ?', whereArgs: [historicalSaleId],
+    )).single;
+    expect(historicalSale['warehouse_id'], isNull);
     expect(await database.query('expenses'), isEmpty);
   });
 }
