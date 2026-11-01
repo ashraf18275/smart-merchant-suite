@@ -41,6 +41,7 @@ Future<void> createLocalSchema(Database db) async {
   await createExpensesSchema(db);
   await createCatalogSchema(db);
   await createBranchWarehouseSchema(db);
+  await createSaleWarehouseSchema(db);
 }
 
 /// Adds sales tables for databases that were created at version 1.
@@ -297,6 +298,30 @@ Future<void> createBranchWarehouseSchema(Database db) async {
     await db.insert('schema_migrations', {
       'version': 5,
       'applied_at': now,
+    });
+  }
+}
+
+/// Adds the warehouse reference to each new sale. Historical sales remain
+/// nullable because their source warehouse cannot be inferred safely.
+Future<void> createSaleWarehouseSchema(Database db) async {
+  final columns = await db.rawQuery('PRAGMA table_info(sales)');
+  if (!columns.any((row) => row['name'] == 'warehouse_id')) {
+    await db.execute(
+      'ALTER TABLE sales ADD COLUMN warehouse_id INTEGER REFERENCES warehouses(id)',
+    );
+  }
+  final applied = await db.query(
+    'schema_migrations',
+    columns: ['version'],
+    where: 'version = ?',
+    whereArgs: [6],
+    limit: 1,
+  );
+  if (applied.isEmpty) {
+    await db.insert('schema_migrations', {
+      'version': 6,
+      'applied_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 }
