@@ -78,7 +78,8 @@ void main() {
     await pumpCatalog(tester);
 
     expect(find.textContaining('أعداد صحيحة فقط'), findsOneWidget);
-    await tester.tap(find.byTooltip('إيقاف الوحدة').first);
+    final unitCard = find.ancestor(of: find.text('كيلوجرام'), matching: find.byType(Card));
+    await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إيقاف الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
     expect(find.textContaining('موقوفة'), findsOneWidget);
