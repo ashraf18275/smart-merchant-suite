@@ -288,6 +288,12 @@ class ProductRepository implements ProductStore, CatalogStore {
     final unitName = name.trim(), shortName = abbreviation.trim();
     if (unitName.isEmpty) throw AppException('اسم وحدة القياس مطلوب');
     if (shortName.isEmpty) throw AppException('اختصار وحدة القياس مطلوب');
+    final current = await _db.query('product_units', columns: ['name'],
+      where: 'id = ?', whereArgs: [id], limit: 1);
+    if (current.isEmpty) throw AppException('وحدة القياس غير موجودة');
+    if (current.single['name'] == 'قطعة' && unitName != 'قطعة') {
+      throw AppException('لا يمكن تغيير اسم وحدة «قطعة» الافتراضية');
+    }
     final changed = await _db.update('product_units', {
       'name': unitName, 'abbreviation': shortName,
       'allows_fraction': allowsFraction ? 1 : 0,
