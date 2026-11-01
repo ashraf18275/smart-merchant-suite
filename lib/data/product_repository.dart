@@ -123,7 +123,7 @@ class ProductRepository implements ProductStore, CatalogStore {
         'cost_minor': product.costMinor,
         'price_minor': product.priceMinor,
         'category_id': product.categoryId,
-        'unit_id': product.unitId,
+        'unit_id': targetUnitId,
       }, where: 'id = ?', whereArgs: [id]);
       if (changed == 0) throw AppException('المنتج غير موجود');
     });
