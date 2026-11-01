@@ -91,11 +91,10 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
     final name = TextEditingController(text: unit?.name ?? '');
     final abbreviation = TextEditingController(text: unit?.abbreviation ?? '');
     final key = GlobalKey<FormState>();
-    var allowsFraction = unit?.allowsFraction ?? false;
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
+        builder: (ctx) => AlertDialog(
           title: Text(unit == null ? 'إضافة وحدة قياس' : 'تعديل وحدة القياس'),
           content: Form(
             key: key,
@@ -112,12 +111,6 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
                   controller: abbreviation,
                   decoration: const InputDecoration(labelText: 'الاختصار (مثل كجم أو لتر)'),
                   validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اختصار الوحدة' : null,
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: allowsFraction,
-                  onChanged: (value) => setDialogState(() => allowsFraction = value ?? false),
-                  title: const Text('تسمح بالكميات الكسرية'),
                 ),
               ],
             ),
@@ -138,14 +131,14 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
           await widget.catalog.addUnit(
             name: name.text,
             abbreviation: abbreviation.text,
-            allowsFraction: allowsFraction,
+            allowsFraction: false,
           );
         } else {
           await widget.catalog.updateUnit(
             id: unit.id,
             name: name.text,
             abbreviation: abbreviation.text,
-            allowsFraction: allowsFraction,
+            allowsFraction: false,
           );
         }
         await _load();
