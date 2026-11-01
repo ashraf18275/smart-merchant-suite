@@ -22,9 +22,15 @@ class _ExportTable {
 }
 
 const _tables = <_ExportTable>[
+  _ExportTable('التصنيفات', 'product_categories', [
+    'id', 'name', 'is_active', 'created_at',
+  ]),
+  _ExportTable('وحدات القياس', 'product_units', [
+    'id', 'name', 'abbreviation', 'allows_fraction', 'is_active', 'created_at',
+  ]),
   _ExportTable('المنتجات', 'products', [
     'id', 'name', 'sku', 'cost_minor', 'price_minor', 'stock_quantity',
-    'is_active', 'created_at',
+    'category_id', 'unit_id', 'is_active', 'created_at',
   ]),
   _ExportTable('الفواتير', 'sales', [
     'id', 'total_minor', 'paid_minor', 'created_at',
@@ -130,9 +136,9 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 3) {
+      if (schemaVersion != 4) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المطلوب: 3).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المطلوب: 4).',
         );
       }
 
@@ -185,10 +191,14 @@ class _DataTransferPageState extends State<DataTransferPage> {
           'sales',
           'expenses',
           'products',
+          'product_categories',
+          'product_units',
         ]) {
           await txn.delete(table);
         }
         for (final table in [
+          'product_categories',
+          'product_units',
           'products',
           'sales',
           'sale_items',
@@ -239,7 +249,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 3) {
+      if (schemaVersion != 4) {
         throw AppException('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
       }
 
@@ -287,7 +297,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final backupVersion = backupVersionRows.isEmpty
           ? 0
           : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (backupVersion != 3) {
+      if (backupVersion != 4) {
         throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
