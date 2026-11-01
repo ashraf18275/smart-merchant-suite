@@ -174,6 +174,7 @@ class HomeDashboard extends StatelessWidget {
                                 sales: SalesApplicationService(
                                   SalesRepository(database),
                                 ),
+                                warehouseStore: WarehouseRepository(database),
                               ),
                             ));
                           } finally {
