@@ -8,10 +8,12 @@ import 'data/expense_repository.dart';
 import 'data/local_database.dart';
 import 'data/product_repository.dart';
 import 'data/sales_repository.dart';
+import 'data/warehouse_repository.dart';
 import 'features/data_transfer_page.dart';
 import 'features/expenses_page.dart';
 import 'features/products_page.dart';
 import 'features/sales_page.dart';
+import 'features/branch_warehouse_page.dart';
 
 void main() {
   runApp(const SmartMerchantApp());
@@ -67,6 +69,11 @@ class HomeDashboard extends StatelessWidget {
       icon: Icons.backup_outlined,
       title: 'النسخ الاحتياطي والمزامنة',
       subtitle: 'تصدير CSV وإنشاء نسخة احتياطية محلية',
+    ),
+    (
+      icon: Icons.warehouse_outlined,
+      title: 'الفروع والمخازن',
+      subtitle: 'أرصدة مستقلة وتحويل وتسوية المخزون',
     ),
   ];
 
@@ -201,6 +208,23 @@ class HomeDashboard extends StatelessWidget {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text(appErrorMessage(error, fallback: 'تعذر فتح قاعدة البيانات المحلية.', operation: 'database.open'))),
+                          );
+                        }
+                      } : index == 4 ? () async {
+                        try {
+                          final database = await openLocalDatabase();
+                          if (!context.mounted) { await database.close(); return; }
+                          try {
+                            await Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => BranchWarehousePage(
+                                store: WarehouseRepository(database),
+                              ),
+                            ));
+                          } finally { await database.close(); }
+                        } catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(appErrorMessage(error, fallback: 'تعذر فتح إدارة الفروع والمخازن.', operation: 'warehouse.open'))),
                           );
                         }
                       } : index == 3 ? () async {
