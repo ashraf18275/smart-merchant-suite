@@ -144,7 +144,7 @@ void main() {
       sku: 'USB-01',
       costMinor: 1250,
       priceMinor: 2000,
-      stockQuantity: 7,
+      stockQuantity: 7000,
     ));
 
     await tester.pumpWidget(MaterialApp(
@@ -181,7 +181,7 @@ void main() {
       name: 'شاحن',
       costMinor: 500,
       priceMinor: 900,
-      stockQuantity: 3,
+      stockQuantity: 3000,
     ));
 
     await tester.pumpWidget(MaterialApp(
