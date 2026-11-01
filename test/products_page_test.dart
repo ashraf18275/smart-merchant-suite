@@ -221,7 +221,7 @@ void main() {
       name: 'شاحن',
       costMinor: 500,
       priceMinor: 900,
-      stockQuantity: 3,
+      stockQuantity: 3000,
     ));
 
     await tester.pumpWidget(MaterialApp(
