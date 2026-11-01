@@ -28,6 +28,7 @@ abstract interface class BranchWarehouseStore {
     required int quantityDelta,
     required String reason,
   });
+  /// [quantity] is a positive integer count of thousandths for the product unit.
   Future<void> transferStock({
     required int productId,
     required int fromWarehouseId,
