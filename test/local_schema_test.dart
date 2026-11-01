@@ -122,7 +122,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7]);
     final migratedProduct = (await database.query('products')).single;
     expect(migratedProduct['stock_quantity'], 6000);
     expect(migratedProduct['unit_id'], isNotNull);
