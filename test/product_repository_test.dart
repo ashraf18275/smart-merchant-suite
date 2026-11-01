@@ -334,6 +334,7 @@ void main() {
     expect(invoices.single['id'], saleId);
     expect(invoices.single['total_minor'], 1800);
     expect(invoices.single['paid_minor'], 1000);
+    expect(invoices.single['warehouse_id'], (await WarehouseRepository(database).warehouses()).first.id);
     final lines = await database.query('sale_items');
     expect(lines, hasLength(1));
     expect(lines.single['unit_cost_minor'], 500);
@@ -401,7 +402,6 @@ void main() {
       SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {id: 2},
         paidMinor: 0,
-      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       ),
       throwsA(isA<AppException>()),
     );
@@ -450,7 +450,6 @@ void main() {
       SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {first: 2, second: 2},
         paidMinor: 0,
-      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       ),
       throwsA(isA<AppException>()),
     );
