@@ -105,26 +105,28 @@ class ProductRepository implements ProductStore, CatalogStore {
   Future<void> update(Product product) async {
     final id = product.id;
     final normalizedSku = product.sku?.trim();
-    final changed = await _db.update(
-      'products',
-      {
+    await _db.transaction((txn) async {
+      final current = await txn.query('products', columns: ['stock_quantity'],
+        where: 'id = ?', whereArgs: [id], limit: 1);
+      if (current.isEmpty) throw AppException('المنتج غير موجود');
+      final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
+        where: 'id = ?', whereArgs: [product.unitId], limit: 1);
+      if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
+      final stock = current.single['stock_quantity']! as int;
+      if (unitRows.single['allows_fraction'] != 1 && stock % Quantity.scale != 0) {
+        throw AppException('لا يمكن اختيار وحدة لا تقبل الكسور مع وجود رصيد كسري');
+      }
+      final changed = await txn.update('products', {
         'name': product.name.trim(),
-        'sku': normalizedSku == null || normalizedSku.isEmpty
-            ? null
-            : normalizedSku,
+        'sku': normalizedSku == null || normalizedSku.isEmpty ? null : normalizedSku,
         'cost_minor': product.costMinor,
         'price_minor': product.priceMinor,
         'category_id': product.categoryId,
         'unit_id': product.unitId,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (changed == 0) {
-      throw AppException('المنتج غير موجود');
-    }
+      }, where: 'id = ?', whereArgs: [id]);
+      if (changed == 0) throw AppException('المنتج غير موجود');
+    });
   }
-
   /// Deactivates/reactivates a product without deleting its history or stock.
   Future<void> setActive({required int productId, required bool isActive}) async {
     final changed = await _db.update(
@@ -299,11 +301,20 @@ class ProductRepository implements ProductStore, CatalogStore {
     final unitName = name.trim(), shortName = abbreviation.trim();
     if (unitName.isEmpty) throw AppException('اسم وحدة القياس مطلوب');
     if (shortName.isEmpty) throw AppException('اختصار وحدة القياس مطلوب');
-    final current = await _db.query('product_units', columns: ['name'],
+    final current = await _db.query('product_units', columns: ['name', 'allows_fraction'],
       where: 'id = ?', whereArgs: [id], limit: 1);
     if (current.isEmpty) throw AppException('وحدة القياس غير موجودة');
     if (current.single['name'] == 'قطعة' && unitName != 'قطعة') {
       throw AppException('لا يمكن تغيير اسم وحدة «قطعة» الافتراضية');
+    }
+    if (!allowsFraction && current.single['allows_fraction'] == 1) {
+      final fractionalBalances = await _db.rawQuery('''
+        SELECT COUNT(*) AS count FROM products p
+        WHERE p.unit_id = ? AND p.stock_quantity % 1000 != 0
+      ''', [id]);
+      if ((fractionalBalances.single['count'] as num).toInt() > 0) {
+        throw AppException('لا يمكن إيقاف الكسور قبل تسوية أرصدة المنتجات إلى كميات صحيحة');
+      }
     }
     final changed = await _db.update('product_units', {
       'name': unitName, 'abbreviation': shortName,
