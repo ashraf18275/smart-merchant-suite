@@ -58,7 +58,7 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _createSale() async {
-    final availableProducts = _productsList.where((p) => p.stockQuantity > 0).toList();
+    final availableProducts = _productsList.where((p) => (p.defaultWarehouseStock ?? p.stockQuantity) > 0).toList();
     if (availableProducts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('أضف منتجًا نشطًا بكمية متاحة أولًا')),
@@ -94,7 +94,7 @@ class _SalesPageState extends State<SalesPage> {
                       validator: (v) {
                         final n = int.tryParse(v?.trim() ?? '');
                         if (n == null || n < 0) return 'عدد صحيح';
-                        if (n > p.stockQuantity) return 'المتاح ${p.stockQuantity}';
+                        if (n > (p.defaultWarehouseStock ?? p.stockQuantity)) return 'المتاح ${p.defaultWarehouseStock ?? p.stockQuantity}';
                         return null;
                       },
                     )),
