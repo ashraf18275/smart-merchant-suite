@@ -124,6 +124,32 @@ void main() {
     expect((await products.all()).single.stockQuantity, 2);
     expect(await database.query('inventory_movements', where: 'product_id = ?', whereArgs: [productId]), hasLength(1));
   });
+  test('adjusts stock in a selected warehouse and keeps total product stock accurate', () async {
+    final store = WarehouseRepository(database);
+    final productId = await products.add(const Product(name: 'سلعة', costMinor: 50, priceMinor: 80, stockQuantity: 3));
+    final branchId = await store.addBranch(name: 'فرع المخزن الإضافي');
+    final warehouseId = await store.addWarehouse(branchId: branchId, name: 'المخزن الجانبي');
+    await store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: 5, reason: 'رصيد جرد');
+    expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5);
+    expect((await products.all()).single.stockQuantity, 8);
+    expect((await products.all()).single.defaultWarehouseStock, 3);
+    await products.changeStock(productId: productId, quantityDelta: -2, reason: 'بيع من المخزن الرئيسي');
+    expect((await products.all()).single.stockQuantity, 6);
+    expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5);
+    await expectLater(store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: -6, reason: 'خصم زائد'), throwsA(isA<AppException>()));
+    expect((await products.all()).single.stockQuantity, 6);
+  });
+
+  test('prevents deactivating branches or warehouses that still contain active stock', () async {
+    final store = WarehouseRepository(database);
+    final branchId = await store.addBranch(name: 'فرع تجريبي');
+    final warehouseId = await store.addWarehouse(branchId: branchId, name: 'مخزن تجريبي');
+    final productId = await products.add(const Product(name: 'منتج مخزن', costMinor: 10, priceMinor: 20, stockQuantity: 2));
+    await store.transferStock(productId: productId, fromWarehouseId: (await store.warehouses()).firstWhere((w) => w.name == 'المخزن الرئيسي').id, toWarehouseId: warehouseId, quantity: 2, reason: 'نقل للمخزن');
+    await expectLater(store.setWarehouseActive(id: warehouseId, isActive: false), throwsA(isA<AppException>()));
+    await expectLater(store.setBranchActive(id: branchId, isActive: false), throwsA(isA<AppException>()));
+    expect((await products.all()).single.stockQuantity, 2);
+  });
   test('stores money as integer minor units and lists products', () async {
     await products.add(const Product(
       name: '  كابل USB  ',
