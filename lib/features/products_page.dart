@@ -300,7 +300,7 @@ class _ProductsPageState extends State<ProductsPage> {
       builder: (ctx) => AlertDialog(
         title: Text('تعديل مخزون ' + product.name),
         content: Form(key: key, child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المتاح حاليًا: ' + product.stockQuantity.toString()),
+          Text('المتاح بالمخزن الرئيسي: ' + (product.defaultWarehouseStock ?? 0).toString() + ' • إجمالي كل المخازن: ' + product.stockQuantity.toString()),
           TextFormField(controller: delta, keyboardType: const TextInputType.numberWithOptions(signed: true),
             decoration: const InputDecoration(labelText: 'التغيير في الكمية', helperText: '5 للإضافة أو -2 للصرف'),
             validator: (v) { final n = int.tryParse(v?.trim() ?? ''); return n == null || n == 0 ? 'أدخل عددًا صحيحًا غير صفر' : null; }),
