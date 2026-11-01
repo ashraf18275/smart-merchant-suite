@@ -45,7 +45,7 @@ void main() {
       name: 'مياه',
       costMinor: 100,
       priceMinor: 150,
-      stockQuantity: 4,
+      stockQuantity: 4000,
       categoryId: categoryId,
       unitId: unitId,
     ));
@@ -73,14 +73,14 @@ void main() {
       name: 'مياه معدنية',
       costMinor: 110,
       priceMinor: 160,
-      stockQuantity: 4,
+      stockQuantity: 4000,
       categoryId: categoryId,
       unitId: unitId,
     ));
     final updated = (await products.all()).single;
     expect(updated.categoryId, categoryId);
     expect(updated.unitId, unitId);
-    expect(updated.stockQuantity, 4);
+    expect(updated.stockQuantity, 4000);
   });
 
   test('prevents disabling the default piece unit', () async {
@@ -119,19 +119,19 @@ void main() {
     final secondBranchId = await warehouseStore.addBranch(name: 'فرع المدينة');
     final secondWarehouseId = await warehouseStore.addWarehouse(branchId: secondBranchId, name: 'مخزن الفرع');
     final mainWarehouse = (await warehouseStore.warehouses()).firstWhere((warehouse) => warehouse.name == 'المخزن الرئيسي');
-    final productId = await products.add(const Product(name: 'صنف متعدد المخازن', costMinor: 100, priceMinor: 150, stockQuantity: 10));
+    final productId = await products.add(const Product(name: 'صنف متعدد المخازن', costMinor: 100, priceMinor: 150, stockQuantity: 10000));
 
-    await warehouseStore.transferStock(productId: productId, fromWarehouseId: mainWarehouse.id, toWarehouseId: secondWarehouseId, quantity: 4, reason: 'توزيع مخزون');
+    await warehouseStore.transferStock(productId: productId, fromWarehouseId: mainWarehouse.id, toWarehouseId: secondWarehouseId, quantity: 4000, reason: 'توزيع مخزون');
 
     final mainStock = (await warehouseStore.stock(warehouseId: mainWarehouse.id)).singleWhere((row) => row.productId == productId);
     final secondStock = (await warehouseStore.stock(warehouseId: secondWarehouseId)).singleWhere((row) => row.productId == productId);
-    expect(mainStock.quantity, 6);
-    expect(secondStock.quantity, 4);
-    expect((await products.all()).single.stockQuantity, 10);
+    expect(mainStock.quantity, 6000);
+    expect(secondStock.quantity, 4000);
+    expect((await products.all()).single.stockQuantity, 10000);
     final movements = await database.query('inventory_movements', where: 'product_id = ?', whereArgs: [productId], orderBy: 'id ASC');
     expect(movements, hasLength(3));
-    expect(movements[1]['quantity_delta'], -4);
-    expect(movements[2]['quantity_delta'], 4);
+    expect(movements[1]['quantity_delta'], -4000);
+    expect(movements[2]['quantity_delta'], 4000);
     expect(movements[1]['warehouse_id'], mainWarehouse.id);
     expect(movements[2]['warehouse_id'], secondWarehouseId);
     expect(branches.single.name, 'الفرع الرئيسي');
@@ -142,36 +142,36 @@ void main() {
     final branchId = await warehouseStore.addBranch(name: 'فرع آخر');
     final targetId = await warehouseStore.addWarehouse(branchId: branchId, name: 'مخزن آخر');
     final source = (await warehouseStore.warehouses()).firstWhere((warehouse) => warehouse.name == 'المخزن الرئيسي');
-    final productId = await products.add(const Product(name: 'مخزون محدود', costMinor: 10, priceMinor: 20, stockQuantity: 2));
-    await expectLater(warehouseStore.transferStock(productId: productId, fromWarehouseId: source.id, toWarehouseId: targetId, quantity: 3, reason: 'تحويل زائد'), throwsA(isA<AppException>()));
-    expect((await products.all()).single.stockQuantity, 2);
+    final productId = await products.add(const Product(name: 'مخزون محدود', costMinor: 10, priceMinor: 20, stockQuantity: 2000));
+    await expectLater(warehouseStore.transferStock(productId: productId, fromWarehouseId: source.id, toWarehouseId: targetId, quantity: 3000, reason: 'تحويل زائد'), throwsA(isA<AppException>()));
+    expect((await products.all()).single.stockQuantity, 2000);
     expect(await database.query('inventory_movements', where: 'product_id = ?', whereArgs: [productId]), hasLength(1));
   });
   test('adjusts stock in a selected warehouse and keeps total product stock accurate', () async {
     final store = WarehouseRepository(database);
-    final productId = await products.add(const Product(name: 'سلعة', costMinor: 50, priceMinor: 80, stockQuantity: 3));
+    final productId = await products.add(const Product(name: 'سلعة', costMinor: 50, priceMinor: 80, stockQuantity: 3000));
     final branchId = await store.addBranch(name: 'فرع المخزن الإضافي');
     final warehouseId = await store.addWarehouse(branchId: branchId, name: 'المخزن الجانبي');
-    await store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: 5, reason: 'رصيد جرد');
-    expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5);
-    expect((await products.all()).single.stockQuantity, 8);
+    await store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: 5000, reason: 'رصيد جرد');
+    expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5000);
+    expect((await products.all()).single.stockQuantity, 8000);
     expect((await products.all()).single.defaultWarehouseStock, 3);
-    await products.changeStock(productId: productId, quantityDelta: -2, reason: 'بيع من المخزن الرئيسي');
-    expect((await products.all()).single.stockQuantity, 6);
-    expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5);
-    await expectLater(store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: -6, reason: 'خصم زائد'), throwsA(isA<AppException>()));
-    expect((await products.all()).single.stockQuantity, 6);
+    await products.changeStock(productId: productId, quantityDelta: -2000, reason: 'بيع من المخزن الرئيسي');
+    expect((await products.all()).single.stockQuantity, 6000);
+    expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5000);
+    await expectLater(store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: -6000, reason: 'خصم زائد'), throwsA(isA<AppException>()));
+    expect((await products.all()).single.stockQuantity, 6000);
   });
 
   test('prevents deactivating branches or warehouses that still contain active stock', () async {
     final store = WarehouseRepository(database);
     final branchId = await store.addBranch(name: 'فرع تجريبي');
     final warehouseId = await store.addWarehouse(branchId: branchId, name: 'مخزن تجريبي');
-    final productId = await products.add(const Product(name: 'منتج مخزن', costMinor: 10, priceMinor: 20, stockQuantity: 2));
-    await store.transferStock(productId: productId, fromWarehouseId: (await store.warehouses()).firstWhere((w) => w.name == 'المخزن الرئيسي').id, toWarehouseId: warehouseId, quantity: 2, reason: 'نقل للمخزن');
+    final productId = await products.add(const Product(name: 'منتج مخزن', costMinor: 10, priceMinor: 20, stockQuantity: 2000));
+    await store.transferStock(productId: productId, fromWarehouseId: (await store.warehouses()).firstWhere((w) => w.name == 'المخزن الرئيسي').id, toWarehouseId: warehouseId, quantity: 2000, reason: 'نقل للمخزن');
     await expectLater(store.setWarehouseActive(id: warehouseId, isActive: false), throwsA(isA<AppException>()));
     await expectLater(store.setBranchActive(id: branchId, isActive: false), throwsA(isA<AppException>()));
-    expect((await products.all()).single.stockQuantity, 2);
+    expect((await products.all()).single.stockQuantity, 2000);
   });
   test('stores money as integer minor units and lists products', () async {
     await products.add(const Product(
@@ -179,7 +179,7 @@ void main() {
       sku: 'USB-01',
       costMinor: 1250,
       priceMinor: 2000,
-      stockQuantity: 3,
+      stockQuantity: 3000,
     ));
 
     final result = await products.all(search: 'USB');
@@ -188,7 +188,7 @@ void main() {
     expect(result.single.name, 'كابل USB');
     expect(result.single.costMinor, 1250);
     expect(result.single.priceMinor, 2000);
-    expect(result.single.stockQuantity, 3);
+    expect(result.single.stockQuantity, 3000);
   });
 
   test('records an opening stock movement atomically when creating a product', () async {
@@ -196,17 +196,17 @@ void main() {
       name: 'دفتر',
       costMinor: 100,
       priceMinor: 150,
-      stockQuantity: 8,
+      stockQuantity: 8000,
     ));
 
     final product = (await products.all()).single;
     final movements = await database.query('inventory_movements');
 
     expect(product.id, id);
-    expect(product.stockQuantity, 8);
+    expect(product.stockQuantity, 8000);
     expect(movements, hasLength(1));
     expect(movements.single['product_id'], id);
-    expect(movements.single['quantity_delta'], 8);
+    expect(movements.single['quantity_delta'], 8000);
     expect(movements.single['reason'], 'رصيد افتتاحي');
   });
 
@@ -216,7 +216,7 @@ void main() {
       sku: 'USB-01',
       costMinor: 1250,
       priceMinor: 2000,
-      stockQuantity: 7,
+      stockQuantity: 7000,
     ));
 
     await products.update(Product(
@@ -225,7 +225,7 @@ void main() {
       sku: 'USBC-01',
       costMinor: 1500,
       priceMinor: 2500,
-      stockQuantity: 7,
+      stockQuantity: 7000,
     ));
 
     final updated = (await products.all()).single;
@@ -233,7 +233,7 @@ void main() {
     expect(updated.sku, 'USBC-01');
     expect(updated.costMinor, 1500);
     expect(updated.priceMinor, 2500);
-    expect(updated.stockQuantity, 7);
+    expect(updated.stockQuantity, 7000);
   });
 
   test('stock change and movement are recorded together', () async {
@@ -241,20 +241,20 @@ void main() {
       name: 'شاحن',
       costMinor: 500,
       priceMinor: 900,
-      stockQuantity: 2,
+      stockQuantity: 2000,
     ));
 
     await products.changeStock(
       productId: id,
-      quantityDelta: 4,
+      quantityDelta: 4000,
       reason: 'توريد تجريبي',
     );
 
-    expect((await products.all()).single.stockQuantity, 6);
+    expect((await products.all()).single.stockQuantity, 6000);
     final movements = await database.query('inventory_movements');
     expect(movements, hasLength(2));
-    expect(movements[0]['quantity_delta'], 2);
-    expect(movements[1]['quantity_delta'], 4);
+    expect(movements[0]['quantity_delta'], 2000);
+    expect(movements[1]['quantity_delta'], 4000);
   });
 
   test('rejects stock below zero without writing an additional movement', () async {
@@ -262,22 +262,22 @@ void main() {
       name: 'سماعة',
       costMinor: 1000,
       priceMinor: 1500,
-      stockQuantity: 1,
+      stockQuantity: 1000,
     ));
 
     await expectLater(
       products.changeStock(
         productId: id,
-        quantityDelta: -2,
+        quantityDelta: -2000,
         reason: 'اختبار المخزون السالب',
       ),
       throwsA(isA<AppException>()),
     );
 
-    expect((await products.all()).single.stockQuantity, 1);
+    expect((await products.all()).single.stockQuantity, 1000);
     final movements = await database.query('inventory_movements');
     expect(movements, hasLength(1));
-    expect(movements.single['quantity_delta'], 1);
+    expect(movements.single['quantity_delta'], 1000);
   });
 
   test('deactivates product without deleting stock history', () async {
@@ -285,11 +285,11 @@ void main() {
       name: 'شاحن',
       costMinor: 500,
       priceMinor: 900,
-      stockQuantity: 4,
+      stockQuantity: 4000,
     ));
     await products.changeStock(
       productId: id,
-      quantityDelta: 2,
+      quantityDelta: 2000,
       reason: 'توريد',
     );
 
@@ -298,12 +298,12 @@ void main() {
     expect(await products.all(), isEmpty);
     final archived = (await products.all(includeInactive: true)).single;
     expect(archived.isActive, isFalse);
-    expect(archived.stockQuantity, 6);
+    expect(archived.stockQuantity, 6000);
     expect(await database.query('inventory_movements'), hasLength(2));
     await expectLater(
       products.changeStock(
         productId: id,
-        quantityDelta: 1,
+        quantityDelta: 1000,
         reason: 'محاولة بعد الإيقاف',
       ),
       throwsA(isA<AppException>()),
@@ -318,16 +318,16 @@ void main() {
       name: 'شاحن',
       costMinor: 500,
       priceMinor: 900,
-      stockQuantity: 5,
+      stockQuantity: 5000,
     ));
     final sales = SalesApplicationService(SalesRepository(database));
     final saleId = await sales.createSale(
-      quantities: {id: 2},
+      quantities: {id: 2000},
       paidMinor: 1000,
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
 
-    expect((await products.all()).single.stockQuantity, 3);
+    expect((await products.all()).single.stockQuantity, 3000);
     expect((await products.all()).single.defaultWarehouseStock, 3);
     final invoices = await database.query('sales');
     expect(invoices, hasLength(1));
@@ -340,8 +340,8 @@ void main() {
     expect(lines.single['unit_cost_minor'], 500);
     final movements = await database.query('inventory_movements', orderBy: 'id ASC');
     expect(movements, hasLength(2));
-    expect(movements[0]['quantity_delta'], 5);
-    expect(movements[1]['quantity_delta'], -2);
+    expect(movements[0]['quantity_delta'], 5000);
+    expect(movements[1]['quantity_delta'], -2000);
   });
 
   test('sale deducts stock only from the selected warehouse', () async {
@@ -349,7 +349,7 @@ void main() {
       name: 'صنف فرع المدينة',
       costMinor: 100,
       priceMinor: 200,
-      stockQuantity: 5,
+      stockQuantity: 5000,
     ));
     final store = WarehouseRepository(database);
     final branchId = await store.addBranch(name: 'فرع المدينة');
@@ -367,7 +367,7 @@ void main() {
 
     final sales = SalesApplicationService(SalesRepository(database));
     await sales.createSale(
-      quantities: {productId: 2},
+      quantities: {productId: 2000},
       paidMinor: 400,
       warehouseId: otherWarehouseId,
     );
@@ -379,9 +379,9 @@ void main() {
         .singleWhere((item) => item.productId == productId);
     final branchBalance = (await store.stock(warehouseId: otherWarehouseId))
         .singleWhere((item) => item.productId == productId);
-    expect(mainBalance.quantity, 2);
-    expect(branchBalance.quantity, 1);
-    expect((await products.all()).single.stockQuantity, 3);
+    expect(mainBalance.quantity, 2000);
+    expect(branchBalance.quantity, 1000);
+    expect((await products.all()).single.stockQuantity, 3000);
     final lastMovement = (await database.query(
       'inventory_movements',
       where: 'product_id = ?',
@@ -390,7 +390,7 @@ void main() {
       limit: 1,
     )).single;
     expect(lastMovement['warehouse_id'], otherWarehouseId);
-    expect(lastMovement['quantity_delta'], -2);
+    expect(lastMovement['quantity_delta'], -2000);
   });
 
   test('sale rejects insufficient stock without partial invoice', () async {
@@ -398,11 +398,11 @@ void main() {
       name: 'سماعة',
       costMinor: 1000,
       priceMinor: 1500,
-      stockQuantity: 1,
+      stockQuantity: 1000,
     ));
     await expectLater(
       SalesApplicationService(SalesRepository(database)).createSale(
-        quantities: {id: 2},
+        quantities: {id: 2000},
         paidMinor: 0,
         warehouseId: await mainWarehouseId(),
       ),
@@ -410,27 +410,27 @@ void main() {
     );
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('sale_items'), isEmpty);
-    expect((await products.all()).single.stockQuantity, 1);
+    expect((await products.all()).single.stockQuantity, 1000);
     expect(await database.query('inventory_movements'), hasLength(1));
   });
 
   test('creates multi-item invoice and deducts stock for every line', () async {
     final charger = await products.add(const Product(
-      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
+      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5000,
     ));
     final headset = await products.add(const Product(
-      name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 3,
+      name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 3000,
     ));
 
     final sales = SalesApplicationService(SalesRepository(database));
     final id = await sales.createSale(
-      quantities: {charger: 2, headset: 1},
+      quantities: {charger: 2000, headset: 1000},
       paidMinor: 3000,
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
 
-    expect((await products.all()).firstWhere((p) => p.id == charger).stockQuantity, 3);
-    expect((await products.all()).firstWhere((p) => p.id == headset).stockQuantity, 2);
+    expect((await products.all()).firstWhere((p) => p.id == charger).stockQuantity, 3000);
+    expect((await products.all()).firstWhere((p) => p.id == headset).stockQuantity, 2000);
     final invoice = (await sales.all()).single;
     expect(invoice.id, id);
     expect(invoice.totalMinor, 3300);
@@ -445,15 +445,15 @@ void main() {
 
   test('multi-item sale rolls back all changes if any line has insufficient stock', () async {
     final first = await products.add(const Product(
-      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
+      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5000,
     ));
     final second = await products.add(const Product(
-      name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 1,
+      name: 'سماعة', costMinor: 1000, priceMinor: 1500, stockQuantity: 1000,
     ));
 
     await expectLater(
       SalesApplicationService(SalesRepository(database)).createSale(
-        quantities: {first: 2, second: 2},
+        quantities: {first: 2000, second: 2000},
         paidMinor: 0,
         warehouseId: await mainWarehouseId(),
       ),
@@ -462,14 +462,14 @@ void main() {
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('sale_items'), isEmpty);
     expect(await database.query('inventory_movements'), hasLength(2));
-    expect((await products.all()).firstWhere((p) => p.id == first).stockQuantity, 5);
-    expect((await products.all()).firstWhere((p) => p.id == second).stockQuantity, 1);
+    expect((await products.all()).firstWhere((p) => p.id == first).stockQuantity, 5000);
+    expect((await products.all()).firstWhere((p) => p.id == second).stockQuantity, 1000);
   });
 
   test('records expenses and calculates all-time profit summary', () async {
-    final id = await products.add(const Product(name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5));
+    final id = await products.add(const Product(name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5000));
     await SalesApplicationService(SalesRepository(database)).createSale(
-      quantities: {id: 2}, paidMinor: 1800,
+      quantities: {id: 2000}, paidMinor: 1800,
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
@@ -485,14 +485,14 @@ void main() {
 
   test('filters profit summary and expenses by inclusive calendar dates', () async {
     final id = await products.add(const Product(
-      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5,
+      name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5000,
     ));
     await SalesApplicationService(SalesRepository(database)).createSale(
-      quantities: {id: 2}, paidMinor: 1800,
+      quantities: {id: 2000}, paidMinor: 1800,
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
     await database.update('sales', {'created_at': '2025-01-10T12:00:00.000Z'});
-    await database.update('sale_items', {'quantity': 2});
+    await database.update('sale_items', {'quantity': 2000});
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
     await expenses.add(description: 'مصروف داخل الفترة', category: 'أخرى', amountMinor: 300);
     await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700);
