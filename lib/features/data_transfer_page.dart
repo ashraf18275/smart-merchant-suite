@@ -46,7 +46,15 @@ const _legacyV4Tables = <_ExportTable>[
     'id', 'name', 'sku', 'cost_minor', 'price_minor', 'stock_quantity',
     'category_id', 'unit_id', 'is_active', 'created_at',
   ]),
-  ..._legacyV3Tables.skip(1),
+  _ExportTable('الفواتير', 'sales', ['id', 'total_minor', 'paid_minor', 'created_at']),
+  _ExportTable('بنود الفواتير', 'sale_items', [
+    'id', 'sale_id', 'product_id', 'quantity', 'unit_price_minor',
+    'unit_cost_minor', 'line_total_minor',
+  ]),
+  _ExportTable('المصروفات', 'expenses', ['id', 'description', 'category', 'amount_minor', 'created_at']),
+  _ExportTable('حركات المخزون', 'inventory_movements', [
+    'id', 'product_id', 'quantity_delta', 'reason', 'created_at',
+  ]),
 ];
 
 const _tables = <_ExportTable>[
