@@ -344,6 +344,79 @@ void main() {
     expect(movements[1]['quantity_delta'], -2000);
   });
 
+  test('supports fractional stock adjustment and warehouse transfer', () async {
+    final catalog = ProductRepository(database);
+    final unitId = await catalog.addUnit(
+      name: 'لتر',
+      abbreviation: 'لتر',
+      allowsFraction: true,
+    );
+    final store = WarehouseRepository(database);
+    final main = await mainWarehouseId();
+    final branchId = await store.addBranch(name: 'فرع السوائل');
+    final target = await store.addWarehouse(branchId: branchId, name: 'مخزن السوائل');
+    final productId = await products.add(Product(
+      name: 'زيت',
+      costMinor: 200,
+      priceMinor: 300,
+      stockQuantity: 1500,
+      unitId: unitId,
+    ));
+
+    await store.adjustStock(
+      warehouseId: target,
+      productId: productId,
+      quantityDelta: 750,
+      reason: 'إضافة ربع لتر وثلاثة أرباع',
+    );
+    await store.transferStock(
+      productId: productId,
+      fromWarehouseId: main,
+      toWarehouseId: target,
+      quantity: 500,
+      reason: 'تحويل نصف لتر',
+    );
+
+    final mainStock = (await store.stock(warehouseId: main)).singleWhere((row) => row.productId == productId);
+    final targetStock = (await store.stock(warehouseId: target)).singleWhere((row) => row.productId == productId);
+    expect(mainStock.quantity, 1000);
+    expect(targetStock.quantity, 1250);
+    expect((await products.all()).single.stockQuantity, 2250);
+  });
+
+  test('rejects fractional writes for units configured as whole-only', () async {
+    final id = await products.add(const Product(
+      name: 'قلم',
+      costMinor: 100,
+      priceMinor: 150,
+      stockQuantity: 2000,
+    ));
+    final warehouse = await mainWarehouseId();
+    final store = WarehouseRepository(database);
+    await expectLater(
+      products.changeStock(productId: id, quantityDelta: 500, reason: 'اختبار'),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      store.adjustStock(warehouseId: warehouse, productId: id, quantityDelta: 500, reason: 'اختبار'),
+      throwsA(isA<AppException>()),
+    );
+    final branchId = await store.addBranch(name: 'فرع الكميات الصحيحة');
+    final target = await store.addWarehouse(branchId: branchId, name: 'مخزن القطع');
+    await expectLater(
+      store.transferStock(productId: id, fromWarehouseId: warehouse, toWarehouseId: target, quantity: 500, reason: 'اختبار'),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      SalesApplicationService(SalesRepository(database)).createSale(
+        quantities: {id: 500},
+        paidMinor: 0,
+        warehouseId: warehouse,
+      ),
+      throwsA(isA<AppException>()),
+    );
+  });
+
   test('sells a fractional quantity and rounds invoice money in piastres', () async {
     final catalog = ProductRepository(database);
     final unitId = await catalog.addUnit(
