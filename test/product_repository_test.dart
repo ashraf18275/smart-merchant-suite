@@ -431,6 +431,11 @@ void main() {
       stockQuantity: 2500,
       unitId: unitId,
     ));
+    expect((await products.all()).single.unitAllowsFraction, isTrue);
+    await expectLater(
+      catalog.updateUnit(id: unitId, name: 'كيلوجرام', abbreviation: 'كجم', allowsFraction: false),
+      throwsA(isA<AppException>()),
+    );
 
     final saleId = await SalesApplicationService(SalesRepository(database)).createSale(
       quantities: {productId: 1500},
