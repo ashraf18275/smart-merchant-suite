@@ -94,6 +94,7 @@ void main() {
     });
     await createCatalogSchema(database);
     await createBranchWarehouseSchema(database);
+    await createSaleWarehouseSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
@@ -102,7 +103,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6]);
     final migratedProduct = (await database.query('products')).single;
     expect(migratedProduct['stock_quantity'], 6);
     expect(migratedProduct['unit_id'], isNotNull);
@@ -116,6 +117,8 @@ void main() {
     final defaultWarehouse = (await database.query('warehouses')).single;
     expect(migratedMovement['warehouse_id'], defaultWarehouse['id']);
     expect(migratedMovement['product_id'], oldProductId);
+    final salesColumns = await database.rawQuery('PRAGMA table_info(sales)');
+    expect(salesColumns.map((row) => row['name']), contains('warehouse_id'));
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('expenses'), isEmpty);
   });
