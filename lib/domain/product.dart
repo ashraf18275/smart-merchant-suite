@@ -14,6 +14,7 @@ class Product {
     this.defaultWarehouseStock,
     this.categoryId,
     this.unitId,
+    this.unitAllowsFraction = false,
     this.isActive = true,
     this.createdAt,
   });
@@ -27,6 +28,7 @@ class Product {
   final int? defaultWarehouseStock;
   final int? categoryId;
   final int? unitId;
+  final bool unitAllowsFraction;
   final bool isActive;
   final DateTime? createdAt;
 }
