@@ -321,6 +321,7 @@ void main() {
     final saleId = await sales.createSale(
       quantities: {id: 2},
       paidMinor: 1000,
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
 
     expect((await products.all()).single.stockQuantity, 3);
@@ -350,6 +351,7 @@ void main() {
       SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {id: 2},
         paidMinor: 0,
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       ),
       throwsA(isA<AppException>()),
     );
@@ -371,6 +373,7 @@ void main() {
     final id = await sales.createSale(
       quantities: {charger: 2, headset: 1},
       paidMinor: 3000,
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
 
     expect((await products.all()).firstWhere((p) => p.id == charger).stockQuantity, 3);
@@ -397,6 +400,7 @@ void main() {
       SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {first: 2, second: 2},
         paidMinor: 0,
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       ),
       throwsA(isA<AppException>()),
     );
@@ -411,6 +415,7 @@ void main() {
     final id = await products.add(const Product(name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5));
     await SalesApplicationService(SalesRepository(database)).createSale(
       quantities: {id: 2}, paidMinor: 1800,
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
     await expenses.add(description: 'إيجار المحل', category: 'إيجار', amountMinor: 4000);
@@ -429,6 +434,7 @@ void main() {
     ));
     await SalesApplicationService(SalesRepository(database)).createSale(
       quantities: {id: 2}, paidMinor: 1800,
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
     await database.update('sales', {'created_at': '2025-01-10T12:00:00.000Z'});
     await database.update('sale_items', {'quantity': 2});
@@ -468,14 +474,17 @@ void main() {
 
     await expectLater(
       sales.createSale(quantities: const {}, paidMinor: 0),
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     await expectLater(
       sales.createSale(quantities: {1: 0}, paidMinor: 0),
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     await expectLater(
       sales.createSale(quantities: {1: 1}, paidMinor: -1),
+      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     expect(await database.query('sales'), isEmpty);
