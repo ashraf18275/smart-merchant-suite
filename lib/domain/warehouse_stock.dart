@@ -12,6 +12,7 @@ class WarehouseStock {
   final String productName;
   final String? sku;
   final String unitName;
+  /// Warehouse balance in integer thousandths (1000 = one whole unit).
   final int quantity;
   final bool allowsFraction;
 }
