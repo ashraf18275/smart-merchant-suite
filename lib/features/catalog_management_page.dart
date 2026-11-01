@@ -93,8 +93,7 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
     final key = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
           title: Text(unit == null ? 'إضافة وحدة قياس' : 'تعديل وحدة القياس'),
           content: Form(
             key: key,
@@ -122,7 +121,6 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
               child: const Text('حفظ'),
             ),
           ],
-        ),
       ),
     );
     if (saved == true) {
