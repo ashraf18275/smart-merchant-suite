@@ -69,7 +69,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
     }
   }
 
-  void _error(Object error, String fallback) {
+  void _showError(Object error, String fallback) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(appErrorMessage(error, fallback: fallback, operation: 'warehouse.action'))),
@@ -109,7 +109,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
           await widget.store.updateBranch(id: branch.id, name: name.text, address: address.text, phone: phone.text);
         }
         await _load();
-      } catch (e) { _error(e, 'تعذر حفظ الفرع.'); }
+      } catch (e) { _showError(e, 'تعذر حفظ الفرع.'); }
     }
     name.dispose();
     address.dispose();
@@ -159,7 +159,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         }
         _branchId = branchId;
         await _load();
-      } catch (e) { _error(e, 'تعذر حفظ المخزن.'); }
+      } catch (e) { _showError(e, 'تعذر حفظ المخزن.'); }
     }
     name.dispose();
   }
@@ -168,14 +168,14 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
     try {
       await widget.store.setBranchActive(id: item.id, isActive: !item.isActive);
       await _load();
-    } catch (e) { _error(e, 'تعذر تغيير حالة الفرع.'); }
+    } catch (e) { _showError(e, 'تعذر تغيير حالة الفرع.'); }
   }
 
   Future<void> _toggleWarehouse(Warehouse item) async {
     try {
       await widget.store.setWarehouseActive(id: item.id, isActive: !item.isActive);
       await _load();
-    } catch (e) { _error(e, 'تعذر تغيير حالة المخزن.'); }
+    } catch (e) { _showError(e, 'تعذر تغيير حالة المخزن.'); }
   }
 
   Future<void> _transfer(WarehouseStock item) async {
@@ -232,7 +232,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
           reason: reason.text,
         );
         await _load();
-      } catch (e) { _error(e, 'تعذر تحويل المخزون.'); }
+      } catch (e) { _showError(e, 'تعذر تحويل المخزون.'); }
     }
     quantity.dispose();
     reason.dispose();
@@ -278,7 +278,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
           reason: reason.text,
         );
         await _load();
-      } catch (e) { _error(e, 'تعذر تسوية المخزون.'); }
+      } catch (e) { _showError(e, 'تعذر تسوية المخزون.'); }
     }
     delta.dispose();
     reason.dispose();
