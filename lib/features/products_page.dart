@@ -103,7 +103,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 TextFormField(controller: sku,
                   decoration: const InputDecoration(labelText: 'كود المنتج (اختياري)')),
                 DropdownButtonFormField<int?>(
-                  value: selectedCategoryId,
+                  initialValue: selectedCategoryId,
                   decoration: const InputDecoration(labelText: 'التصنيف (اختياري)'),
                   items: [
                     const DropdownMenuItem<int?>(value: null, child: Text('بدون تصنيف')),
@@ -113,7 +113,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   onChanged: (value) => selectedCategoryId = value,
                 ),
                 DropdownButtonFormField<int>(
-                  value: selectedUnitId,
+                  initialValue: selectedUnitId,
                   decoration: const InputDecoration(labelText: 'وحدة القياس *'),
                   items: [
                     for (final item in _units.where((v) => v.isActive))
@@ -198,7 +198,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   decoration: const InputDecoration(labelText: 'كود المنتج (اختياري)'),
                 ),
                 DropdownButtonFormField<int?>(
-                  value: selectedCategoryId,
+                  initialValue: selectedCategoryId,
                   decoration: const InputDecoration(labelText: 'التصنيف (اختياري)'),
                   items: [
                     const DropdownMenuItem<int?>(value: null, child: Text('بدون تصنيف')),
@@ -208,7 +208,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   onChanged: (value) => selectedCategoryId = value,
                 ),
                 DropdownButtonFormField<int>(
-                  value: selectedUnitId,
+                  initialValue: selectedUnitId,
                   decoration: const InputDecoration(labelText: 'وحدة القياس *'),
                   items: [
                     for (final item in _units.where((v) => v.isActive || v.id == selectedUnitId))
