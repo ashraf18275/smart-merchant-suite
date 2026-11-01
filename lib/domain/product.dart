@@ -24,6 +24,7 @@ class Product {
   final String? sku;
   final int costMinor;
   final int priceMinor;
+  /// Total stock in integer thousandths (1000 = one whole unit).
   final int stockQuantity;
   final int? defaultWarehouseStock;
   final int? categoryId;
