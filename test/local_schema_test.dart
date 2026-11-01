@@ -75,13 +75,19 @@ void main() {
 
     await createSalesSchema(database);
     await createExpensesSchema(database);
-    await database.insert('products', {
+    final oldProductId = await database.insert('products', {
       'name': 'منتج قديم',
       'sku': 'OLD-01',
       'cost_minor': 100,
       'price_minor': 150,
       'stock_quantity': 6,
       'is_active': 1,
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
+    await database.insert('inventory_movements', {
+      'product_id': oldProductId,
+      'quantity_delta': 6,
+      'reason': 'رصيد افتتاحي قديم',
       'created_at': DateTime.utc(2025).toIso8601String(),
     });
     await createCatalogSchema(database);
@@ -104,6 +110,10 @@ void main() {
     expect(stock['quantity'], 6);
     final movementColumns = await database.rawQuery('PRAGMA table_info(inventory_movements)');
     expect(movementColumns.map((row) => row['name']), contains('warehouse_id'));
+    final migratedMovement = (await database.query('inventory_movements')).single;
+    final defaultWarehouse = (await database.query('warehouses')).single;
+    expect(migratedMovement['warehouse_id'], defaultWarehouse['id']);
+    expect(migratedMovement['product_id'], oldProductId);
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('expenses'), isEmpty);
   });
