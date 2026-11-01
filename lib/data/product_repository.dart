@@ -26,6 +26,8 @@ Product _productFromRow(Map<String, Object?> row) => Product(
       costMinor: row['cost_minor']! as int,
       priceMinor: row['price_minor']! as int,
       stockQuantity: row['stock_quantity']! as int,
+      categoryId: row['category_id'] as int?,
+      unitId: row['unit_id'] as int?,
       isActive: row['is_active'] == 1,
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
     );
@@ -38,10 +40,19 @@ class ProductRepository implements ProductStore {
   Future<int> add(Product product) async {
     return _db.transaction((txn) async {
       final createdAt = product.createdAt ?? DateTime.now();
-      final productId = await txn.insert(
-        'products',
-        _productToRow(product),
-      );
+      final row = _productToRow(product);
+      if (row['unit_id'] == null) {
+        final units = await txn.query(
+          'product_units',
+          columns: ['id'],
+          where: 'name = ? AND is_active = 1',
+          whereArgs: ['قطعة'],
+          limit: 1,
+        );
+        if (units.isEmpty) throw AppException('وحدة القياس الافتراضية غير موجودة');
+        row['unit_id'] = units.single['id'];
+      }
+      final productId = await txn.insert('products', row);
 
       // The opening balance is a stock movement, not an unexplained balance.
       // Keep both writes in one transaction so the ledger and balance agree.
