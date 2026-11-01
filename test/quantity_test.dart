@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/core/quantity.dart';
 
+// Pull-request validation exercises the current feature-branch code.
 void main() {
   group('Quantity.parse', () {
     test('parses whole and fractional values exactly', () {
