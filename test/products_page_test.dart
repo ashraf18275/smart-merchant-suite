@@ -211,10 +211,15 @@ void main() {
     await pumpDatabaseResult(tester);
 
     expect(find.text('2'), findsOneWidget);
-    final movements = await database.query('inventory_movements');
-    expect(movements, hasLength(1));
-    expect(movements.single['quantity_delta'], -1);
-    expect(movements.single['reason'], 'تصحيح جرد');
+    final movements = await database.query(
+      'inventory_movements',
+      orderBy: 'id ASC',
+    );
+    expect(movements, hasLength(2));
+    expect(movements.first['quantity_delta'], 3);
+    expect(movements.first['reason'], 'رصيد افتتاحي');
+    expect(movements.last['quantity_delta'], -1);
+    expect(movements.last['reason'], 'تصحيح جرد');
   });
 
 }
