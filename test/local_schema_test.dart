@@ -151,12 +151,16 @@ void main() {
       whereArgs: [oldSaleId],
     )).single;
     expect(migratedSale['warehouse_id'], isNull);
+    expect(migratedSale['total_minor'], 250);
+    expect(migratedSale['paid_minor'], 100);
     final salesColumns = await database.rawQuery('PRAGMA table_info(sales)');
     expect(salesColumns.map((row) => row['name']), contains('warehouse_id'));
     final historicalSale = (await database.query(
       'sales', where: 'id = ?', whereArgs: [historicalSaleId],
     )).single;
     expect(historicalSale['warehouse_id'], isNull);
+    expect(historicalSale['total_minor'], 300);
+    expect(historicalSale['paid_minor'], 300);
     final migratedItem = (await database.query('sale_items', where: 'sale_id = ?', whereArgs: [oldSaleId])).single;
     expect(migratedItem['quantity'], 2000);
     expect(migratedItem['line_total_minor'], 300);
