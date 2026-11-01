@@ -79,7 +79,7 @@ void main() {
     await pumpCatalog(tester);
 
     expect(find.textContaining('تقبل الكسور'), findsOneWidget);
-    await tester.tap(find.byTooltip('إيقاف الوحدة'));
+    await tester.tap(find.byTooltip('إيقاف الوحدة').first);
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
     expect(find.textContaining('موقوفة'), findsOneWidget);
