@@ -5,6 +5,8 @@ class SaleRecord {
     required this.paidMinor,
     required this.createdAt,
     required this.itemCount,
+    this.warehouseName,
+    this.branchName,
   });
 
   final int id;
@@ -12,6 +14,8 @@ class SaleRecord {
   final int paidMinor;
   final DateTime createdAt;
   final int itemCount;
+  final String? warehouseName;
+  final String? branchName;
 
   int get remainingMinor => totalMinor - paidMinor;
 }
