@@ -88,6 +88,26 @@ void main() {
       catalog.setUnitActive(id: unit.id, isActive: false),
       throwsA(isA<AppException>()),
     );
+    await expectLater(
+      catalog.updateUnit(
+        id: unit.id,
+        name: 'حبة',
+        abbreviation: 'حبة',
+        allowsFraction: false,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    final warehouses = WarehouseRepository(database);
+    final branch = (await warehouses.branches()).single;
+    final warehouse = (await warehouses.warehouses()).single;
+    await expectLater(
+      warehouses.updateBranch(id: branch.id, name: 'فرع بديل'),
+      throwsA(isA<AppException>()),
+    );
+    await expectLater(
+      warehouses.updateWarehouse(id: warehouse.id, name: 'مخزن بديل'),
+      throwsA(isA<AppException>()),
+    );
   });
 
   test('keeps independent warehouse balances and transfers stock atomically', () async {
