@@ -2,19 +2,24 @@ import 'package:flutter/material.dart';
 
 import '../application/ports/product_catalog.dart';
 import '../application/ports/sales_service.dart';
+import '../application/ports/branch_warehouse_store.dart';
 import '../core/app_error.dart';
 import '../domain/product.dart';
 import '../domain/sale_record.dart';
+import '../domain/warehouse.dart';
+import '../domain/warehouse_stock.dart';
 
 class SalesPage extends StatefulWidget {
   const SalesPage({
     super.key,
     required this.products,
     required this.sales,
+    required this.warehouseStore,
   });
 
   final ProductCatalog products;
   final SalesService sales;
+  final BranchWarehouseStore warehouseStore;
 
   @override
   State<SalesPage> createState() => _SalesPageState();
@@ -25,6 +30,9 @@ class _SalesPageState extends State<SalesPage> {
   SalesService get _sales => widget.sales;
   List<Product> _productsList = [];
   List<SaleRecord> _salesList = [];
+  List<Warehouse> _warehouses = [];
+  List<WarehouseStock> _warehouseStock = [];
+  int? _selectedWarehouseId;
   bool _loading = true;
   String? _error;
 
@@ -43,11 +51,20 @@ class _SalesPageState extends State<SalesPage> {
 
   Future<void> _load() async {
     try {
-      final values = await Future.wait([_products.all(), _sales.all()]);
+      final values = await Future.wait([_products.all(), _sales.all(), widget.warehouseStore.warehouses()]);
+      final warehouses = values[2] as List<Warehouse>;
+      final defaultWarehouse = warehouses.where((item) => item.name == 'المخزن الرئيسي' && item.branchName == 'الفرع الرئيسي');
+      final selectedId = warehouses.any((item) => item.id == _selectedWarehouseId)
+          ? _selectedWarehouseId
+          : (defaultWarehouse.isNotEmpty ? defaultWarehouse.first.id : (warehouses.isEmpty ? null : warehouses.first.id));
+      final stock = selectedId == null ? <WarehouseStock>[] : await widget.warehouseStore.stock(warehouseId: selectedId);
       if (!mounted) return;
       setState(() {
         _productsList = values[0] as List<Product>;
         _salesList = values[1] as List<SaleRecord>;
+        _warehouses = warehouses;
+        _selectedWarehouseId = selectedId;
+        _warehouseStock = stock;
         _loading = false;
         _error = null;
       });
@@ -58,7 +75,8 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _createSale() async {
-    final availableProducts = _productsList.where((p) => (p.defaultWarehouseStock ?? p.stockQuantity) > 0).toList();
+    final quantitiesByProduct = {for (final item in _warehouseStock) item.productId: item.quantity};
+    final availableProducts = _productsList.where((p) => (quantitiesByProduct[p.id] ?? 0) > 0).toList();
     if (availableProducts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('أضف منتجًا نشطًا بكمية متاحة أولًا')),
@@ -85,7 +103,7 @@ class _SalesPageState extends State<SalesPage> {
                 ...availableProducts.map((p) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(children: [
-                    Expanded(child: Text('${p.name}\nالمتاح بالمخزن الرئيسي: ${p.defaultWarehouseStock ?? p.stockQuantity} • السعر: ${_money(p.priceMinor)}')),
+                    Expanded(child: Text('${p.name}\nالمتاح بالمخزن المحدد: ${quantitiesByProduct[p.id] ?? 0} • السعر: ${_money(p.priceMinor)}')),
                     const SizedBox(width: 12),
                     SizedBox(width: 92, child: TextFormField(
                       controller: quantityControllers[p.id],
@@ -94,7 +112,7 @@ class _SalesPageState extends State<SalesPage> {
                       validator: (v) {
                         final n = int.tryParse(v?.trim() ?? '');
                         if (n == null || n < 0) return 'عدد صحيح';
-                        if (n > (p.defaultWarehouseStock ?? p.stockQuantity)) return 'المتاح ${p.defaultWarehouseStock ?? p.stockQuantity}';
+                        if (n > (quantitiesByProduct[p.id] ?? 0)) return 'المتاح ${quantitiesByProduct[p.id] ?? 0}';
                         return null;
                       },
                     )),
@@ -144,6 +162,7 @@ class _SalesPageState extends State<SalesPage> {
       final id = await _sales.createSale(
         quantities: Map<int, int>.from(result['quantities']! as Map),
         paidMinor: result['paidMinor']! as int,
+        warehouseId: _selectedWarehouseId!,
       );
       await _load();
       if (mounted) {
@@ -175,24 +194,44 @@ class _SalesPageState extends State<SalesPage> {
                   Text(_error!, textAlign: TextAlign.center),
                   OutlinedButton(onPressed: _load, child: const Text('إعادة المحاولة')),
                 ]))
-              : _salesList.isEmpty
-                  ? const Center(child: Text('لا توجد فواتير بعد. اضغط «فاتورة جديدة» للبدء.'))
-                  : ListView.separated(
-                      itemCount: _salesList.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final sale = _salesList[index];
-                        return Card(child: ListTile(
-                          leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
-                          title: Text('فاتورة رقم ${sale.id}'),
-                          subtitle: Text(
-                            '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
-                          ),
-                          isThreeLine: true,
-                          trailing: Text(_money(sale.totalMinor)),
-                        ));
+              : Column(
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: _selectedWarehouseId,
+                      decoration: const InputDecoration(labelText: 'المخزن الذي ستتم منه المبيعات'),
+                      items: [
+                        for (final warehouse in _warehouses)
+                          DropdownMenuItem(value: warehouse.id, child: Text('${warehouse.branchName} — ${warehouse.name}')),
+                      ],
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        setState(() { _selectedWarehouseId = value; _loading = true; });
+                        await _load();
                       },
                     ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: _salesList.isEmpty
+                          ? const Center(child: Text('لا توجد فواتير بعد. اضغط «فاتورة جديدة» للبدء.'))
+                          : ListView.separated(
+                              itemCount: _salesList.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final sale = _salesList[index];
+                                return Card(child: ListTile(
+                                  leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
+                                  title: Text('فاتورة رقم ${sale.id}'),
+                                  subtitle: Text(
+                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
+                                  ),
+                                  isThreeLine: true,
+                                  trailing: Text(_money(sale.totalMinor)),
+                                ));
+                              },
+                            ),
+                    ),
+                  ],
+                ),
     ),
   );
 }
