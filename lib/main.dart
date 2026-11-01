@@ -191,6 +191,7 @@ class HomeDashboard extends StatelessWidget {
                                 repository: ProductApplicationService(
                                   ProductRepository(database),
                                 ),
+                                catalog: ProductRepository(database),
                               ),
                             ));
                           } finally {
