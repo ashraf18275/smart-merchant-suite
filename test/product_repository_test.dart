@@ -404,6 +404,7 @@ void main() {
       SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {id: 2},
         paidMinor: 0,
+        warehouseId: await mainWarehouseId(),
       ),
       throwsA(isA<AppException>()),
     );
@@ -452,6 +453,7 @@ void main() {
       SalesApplicationService(SalesRepository(database)).createSale(
         quantities: {first: 2, second: 2},
         paidMinor: 0,
+        warehouseId: await mainWarehouseId(),
       ),
       throwsA(isA<AppException>()),
     );
