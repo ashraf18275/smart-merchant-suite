@@ -71,6 +71,31 @@ const _tables = <_ExportTable>[
   _ExportTable('أرصدة المخازن', 'product_warehouse_stock', [
     'id', 'product_id', 'warehouse_id', 'quantity', 'updated_at',
   ]),
+  _ExportTable('الفواتير', 'sales', ['id', 'total_minor', 'paid_minor', 'warehouse_id', 'created_at']),
+  _ExportTable('بنود الفواتير', 'sale_items', [
+    'id', 'sale_id', 'product_id', 'quantity', 'unit_price_minor',
+    'unit_cost_minor', 'line_total_minor',
+  ]),
+  _ExportTable('المصروفات', 'expenses', ['id', 'description', 'category', 'amount_minor', 'created_at']),
+  _ExportTable('حركات المخزون', 'inventory_movements', [
+    'id', 'product_id', 'warehouse_id', 'quantity_delta', 'reason', 'created_at',
+  ]),
+];
+
+const _legacyV5Tables = <_ExportTable>[
+  _ExportTable('الفروع', 'branches', ['id', 'name', 'address', 'phone', 'is_active', 'created_at']),
+  _ExportTable('المخازن', 'warehouses', ['id', 'branch_id', 'name', 'is_active', 'created_at']),
+  _ExportTable('التصنيفات', 'product_categories', ['id', 'name', 'is_active', 'created_at']),
+  _ExportTable('وحدات القياس', 'product_units', [
+    'id', 'name', 'abbreviation', 'allows_fraction', 'is_active', 'created_at',
+  ]),
+  _ExportTable('المنتجات', 'products', [
+    'id', 'name', 'sku', 'cost_minor', 'price_minor', 'stock_quantity',
+    'category_id', 'unit_id', 'is_active', 'created_at',
+  ]),
+  _ExportTable('أرصدة المخازن', 'product_warehouse_stock', [
+    'id', 'product_id', 'warehouse_id', 'quantity', 'updated_at',
+  ]),
   _ExportTable('الفواتير', 'sales', ['id', 'total_minor', 'paid_minor', 'created_at']),
   _ExportTable('بنود الفواتير', 'sale_items', [
     'id', 'sale_id', 'product_id', 'quantity', 'unit_price_minor',
@@ -171,16 +196,18 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 3 && schemaVersion != 4 && schemaVersion != 5) {
+      if (schemaVersion != 3 && schemaVersion != 4 && schemaVersion != 5 && schemaVersion != 6) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 أو 4 أو 5).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 أو 4 أو 5 أو 6).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion == 5
+      final restoreTables = schemaVersion == 6
           ? _tables
-          : schemaVersion == 4
+          : schemaVersion == 5
+              ? _legacyV5Tables
+              : schemaVersion == 4
               ? _legacyV4Tables
               : _legacyV3Tables;
       for (final spec in restoreTables) {
@@ -190,6 +217,9 @@ class _DataTransferPageState extends State<DataTransferPage> {
           throw AppException('النسخة لا تحتوي على بنية جدول ' + spec.label + ' المتوقعة.');
         }
         data[spec.table] = await opened.query(spec.table, orderBy: 'id ASC');
+      }
+      if (schemaVersion < 6) {
+        data['sales'] = data['sales']!.map((row) => {...row, 'warehouse_id': null}).toList(growable: false);
       }
       if (schemaVersion < 5) {
         final branchRows = await widget.database.rawQuery(
@@ -336,7 +366,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 5) {
+      if (schemaVersion != 6) {
         throw AppException('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
       }
 
@@ -384,7 +414,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final backupVersion = backupVersionRows.isEmpty
           ? 0
           : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (backupVersion != 5) {
+      if (backupVersion != 6) {
         throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
