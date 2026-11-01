@@ -1,8 +1,7 @@
 /// Product values used by the current local application.
 ///
-/// Stock is kept here temporarily for compatibility with the first local
-/// schema. The inventory phase will move balances into warehouse-scoped
-/// inventory records.
+/// Stock balances are stored as integer thousandths and synchronized with
+/// the product's warehouse-scoped inventory records.
 class Product {
   const Product({
     this.id,
