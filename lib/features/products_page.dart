@@ -62,13 +62,21 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
-  bool _allowsFraction(int? unitId) =>
-      _units.where((unit) => unit.id == unitId).firstOrNull?.allowsFraction ?? false;
+  bool _allowsFraction(int? unitId) {
+    for (final unit in _units) {
+      if (unit.id == unitId) return unit.allowsFraction;
+    }
+    return false;
+  }
 
   String _quantity(int scaled) => Quantity.format(scaled);
 
-  String _unitLabel(int? unitId) =>
-      _units.where((unit) => unit.id == unitId).firstOrNull?.abbreviation ?? 'وحدة';
+  String _unitLabel(int? unitId) {
+    for (final unit in _units) {
+      if (unit.id == unitId) return unit.abbreviation;
+    }
+    return 'وحدة';
+  }
 
   String _money(int minor) => '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')} ج.م';
 
