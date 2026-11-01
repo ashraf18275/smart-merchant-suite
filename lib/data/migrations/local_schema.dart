@@ -267,6 +267,11 @@ Future<void> createBranchWarehouseSchema(Database db) async {
     );
   }
 
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_inventory_movements_warehouse_created
+    ON inventory_movements (warehouse_id, created_at)
+  ''');
+
   final products = await db.query(
     'products',
     columns: ['id', 'stock_quantity'],
