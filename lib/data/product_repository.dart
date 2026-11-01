@@ -143,7 +143,7 @@ class ProductRepository implements ProductStore, CatalogStore {
       args.addAll(['%$normalized%', '%$normalized%']);
     }
     final rows = await _db.rawQuery('''
-      SELECT p.*,
+      SELECT p.*, COALESCE(u.allows_fraction, 0) AS unit_allows_fraction,
         COALESCE((
           SELECT s.quantity
           FROM product_warehouse_stock s
