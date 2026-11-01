@@ -304,6 +304,7 @@ void main() {
     );
 
     expect((await products.all()).single.stockQuantity, 3);
+    expect((await products.all()).single.defaultWarehouseStock, 3);
     final invoices = await database.query('sales');
     expect(invoices, hasLength(1));
     expect(invoices.single['id'], saleId);
