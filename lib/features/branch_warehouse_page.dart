@@ -358,7 +358,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
                 final item = _stock[index];
                 return Card(child: ListTile(
                   title: Text(item.productName),
-                  subtitle: Text('الرصيد: ' + item.quantity.toString() + ' ' + item.unitName + (item.sku == null ? '' : ' • ' + item.sku!)),
+                  subtitle: Text('الرصيد: ' + _quantity(item.quantity) + ' ' + item.unitName + (item.sku == null ? '' : ' • ' + item.sku!)),
                   trailing: Wrap(children: [
                     IconButton(tooltip: 'تسوية المخزون', onPressed: () => _adjust(item), icon: const Icon(Icons.tune)),
                     IconButton(tooltip: 'تحويل إلى مخزن آخر', onPressed: () => _transfer(item), icon: const Icon(Icons.swap_horiz)),
