@@ -1,10 +1,10 @@
 # Fractional Quantities — Implementation Contract
 
-Status: design checkpoint only. Fractional quantity entry is **not enabled** until the schema, repositories, application ports, UI, backup/restore, and tests are migrated together.
+Status: implementation in progress on `feature/multi-user-cloud`. Schema v7, scaled quantity utilities, stock/sales/warehouse flows, unit configuration, CSV formatting, and legacy-backup conversion have been added. Full CI and Android/Windows builds are still required before treating the feature as ready.
 
 ## Why this is a cross-cutting change
 
-The current application stores whole-number quantities as SQLite integers and exposes them as Dart `int` values. This affects product balances, warehouse balances, stock movements, transfers, sale-item quantities, sale validation, invoice totals, and CSV/backup workflows. The existing `product_units.allows_fraction` flag is not sufficient by itself: enabling it before these paths are migrated would either reject decimal input or silently lose precision.
+The application exposes quantities as Dart `int` values representing scaled thousandths, while monetary values remain integer piastres. This affects product balances, warehouse balances, stock movements, transfers, sale-item quantities, sale validation, invoice totals, and CSV/backup workflows. The existing `product_units.allows_fraction` flag is not sufficient by itself: enabling it before these paths are migrated would either reject decimal input or silently lose precision.
 
 ## Canonical representation
 
@@ -49,7 +49,7 @@ Use one shared quantity parser/formatter/conversion utility so the screens canno
 - Export schema version 7 quantities in scaled integer form.
 - Continue accepting backup schema versions 3, 4, 5, and 6.
 - Treat versions 3–6 as whole-unit quantities and multiply their quantity fields by 1,000 during restore.
-- Add a dedicated legacy-v6 table specification; never read a v6 backup using the v7 table contract.
+- Use the dedicated `_legacyV6Tables` contract for v6 backups; v6 values are scaled during restore, while v7 values are not.
 - Keep the existing historical-sale warehouse behavior: do not infer a warehouse for old invoices.
 - Verify backup integrity, foreign keys, row counts, and converted quantities before asking the user to confirm replacement.
 
