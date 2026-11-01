@@ -100,6 +100,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         ],
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     if (saved == true) {
       try {
         if (branch == null) {
@@ -148,6 +149,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         ),
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     if (saved == true && branchId != null) {
       try {
         if (warehouse == null) {
@@ -219,6 +221,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         ),
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     if (saved == true) {
       try {
         await widget.store.transferStock(
@@ -265,6 +268,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         ],
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     if (saved == true && _warehouseId != null) {
       try {
         await widget.store.adjustStock(
