@@ -102,6 +102,12 @@ void main() {
       'reason': 'رصيد افتتاحي قديم',
       'created_at': DateTime.utc(2025).toIso8601String(),
     });
+    await database.insert('inventory_movements', {
+      'product_id': oldProductId,
+      'quantity_delta': -2,
+      'reason': 'صرف قديم',
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
     await createCatalogSchema(database);
     await createBranchWarehouseSchema(database);
     await createSaleWarehouseSchema(database);
@@ -132,11 +138,13 @@ void main() {
     expect(stock['quantity'], 6000);
     final movementColumns = await database.rawQuery('PRAGMA table_info(inventory_movements)');
     expect(movementColumns.map((row) => row['name']), contains('warehouse_id'));
-    final migratedMovement = (await database.query('inventory_movements')).single;
+    final migratedMovements = await database.query('inventory_movements', orderBy: 'id ASC');
     final defaultWarehouse = (await database.query('warehouses')).single;
-    expect(migratedMovement['warehouse_id'], defaultWarehouse['id']);
-    expect(migratedMovement['quantity_delta'], 6000);
-    expect(migratedMovement['product_id'], oldProductId);
+    expect(migratedMovements, hasLength(2));
+    expect(migratedMovements[0]['warehouse_id'], defaultWarehouse['id']);
+    expect(migratedMovements[0]['quantity_delta'], 6000);
+    expect(migratedMovements[0]['product_id'], oldProductId);
+    expect(migratedMovements[1]['quantity_delta'], -2000);
     final migratedSale = (await database.query(
       'sales',
       where: 'id = ?',
