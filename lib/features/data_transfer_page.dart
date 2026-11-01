@@ -11,6 +11,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../core/app_error.dart';
+import '../core/quantity.dart';
 
 import '../data/csv_encoder.dart';
 
@@ -128,6 +129,19 @@ class _DataTransferPageState extends State<DataTransferPage> {
     return '${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}${two(now.second)}';
   }
 
+  Object? _csvValue(String table, String column, Object? value) {
+    const quantityFields = <String, Set<String>>{
+      'products': {'stock_quantity'},
+      'product_warehouse_stock': {'quantity'},
+      'sale_items': {'quantity'},
+      'inventory_movements': {'quantity_delta'},
+    };
+    if (quantityFields[table]?.contains(column) == true && value is num) {
+      return Quantity.format(value.toInt());
+    }
+    return value;
+  }
+
   Future<void> _shareCsv() async {
     if (_working) return;
     setState(() => _working = true);
@@ -140,7 +154,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       );
       final csvRows = <List<Object?>>[
         spec.columns,
-        ...rows.map((row) => spec.columns.map((column) => row[column]).toList()),
+        ...rows.map((row) => spec.columns.map((column) => _csvValue(spec.table, column, row[column])).toList()),
       ];
       final directory = await getTemporaryDirectory();
       final file = File(p.join(directory.path, '${spec.table}_${_timestamp()}.csv'));
