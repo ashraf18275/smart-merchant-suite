@@ -18,7 +18,7 @@ Map<String, Object?> _productToRow(Product product) {
     'price_minor': product.priceMinor,
     'stock_quantity': product.stockQuantity,
     'category_id': product.categoryId,
-    'unit_id': product.unitId,
+    'unit_id': targetUnitId,
     'is_active': product.isActive ? 1 : 0,
     'created_at':
         (product.createdAt ?? DateTime.now()).toUtc().toIso8601String(),
@@ -106,11 +106,12 @@ class ProductRepository implements ProductStore, CatalogStore {
     final id = product.id;
     final normalizedSku = product.sku?.trim();
     await _db.transaction((txn) async {
-      final current = await txn.query('products', columns: ['stock_quantity'],
+      final current = await txn.query('products', columns: ['stock_quantity', 'unit_id'],
         where: 'id = ?', whereArgs: [id], limit: 1);
       if (current.isEmpty) throw AppException('المنتج غير موجود');
+      final targetUnitId = product.unitId ?? current.single['unit_id'] as int?;
       final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
-        where: 'id = ?', whereArgs: [product.unitId], limit: 1);
+        where: 'id = ?', whereArgs: [targetUnitId], limit: 1);
       if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
       final stock = current.single['stock_quantity']! as int;
       if (unitRows.single['allows_fraction'] != 1 && stock % Quantity.scale != 0) {
