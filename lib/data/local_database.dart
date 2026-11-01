@@ -48,6 +48,7 @@ Future<sqflite.Database> openLocalDatabase() async {
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
         if (oldVersion < 3) await createExpensesSchema(db);
+        if (oldVersion < 4) await createCatalogSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
