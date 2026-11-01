@@ -5,6 +5,7 @@ import '../core/app_error.dart';
 import '../domain/branch.dart';
 import '../domain/warehouse.dart';
 import '../domain/warehouse_stock.dart';
+import '../core/quantity.dart';
 
 class BranchWarehousePage extends StatefulWidget {
   const BranchWarehousePage({super.key, required this.store});
@@ -68,6 +69,8 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
       });
     }
   }
+
+  String _quantity(int scaled) => Quantity.format(scaled);
 
   void _showError(Object error, String fallback) {
     if (!mounted) return;
@@ -204,10 +207,11 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
                 onChanged: (v) { if (v != null) setDialogState(() => targetId = v); },
               ),
               TextFormField(controller: quantity, keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'المتاح: ' + item.quantity.toString()),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: 'المتاح: ' + _quantity(item.quantity) + ' ' + item.unitName),
                 validator: (v) {
-                  final n = int.tryParse(v?.trim() ?? '');
-                  if (n == null || n <= 0) return 'أدخل كمية صحيحة';
+                  final n = Quantity.parse(v ?? '', allowsFraction: item.allowsFraction);
+                  if (n == null || n <= 0) return 'أدخل كمية صحيحة حسب وحدة القياس';
                   if (n > item.quantity) return 'الكمية أكبر من المتاح';
                   return null;
                 }),
@@ -228,7 +232,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
           productId: item.productId,
           fromWarehouseId: source,
           toWarehouseId: targetId,
-          quantity: int.parse(quantity.text.trim()),
+          quantity: Quantity.parse(quantity.text, allowsFraction: item.allowsFraction)!,
           reason: reason.text,
         );
         await _load();
@@ -249,12 +253,12 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         content: Form(
           key: key,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('الرصيد الحالي: ' + item.quantity.toString() + ' ' + item.unitName),
-            TextFormField(controller: delta, keyboardType: const TextInputType.numberWithOptions(signed: true),
+            Text('الرصيد الحالي: ' + _quantity(item.quantity) + ' ' + item.unitName),
+            TextFormField(controller: delta, keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
               decoration: const InputDecoration(labelText: 'فرق الكمية (+ إضافة / - خصم)'),
               validator: (v) {
-                final n = int.tryParse(v?.trim() ?? '');
-                if (n == null || n == 0) return 'أدخل فرقًا صحيحًا غير صفر';
+                final n = Quantity.parse(v ?? '', allowsFraction: item.allowsFraction, allowNegative: true);
+                if (n == null || n == 0) return 'أدخل فرقًا صحيحًا غير صفر حسب وحدة القياس';
                 if (item.quantity + n < 0) return 'الرصيد لا يسمح بهذا الخصم';
                 return null;
               }),
@@ -274,7 +278,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         await widget.store.adjustStock(
           warehouseId: _warehouseId!,
           productId: item.productId,
-          quantityDelta: int.parse(delta.text.trim()),
+          quantityDelta: Quantity.parse(delta.text, allowsFraction: item.allowsFraction, allowNegative: true)!,
           reason: reason.text,
         );
         await _load();
