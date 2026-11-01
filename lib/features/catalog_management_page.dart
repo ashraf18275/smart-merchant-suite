@@ -72,7 +72,6 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
           ),
         ],
       ),
-      ),
     );
     if (saved == true) {
       try {
@@ -133,6 +132,7 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
             child: const Text('حفظ'),
           ),
         ],
+        ),
       ),
     );
     if (saved == true) {
