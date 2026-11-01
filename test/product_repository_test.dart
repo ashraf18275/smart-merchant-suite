@@ -371,6 +371,8 @@ void main() {
       paidMinor: 400,
       warehouseId: otherWarehouseId,
     );
+    final invoice = (await database.query('sales')).single;
+    expect(invoice['warehouse_id'], otherWarehouseId);
 
     final mainId = await mainWarehouseId();
     final mainBalance = (await store.stock(warehouseId: mainId))
