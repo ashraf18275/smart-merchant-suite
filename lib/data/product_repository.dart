@@ -58,15 +58,33 @@ class ProductRepository implements ProductStore, CatalogStore {
         row['unit_id'] = units.single['id'];
       }
       final productId = await txn.insert('products', row);
-
+      final defaultWarehouses = await txn.rawQuery('''
+        SELECT w.id FROM warehouses w
+        JOIN branches b ON b.id = w.branch_id
+        WHERE w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'
+          AND w.is_active = 1 AND b.is_active = 1
+        LIMIT 1
+      ''');
+      if (defaultWarehouses.isEmpty) {
+        throw AppException('المخزن الرئيسي الافتراضي غير موجود أو غير نشط');
+      }
+      final warehouseId = defaultWarehouses.single['id']! as int;
+      final stamp = createdAt.toUtc().toIso8601String();
+      await txn.insert('product_warehouse_stock', {
+        'product_id': productId,
+        'warehouse_id': warehouseId,
+        'quantity': product.stockQuantity,
+        'updated_at': stamp,
+      });
       // The opening balance is a stock movement, not an unexplained balance.
-      // Keep both writes in one transaction so the ledger and balance agree.
+      // Keep the balance and ledger write in one transaction.
       if (product.stockQuantity > 0) {
         await txn.insert('inventory_movements', {
           'product_id': productId,
+          'warehouse_id': warehouseId,
           'quantity_delta': product.stockQuantity,
           'reason': 'رصيد افتتاحي',
-          'created_at': createdAt.toUtc().toIso8601String(),
+          'created_at': stamp,
         });
       }
       return productId;
@@ -139,34 +157,53 @@ class ProductRepository implements ProductStore, CatalogStore {
     required String reason,
   }) async {
     await _db.transaction((txn) async {
-      final rows = await txn.query(
+      final products = await txn.query(
         'products',
-        columns: ['stock_quantity'],
+        columns: ['id'],
         where: 'id = ? AND is_active = 1',
         whereArgs: [productId],
         limit: 1,
       );
-      if (rows.isEmpty) {
-        throw AppException('المنتج غير موجود أو غير نشط');
-      }
-
-      final current = rows.single['stock_quantity']! as int;
+      if (products.isEmpty) throw AppException('المنتج غير موجود أو غير نشط');
+      final warehouses = await txn.rawQuery('''
+        SELECT w.id FROM warehouses w
+        JOIN branches b ON b.id = w.branch_id
+        WHERE w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'
+          AND w.is_active = 1 AND b.is_active = 1
+        LIMIT 1
+      ''');
+      if (warehouses.isEmpty) throw AppException('المخزن الرئيسي الافتراضي غير موجود');
+      final warehouseId = warehouses.single['id']! as int;
+      final balances = await txn.query('product_warehouse_stock',
+        columns: ['id', 'quantity'],
+        where: 'product_id = ? AND warehouse_id = ?',
+        whereArgs: [productId, warehouseId], limit: 1);
+      final current = balances.isEmpty ? 0 : balances.single['quantity']! as int;
       final next = current + quantityDelta;
-      if (next < 0) {
-        throw AppException('الكمية غير كافية؛ لا يسمح بالمخزون السالب');
+      if (next < 0) throw AppException('الكمية غير كافية؛ لا يسمح بالمخزون السالب');
+      final stamp = DateTime.now().toUtc().toIso8601String();
+      if (balances.isEmpty) {
+        await txn.insert('product_warehouse_stock', {
+          'product_id': productId, 'warehouse_id': warehouseId,
+          'quantity': next, 'updated_at': stamp,
+        });
+      } else {
+        await txn.update('product_warehouse_stock', {
+          'quantity': next, 'updated_at': stamp,
+        }, where: 'id = ?', whereArgs: [balances.single['id']]);
       }
-
-      await txn.update(
-        'products',
-        {'stock_quantity': next},
-        where: 'id = ?',
-        whereArgs: [productId],
+      final totals = await txn.rawQuery(
+        'SELECT COALESCE(SUM(quantity), 0) AS total FROM product_warehouse_stock WHERE product_id = ?',
+        [productId],
       );
+      await txn.update('products', {'stock_quantity': totals.single['total']},
+        where: 'id = ?', whereArgs: [productId]);
       await txn.insert('inventory_movements', {
         'product_id': productId,
+        'warehouse_id': warehouseId,
         'quantity_delta': quantityDelta,
         'reason': reason.trim(),
-        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'created_at': stamp,
       });
     });
   }
