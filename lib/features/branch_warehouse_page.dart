@@ -129,7 +129,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
             key: key,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               DropdownButtonFormField<int>(
-                value: branchId,
+                initialValue: branchId,
                 decoration: const InputDecoration(labelText: 'الفرع'),
                 items: [
                   for (final b in _branches.where((x) => x.isActive || x.id == branchId))
@@ -198,7 +198,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
             key: key,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               DropdownButtonFormField<int>(
-                value: targetId,
+                initialValue: targetId,
                 decoration: const InputDecoration(labelText: 'إلى المخزن'),
                 items: [for (final w in targets) DropdownMenuItem(value: w.id, child: Text(w.branchName + ' — ' + w.name))],
                 onChanged: (v) { if (v != null) setDialogState(() => targetId = v); },
@@ -304,7 +304,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
     padding: const EdgeInsets.all(16),
     children: [
       DropdownButtonFormField<int>(
-        value: _branchId,
+        initialValue: _branchId,
         decoration: const InputDecoration(labelText: 'تصفية حسب الفرع'),
         items: [for (final b in _branches.where((x) => x.isActive)) DropdownMenuItem(value: b.id, child: Text(b.name))],
         onChanged: (v) async {
@@ -332,7 +332,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
     Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: DropdownButtonFormField<int>(
-        value: _warehouseId,
+        initialValue: _warehouseId,
         decoration: const InputDecoration(labelText: 'المخزن المحدد'),
         items: [for (final w in _warehouses.where((x) => x.isActive)) DropdownMenuItem(value: w.id, child: Text(w.branchName + ' — ' + w.name))],
         onChanged: (v) async {
