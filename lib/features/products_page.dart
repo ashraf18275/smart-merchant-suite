@@ -389,7 +389,7 @@ class _ProductsPageState extends State<ProductsPage> {
         },
       )],
     ),
-    floatingActionButton: FloatingActionButton.extended(onPressed: _add, icon: const Icon(Icons.add), label: const Text('إضافة منتج')),
+    floatingActionButton: FloatingActionButton.extended(onPressed: _loading ? null : _add, icon: const Icon(Icons.add), label: const Text('إضافة منتج')),
     body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
       TextField(controller: _search, decoration: InputDecoration(
         prefixIcon: const Icon(Icons.search), hintText: 'ابحث باسم المنتج أو الكود',
