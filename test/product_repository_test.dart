@@ -5,6 +5,7 @@ import 'package:smart_merchant_suite/application/services/sales_application_serv
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
+import 'package:smart_merchant_suite/data/warehouse_repository.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
@@ -89,6 +90,40 @@ void main() {
     );
   });
 
+  test('keeps independent warehouse balances and transfers stock atomically', () async {
+    final warehouseStore = WarehouseRepository(database);
+    final branches = await warehouseStore.branches();
+    final secondBranchId = await warehouseStore.addBranch(name: 'فرع المدينة');
+    final secondWarehouseId = await warehouseStore.addWarehouse(branchId: secondBranchId, name: 'مخزن الفرع');
+    final mainWarehouse = (await warehouseStore.warehouses()).single;
+    final productId = await products.add(const Product(name: 'صنف متعدد المخازن', costMinor: 100, priceMinor: 150, stockQuantity: 10));
+
+    await warehouseStore.transferStock(productId: productId, fromWarehouseId: mainWarehouse.id, toWarehouseId: secondWarehouseId, quantity: 4, reason: 'توزيع مخزون');
+
+    final mainStock = (await warehouseStore.stock(warehouseId: mainWarehouse.id)).singleWhere((row) => row.productId == productId);
+    final secondStock = (await warehouseStore.stock(warehouseId: secondWarehouseId)).singleWhere((row) => row.productId == productId);
+    expect(mainStock.quantity, 6);
+    expect(secondStock.quantity, 4);
+    expect((await products.all()).single.stockQuantity, 10);
+    final movements = await database.query('inventory_movements', where: 'product_id = ?', whereArgs: [productId], orderBy: 'id ASC');
+    expect(movements, hasLength(3));
+    expect(movements[1]['quantity_delta'], -4);
+    expect(movements[2]['quantity_delta'], 4);
+    expect(movements[1]['warehouse_id'], mainWarehouse.id);
+    expect(movements[2]['warehouse_id'], secondWarehouseId);
+    expect(branches.single.name, 'الفرع الرئيسي');
+  });
+
+  test('rejects transfer from a warehouse with insufficient stock', () async {
+    final warehouseStore = WarehouseRepository(database);
+    final branchId = await warehouseStore.addBranch(name: 'فرع آخر');
+    final targetId = await warehouseStore.addWarehouse(branchId: branchId, name: 'مخزن آخر');
+    final source = (await warehouseStore.warehouses()).single;
+    final productId = await products.add(const Product(name: 'مخزون محدود', costMinor: 10, priceMinor: 20, stockQuantity: 2));
+    await expectLater(warehouseStore.transferStock(productId: productId, fromWarehouseId: source.id, toWarehouseId: targetId, quantity: 3, reason: 'تحويل زائد'), throwsA(isA<AppException>()));
+    expect((await products.all()).single.stockQuantity, 2);
+    expect(await database.query('inventory_movements', where: 'product_id = ?', whereArgs: [productId]), hasLength(1));
+  });
   test('stores money as integer minor units and lists products', () async {
     await products.add(const Product(
       name: '  كابل USB  ',
