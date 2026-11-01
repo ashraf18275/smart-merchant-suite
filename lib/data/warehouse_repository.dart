@@ -52,6 +52,12 @@ class WarehouseRepository implements BranchWarehouseStore {
   }) async {
     final value = name.trim();
     if (value.isEmpty) throw AppException('اسم الفرع مطلوب');
+    final currentBranch = await _db.query('branches', columns: ['name'],
+      where: 'id = ?', whereArgs: [id], limit: 1);
+    if (currentBranch.isEmpty) throw AppException('الفرع غير موجود');
+    if (currentBranch.single['name'] == 'الفرع الرئيسي' && value != 'الفرع الرئيسي') {
+      throw AppException('لا يمكن تغيير اسم الفرع الرئيسي الافتراضي');
+    }
     try {
       final changed = await _db.update('branches', {
         'name': value,
@@ -142,6 +148,16 @@ class WarehouseRepository implements BranchWarehouseStore {
   Future<void> updateWarehouse({required int id, required String name}) async {
     final value = name.trim();
     if (value.isEmpty) throw AppException('اسم المخزن مطلوب');
+    final currentWarehouse = await _db.rawQuery('''
+      SELECT w.name, b.name AS branch_name FROM warehouses w
+      JOIN branches b ON b.id = w.branch_id WHERE w.id = ? LIMIT 1
+    ''', [id]);
+    if (currentWarehouse.isEmpty) throw AppException('المخزن غير موجود');
+    if (currentWarehouse.single['name'] == 'المخزن الرئيسي' &&
+        currentWarehouse.single['branch_name'] == 'الفرع الرئيسي' &&
+        value != 'المخزن الرئيسي') {
+      throw AppException('لا يمكن تغيير اسم المخزن الرئيسي الافتراضي');
+    }
     try {
       final changed = await _db.update('warehouses', {'name': value},
         where: 'id = ?', whereArgs: [id]);
