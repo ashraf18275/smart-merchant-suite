@@ -127,8 +127,11 @@ void main() {
     final defaultWarehouse = (await database.query('warehouses')).single;
     expect(migratedMovement['warehouse_id'], defaultWarehouse['id']);
     expect(migratedMovement['product_id'], oldProductId);
-    final migratedSale = (await database.query('sales')).single;
-    expect(migratedSale['id'], oldSaleId);
+    final migratedSale = (await database.query(
+      'sales',
+      where: 'id = ?',
+      whereArgs: [oldSaleId],
+    )).single;
     expect(migratedSale['warehouse_id'], isNull);
     final salesColumns = await database.rawQuery('PRAGMA table_info(sales)');
     expect(salesColumns.map((row) => row['name']), contains('warehouse_id'));
