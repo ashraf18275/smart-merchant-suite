@@ -209,6 +209,7 @@ class WarehouseRepository implements BranchWarehouseStore {
     final rows = await _db.rawQuery('''
       SELECT p.id AS product_id, p.name AS product_name, p.sku,
              COALESCE(u.abbreviation, u.name, 'قطعة') AS unit_name,
+             COALESCE(u.allows_fraction, 0) AS allows_fraction,
              COALESCE(s.quantity, 0) AS quantity
       FROM products p
       LEFT JOIN product_warehouse_stock s
@@ -223,6 +224,7 @@ class WarehouseRepository implements BranchWarehouseStore {
       sku: row['sku'] as String?,
       unitName: row['unit_name']! as String,
       quantity: row['quantity']! as int,
+      allowsFraction: row['allows_fraction'] == 1,
     )).toList(growable: false);
   }
 
