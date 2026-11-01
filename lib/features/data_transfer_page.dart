@@ -107,6 +107,9 @@ const _legacyV5Tables = <_ExportTable>[
   ]),
 ];
 
+// Version 6 uses the same table layout as v7, but its quantities are whole units.
+const _legacyV6Tables = _tables;
+
 class DataTransferPage extends StatefulWidget {
   const DataTransferPage({super.key, required this.database});
   final Database database;
@@ -196,16 +199,18 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 3 && schemaVersion != 4 && schemaVersion != 5 && schemaVersion != 6) {
+      if (schemaVersion != 3 && schemaVersion != 4 && schemaVersion != 5 && schemaVersion != 6 && schemaVersion != 7) {
         throw AppException(
           'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 أو 4 أو 5 أو 6).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion == 6
+      final restoreTables = schemaVersion == 7
           ? _tables
-          : schemaVersion == 5
+          : schemaVersion == 6
+              ? _legacyV6Tables
+              : schemaVersion == 5
               ? _legacyV5Tables
               : schemaVersion == 4
               ? _legacyV4Tables
@@ -261,6 +266,27 @@ class _DataTransferPageState extends State<DataTransferPage> {
         data['inventory_movements'] = data['inventory_movements']!.map((row) => {
           ...row, 'warehouse_id': warehouseId,
         }).toList(growable: false);
+      }
+      if (schemaVersion < 7) {
+        const quantityColumns = <String, List<String>>{
+          'products': ['stock_quantity'],
+          'product_warehouse_stock': ['quantity'],
+          'sale_items': ['quantity'],
+          'inventory_movements': ['quantity_delta'],
+        };
+        for (final entry in quantityColumns.entries) {
+          data[entry.key] = data[entry.key]!.map((row) {
+            final converted = Map<String, Object?>.from(row);
+            for (final column in entry.value) {
+              final value = (converted[column] as num?)?.toInt() ?? 0;
+              if (value > 9223372036854775 || value < -9223372036854775) {
+                throw AppException('توجد كمية أكبر من الحد الآمن للتحويل في جدول ${entry.key}.');
+              }
+              converted[column] = value * 1000;
+            }
+            return converted;
+          }).toList(growable: false);
+        }
       }
       final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
       if (foreignKeyErrors.isNotEmpty) {
@@ -366,7 +392,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 6) {
+      if (schemaVersion != 7) {
         throw AppException('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
       }
 
@@ -414,7 +440,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final backupVersion = backupVersionRows.isEmpty
           ? 0
           : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (backupVersion != 6) {
+      if (backupVersion != 7) {
         throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
