@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../application/ports/product_catalog.dart';
+import '../application/ports/catalog_store.dart';
+import '../domain/product_category.dart';
+import '../domain/product_unit.dart';
+import 'catalog_management_page.dart';
 import '../core/app_error.dart';
 import '../domain/product.dart';
 
 class ProductsPage extends StatefulWidget {
-  const ProductsPage({super.key, required this.repository});
+  const ProductsPage({super.key, required this.repository, required this.catalog});
   final ProductCatalog repository;
+  final CatalogStore catalog;
 
   @override
   State<ProductsPage> createState() => _ProductsPageState();
@@ -15,6 +20,8 @@ class ProductsPage extends StatefulWidget {
 class _ProductsPageState extends State<ProductsPage> {
   final _search = TextEditingController();
   List<Product> _items = [];
+  List<ProductCategory> _categories = [];
+  List<ProductUnit> _units = [];
   bool _loading = true;
   bool _showInactive = false;
   String? _error;
@@ -35,12 +42,19 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Future<void> _load() async {
     try {
-      final result = await widget.repository.all(
-        search: _search.text,
-        includeInactive: _showInactive,
-      );
+      final values = await Future.wait([
+        widget.repository.all(search: _search.text, includeInactive: _showInactive),
+        widget.catalog.categories(includeInactive: true),
+        widget.catalog.units(includeInactive: true),
+      ]);
       if (!mounted) return;
-      setState(() { _items = result; _loading = false; _error = null; });
+      setState(() {
+        _items = values[0] as List<Product>;
+        _categories = values[1] as List<ProductCategory>;
+        _units = values[2] as List<ProductUnit>;
+        _loading = false;
+        _error = null;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل المنتجات.', operation: 'products.load'); });
@@ -67,6 +81,11 @@ class _ProductsPageState extends State<ProductsPage> {
     final cost = TextEditingController(text: '0.00');
     final price = TextEditingController(text: '0.00');
     final stock = TextEditingController(text: '0');
+    int? selectedCategoryId;
+    int? selectedUnitId = _units.where((u) => u.isActive).firstWhere(
+      (u) => u.name == 'قطعة',
+      orElse: () => _units.firstWhere((u) => u.isActive),
+    ).id;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -83,6 +102,26 @@ class _ProductsPageState extends State<ProductsPage> {
                   validator: (v) => v == null || v.trim().isEmpty ? 'أدخل اسم المنتج' : null),
                 TextFormField(controller: sku,
                   decoration: const InputDecoration(labelText: 'كود المنتج (اختياري)')),
+                DropdownButtonFormField<int?>(
+                  value: selectedCategoryId,
+                  decoration: const InputDecoration(labelText: 'التصنيف (اختياري)'),
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('بدون تصنيف')),
+                    for (final item in _categories.where((v) => v.isActive))
+                      DropdownMenuItem<int?>(value: item.id, child: Text(item.name)),
+                  ],
+                  onChanged: (value) => selectedCategoryId = value,
+                ),
+                DropdownButtonFormField<int>(
+                  value: selectedUnitId,
+                  decoration: const InputDecoration(labelText: 'وحدة القياس *'),
+                  items: [
+                    for (final item in _units.where((v) => v.isActive))
+                      DropdownMenuItem<int>(value: item.id, child: Text('${item.name} (${item.abbreviation})')),
+                  ],
+                  validator: (value) => value == null ? 'اختر وحدة القياس' : null,
+                  onChanged: (value) => selectedUnitId = value,
+                ),
                 TextFormField(controller: cost, keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'التكلفة بالجنيه *'),
                   validator: (v) => v == null || _minor(v) == null ? 'أدخل تكلفة صحيحة' : null),
@@ -116,6 +155,8 @@ class _ProductsPageState extends State<ProductsPage> {
           costMinor: _minor(cost.text)!,
           priceMinor: _minor(price.text)!,
           stockQuantity: int.parse(stock.text.trim()),
+          categoryId: selectedCategoryId,
+          unitId: selectedUnitId,
         ));
         await _load();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المنتج محليًا')));
@@ -132,6 +173,8 @@ class _ProductsPageState extends State<ProductsPage> {
     final sku = TextEditingController(text: product.sku ?? '');
     final cost = TextEditingController(text: _moneyInput(product.costMinor));
     final price = TextEditingController(text: _moneyInput(product.priceMinor));
+    int? selectedCategoryId = product.categoryId;
+    int? selectedUnitId = product.unitId ?? _units.where((u) => u.isActive).first.id;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -153,6 +196,26 @@ class _ProductsPageState extends State<ProductsPage> {
                 TextFormField(
                   controller: sku,
                   decoration: const InputDecoration(labelText: 'كود المنتج (اختياري)'),
+                ),
+                DropdownButtonFormField<int?>(
+                  value: selectedCategoryId,
+                  decoration: const InputDecoration(labelText: 'التصنيف (اختياري)'),
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('بدون تصنيف')),
+                    for (final item in _categories.where((v) => v.isActive || v.id == selectedCategoryId))
+                      DropdownMenuItem<int?>(value: item.id, child: Text(item.name + (item.isActive ? '' : ' (موقوف)'))),
+                  ],
+                  onChanged: (value) => selectedCategoryId = value,
+                ),
+                DropdownButtonFormField<int>(
+                  value: selectedUnitId,
+                  decoration: const InputDecoration(labelText: 'وحدة القياس *'),
+                  items: [
+                    for (final item in _units.where((v) => v.isActive || v.id == selectedUnitId))
+                      DropdownMenuItem<int>(value: item.id, child: Text(item.name + (item.isActive ? '' : ' (موقوف)'))),
+                  ],
+                  validator: (value) => value == null ? 'اختر وحدة القياس' : null,
+                  onChanged: (value) => selectedUnitId = value,
                 ),
                 TextFormField(
                   controller: cost,
@@ -200,6 +263,8 @@ class _ProductsPageState extends State<ProductsPage> {
           costMinor: _minor(cost.text)!,
           priceMinor: _minor(price.text)!,
           stockQuantity: product.stockQuantity,
+          categoryId: selectedCategoryId,
+          unitId: selectedUnitId,
           isActive: product.isActive,
           createdAt: product.createdAt,
         ));
@@ -311,7 +376,19 @@ class _ProductsPageState extends State<ProductsPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('المنتجات والمخزون')),
+    appBar: AppBar(
+      title: const Text('المنتجات والمخزون'),
+      actions: [IconButton(
+        tooltip: 'إدارة التصنيفات ووحدات القياس',
+        icon: const Icon(Icons.category_outlined),
+        onPressed: () async {
+          await Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => CatalogManagementPage(catalog: widget.catalog),
+          ));
+          await _load();
+        },
+      )],
+    ),
     floatingActionButton: FloatingActionButton.extended(onPressed: _add, icon: const Icon(Icons.add), label: const Text('إضافة منتج')),
     body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
       TextField(controller: _search, decoration: InputDecoration(
