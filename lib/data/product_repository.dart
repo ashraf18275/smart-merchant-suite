@@ -2,6 +2,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../application/ports/product_store.dart';
 import '../core/app_error.dart';
+import '../core/quantity.dart';
 import '../domain/product.dart';
 import '../domain/product_category.dart';
 import '../domain/product_unit.dart';
@@ -58,6 +59,13 @@ class ProductRepository implements ProductStore, CatalogStore {
         );
         if (units.isEmpty) throw AppException('وحدة القياس الافتراضية غير موجودة');
         row['unit_id'] = units.single['id'];
+      }
+      final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
+        where: 'id = ?', whereArgs: [row['unit_id']], limit: 1);
+      if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
+      if (unitRows.single['allows_fraction'] != 1 &&
+          product.stockQuantity % Quantity.scale != 0) {
+        throw AppException('وحدة القياس المحددة لا تقبل الكميات الكسرية');
       }
       final productId = await txn.insert('products', row);
       final defaultWarehouses = await txn.rawQuery('''
@@ -170,14 +178,15 @@ class ProductRepository implements ProductStore, CatalogStore {
     required String reason,
   }) async {
     await _db.transaction((txn) async {
-      final products = await txn.query(
-        'products',
-        columns: ['id'],
-        where: 'id = ? AND is_active = 1',
-        whereArgs: [productId],
-        limit: 1,
-      );
+      final products = await txn.rawQuery('''
+        SELECT p.id, COALESCE(u.allows_fraction, 0) AS allows_fraction
+        FROM products p LEFT JOIN product_units u ON u.id = p.unit_id
+        WHERE p.id = ? AND p.is_active = 1 LIMIT 1
+      ''', [productId]);
       if (products.isEmpty) throw AppException('المنتج غير موجود أو غير نشط');
+      if (products.single['allows_fraction'] != 1 && quantityDelta % Quantity.scale != 0) {
+        throw AppException('وحدة قياس المنتج لا تقبل الكميات الكسرية');
+      }
       final warehouses = await txn.rawQuery('''
         SELECT w.id FROM warehouses w
         JOIN branches b ON b.id = w.branch_id
