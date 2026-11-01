@@ -7,6 +7,7 @@ import '../domain/product_unit.dart';
 import 'catalog_management_page.dart';
 import '../core/app_error.dart';
 import '../domain/product.dart';
+import '../core/quantity.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key, required this.repository, required this.catalog});
@@ -60,6 +61,14 @@ class _ProductsPageState extends State<ProductsPage> {
       setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل المنتجات.', operation: 'products.load'); });
     }
   }
+
+  bool _allowsFraction(int? unitId) =>
+      _units.where((unit) => unit.id == unitId).firstOrNull?.allowsFraction ?? false;
+
+  String _quantity(int scaled) => Quantity.format(scaled);
+
+  String _unitLabel(int? unitId) =>
+      _units.where((unit) => unit.id == unitId).firstOrNull?.abbreviation ?? 'وحدة';
 
   String _money(int minor) => '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')} ج.م';
 
@@ -128,9 +137,9 @@ class _ProductsPageState extends State<ProductsPage> {
                 TextFormField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'سعر البيع بالجنيه *'),
                   validator: (v) => v == null || _minor(v) == null ? 'أدخل سعرًا صحيحًا' : null),
-                TextFormField(controller: stock, keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'الكمية الافتتاحية'),
-                  validator: (v) { final n = int.tryParse(v?.trim() ?? ''); return n == null || n < 0 ? 'أدخل كمية صحيحة' : null; }),
+                TextFormField(controller: stock, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'الكمية الافتتاحية', helperText: 'حتى 3 خانات عشرية للوحدات التي تقبل الكسور'),
+                  validator: (v) { final n = Quantity.parse(v ?? '', allowsFraction: _allowsFraction(selectedUnitId)); return n == null || n < 0 ? 'أدخل كمية صحيحة حسب وحدة القياس' : null; }),
               ]),
             ),
           ),
@@ -154,7 +163,7 @@ class _ProductsPageState extends State<ProductsPage> {
           sku: sku.text.trim().isEmpty ? null : sku.text.trim(),
           costMinor: _minor(cost.text)!,
           priceMinor: _minor(price.text)!,
-          stockQuantity: int.parse(stock.text.trim()),
+          stockQuantity: Quantity.parse(stock.text, allowsFraction: _allowsFraction(selectedUnitId))!,
           categoryId: selectedCategoryId,
           unitId: selectedUnitId,
         ));
@@ -300,10 +309,10 @@ class _ProductsPageState extends State<ProductsPage> {
       builder: (ctx) => AlertDialog(
         title: Text('تعديل مخزون ' + product.name),
         content: Form(key: key, child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المتاح بالمخزن الرئيسي: ' + (product.defaultWarehouseStock ?? 0).toString() + ' • إجمالي كل المخازن: ' + product.stockQuantity.toString()),
-          TextFormField(controller: delta, keyboardType: const TextInputType.numberWithOptions(signed: true),
-            decoration: const InputDecoration(labelText: 'التغيير في الكمية', helperText: '5 للإضافة أو -2 للصرف'),
-            validator: (v) { final n = int.tryParse(v?.trim() ?? ''); return n == null || n == 0 ? 'أدخل عددًا صحيحًا غير صفر' : null; }),
+          Text('المتاح بالمخزن الرئيسي: ' + _quantity(product.defaultWarehouseStock ?? 0) + ' • إجمالي كل المخازن: ' + _quantity(product.stockQuantity) + ' ' + _unitLabel(product.unitId)),
+          TextFormField(controller: delta, keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+            decoration: const InputDecoration(labelText: 'التغيير في الكمية', helperText: 'مثال: 1.5 للإضافة أو -0.25 للصرف'),
+            validator: (v) { final n = Quantity.parse(v ?? '', allowsFraction: _allowsFraction(product.unitId), allowNegative: true); return n == null || n == 0 ? 'أدخل كمية صحيحة غير صفر حسب وحدة القياس' : null; }),
           TextFormField(controller: reason, decoration: const InputDecoration(labelText: 'سبب الحركة *'),
             validator: (v) => v == null || v.trim().isEmpty ? 'اكتب سبب الحركة' : null),
         ])),
@@ -318,7 +327,7 @@ class _ProductsPageState extends State<ProductsPage> {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (ok == true) {
       try {
-        await widget.repository.changeStock(productId: product.id!, quantityDelta: int.parse(delta.text.trim()), reason: reason.text.trim());
+        await widget.repository.changeStock(productId: product.id!, quantityDelta: Quantity.parse(delta.text, allowsFraction: _allowsFraction(product.unitId), allowNegative: true)!, reason: reason.text.trim());
         await _load();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث المخزون وتسجيل الحركة')));
       } catch (e) {
@@ -416,10 +425,10 @@ class _ProductsPageState extends State<ProductsPage> {
               final p = _items[i];
               final code = p.sku == null ? '' : '\nالكود: ' + p.sku!;
               return Card(child: ListTile(
-                leading: CircleAvatar(child: Text(p.stockQuantity.toString())),
+                leading: CircleAvatar(child: Text(_quantity(p.stockQuantity), style: const TextStyle(fontSize: 12))),
                 title: Text(p.isActive ? p.name : '${p.name} (موقوف)'),
-                subtitle: Text('التكلفة: ' + _money(p.costMinor) + ' • البيع: ' + _money(p.priceMinor) + code),
-                isThreeLine: p.sku != null,
+                subtitle: Text('المخزون: ' + _quantity(p.stockQuantity) + ' ' + _unitLabel(p.unitId) + '\nالتكلفة: ' + _money(p.costMinor) + ' • البيع: ' + _money(p.priceMinor) + code),
+                isThreeLine: true,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
