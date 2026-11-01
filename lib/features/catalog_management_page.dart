@@ -48,7 +48,7 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
   }
 
   Future<void> _categoryDialog([ProductCategory? category]) async {
-    final controller = TextEditingController(text: category?.name ?? '');
+    var categoryName = category?.name ?? '';
     final key = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
@@ -57,8 +57,9 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
         content: Form(
           key: key,
           child: TextFormField(
-            controller: controller,
+            initialValue: categoryName,
             autofocus: true,
+            onChanged: (value) => categoryName = value,
             decoration: const InputDecoration(labelText: 'اسم التصنيف'),
             validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اسم التصنيف' : null,
           ),
@@ -75,67 +76,68 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
     if (saved == true) {
       try {
         if (category == null) {
-          await widget.catalog.addCategory(controller.text);
+          await widget.catalog.addCategory(categoryName);
         } else {
-          await widget.catalog.updateCategory(id: category.id, name: controller.text);
+          await widget.catalog.updateCategory(id: category.id, name: categoryName);
         }
         await _load();
       } catch (error) {
         _showError(error, 'تعذر حفظ التصنيف.');
       }
     }
-    controller.dispose();
   }
 
   Future<void> _unitDialog([ProductUnit? unit]) async {
-    final name = TextEditingController(text: unit?.name ?? '');
-    final abbreviation = TextEditingController(text: unit?.abbreviation ?? '');
+    var unitName = unit?.name ?? '';
+    var unitAbbreviation = unit?.abbreviation ?? '';
     final key = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-          title: Text(unit == null ? 'إضافة وحدة قياس' : 'تعديل وحدة القياس'),
-          content: Form(
-            key: key,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: name,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: 'اسم الوحدة'),
-                  validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اسم الوحدة' : null,
-                ),
-                TextFormField(
-                  controller: abbreviation,
-                  decoration: const InputDecoration(labelText: 'الاختصار (مثل كجم أو لتر)'),
-                  validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اختصار الوحدة' : null,
-                ),
-              ],
-            ),
+        title: Text(unit == null ? 'إضافة وحدة قياس' : 'تعديل وحدة القياس'),
+        content: Form(
+          key: key,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                initialValue: unitName,
+                autofocus: true,
+                onChanged: (value) => unitName = value,
+                decoration: const InputDecoration(labelText: 'اسم الوحدة'),
+                validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اسم الوحدة' : null,
+              ),
+              TextFormField(
+                initialValue: unitAbbreviation,
+                onChanged: (value) => unitAbbreviation = value,
+                decoration: const InputDecoration(labelText: 'الاختصار (مثل كجم أو لتر)'),
+                validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اختصار الوحدة' : null,
+              ),
+            ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-            FilledButton(
-              onPressed: () { if (key.currentState!.validate()) Navigator.pop(ctx, true); },
-              child: const Text('حفظ'),
-            ),
-          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () { if (key.currentState!.validate()) Navigator.pop(ctx, true); },
+            child: const Text('حفظ'),
+          ),
+        ],
       ),
     );
     if (saved == true) {
       try {
         if (unit == null) {
           await widget.catalog.addUnit(
-            name: name.text,
-            abbreviation: abbreviation.text,
+            name: unitName,
+            abbreviation: unitAbbreviation,
             allowsFraction: false,
           );
         } else {
           await widget.catalog.updateUnit(
             id: unit.id,
-            name: name.text,
-            abbreviation: abbreviation.text,
+            name: unitName,
+            abbreviation: unitAbbreviation,
             allowsFraction: false,
           );
         }
@@ -144,8 +146,6 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
         _showError(error, 'تعذر حفظ وحدة القياس.');
       }
     }
-    name.dispose();
-    abbreviation.dispose();
   }
 
   Future<void> _toggleCategory(ProductCategory category) async {
