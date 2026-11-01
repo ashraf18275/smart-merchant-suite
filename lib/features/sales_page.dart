@@ -8,6 +8,7 @@ import '../domain/product.dart';
 import '../domain/sale_record.dart';
 import '../domain/warehouse.dart';
 import '../domain/warehouse_stock.dart';
+import '../core/quantity.dart';
 
 class SalesPage extends StatefulWidget {
   const SalesPage({
@@ -38,6 +39,8 @@ class _SalesPageState extends State<SalesPage> {
 
   @override
   void initState() { super.initState(); _load(); }
+
+  String _quantity(int scaled) => Quantity.format(scaled);
 
   String _money(int minor) => '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')} ج.م';
 
@@ -74,6 +77,13 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
+  WarehouseStock _stockUnit(int? productId) {
+    for (final item in _warehouseStock) {
+      if (item.productId == productId) return item;
+    }
+    return WarehouseStock(productId: productId ?? 0, productName: '', unitName: 'وحدة', quantity: 0);
+  }
+
   Future<void> _createSale() async {
     final quantitiesByProduct = {for (final item in _warehouseStock) item.productId: item.quantity};
     final availableProducts = _productsList.where((p) => (quantitiesByProduct[p.id] ?? 0) > 0).toList();
@@ -107,12 +117,12 @@ class _SalesPageState extends State<SalesPage> {
                     const SizedBox(width: 12),
                     SizedBox(width: 92, child: TextFormField(
                       controller: quantityControllers[p.id],
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: 'الكمية', isDense: true),
                       validator: (v) {
-                        final n = int.tryParse(v?.trim() ?? '');
-                        if (n == null || n < 0) return 'عدد صحيح';
-                        if (n > (quantitiesByProduct[p.id] ?? 0)) return 'المتاح ${quantitiesByProduct[p.id] ?? 0}';
+                        final n = Quantity.parse(v ?? '', allowsFraction: _stockUnit(p.id).allowsFraction);
+                        if (n == null || n < 0) return 'كمية غير صحيحة';
+                        if (n > (quantitiesByProduct[p.id] ?? 0)) return 'المتاح ${_quantity(quantitiesByProduct[p.id] ?? 0)}';
                         return null;
                       },
                     )),
@@ -136,7 +146,8 @@ class _SalesPageState extends State<SalesPage> {
               if (!key.currentState!.validate()) return;
               final quantities = <int, int>{};
               for (final entry in quantityControllers.entries) {
-                final n = int.parse(entry.value.text.trim());
+                final stockItem = _stockUnit(entry.key);
+                final n = Quantity.parse(entry.value.text, allowsFraction: stockItem.allowsFraction)!;
                 if (n > 0) quantities[entry.key] = n;
               }
               if (quantities.isEmpty) {
