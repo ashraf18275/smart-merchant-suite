@@ -5,6 +5,7 @@ class WarehouseStock {
     this.sku,
     required this.unitName,
     required this.quantity,
+    this.allowsFraction = false,
   });
 
   final int productId;
@@ -12,4 +13,5 @@ class WarehouseStock {
   final String? sku;
   final String unitName;
   final int quantity;
+  final bool allowsFraction;
 }
