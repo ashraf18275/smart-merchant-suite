@@ -18,7 +18,7 @@ Map<String, Object?> _productToRow(Product product) {
     'price_minor': product.priceMinor,
     'stock_quantity': product.stockQuantity,
     'category_id': product.categoryId,
-    'unit_id': targetUnitId,
+    'unit_id': product.unitId,
     'is_active': product.isActive ? 1 : 0,
     'created_at':
         (product.createdAt ?? DateTime.now()).toUtc().toIso8601String(),
@@ -60,8 +60,13 @@ class ProductRepository implements ProductStore, CatalogStore {
         if (units.isEmpty) throw AppException('وحدة القياس الافتراضية غير موجودة');
         row['unit_id'] = units.single['id'];
       }
-      final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
-        where: 'id = ?', whereArgs: [row['unit_id']], limit: 1);
+      final unitRows = await txn.query(
+        'product_units',
+        columns: ['allows_fraction'],
+        where: 'id = ?',
+        whereArgs: [row['unit_id']],
+        limit: 1,
+      );
       if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
       if (unitRows.single['allows_fraction'] != 1 &&
           product.stockQuantity % Quantity.scale != 0) {
@@ -86,8 +91,6 @@ class ProductRepository implements ProductStore, CatalogStore {
         'quantity': product.stockQuantity,
         'updated_at': stamp,
       });
-      // The opening balance is a stock movement, not an unexplained balance.
-      // Keep the balance and ledger write in one transaction.
       if (product.stockQuantity > 0) {
         await txn.insert('inventory_movements', {
           'product_id': productId,
@@ -106,17 +109,32 @@ class ProductRepository implements ProductStore, CatalogStore {
     final id = product.id;
     final normalizedSku = product.sku?.trim();
     await _db.transaction((txn) async {
-      final current = await txn.query('products', columns: ['stock_quantity', 'unit_id'],
-        where: 'id = ?', whereArgs: [id], limit: 1);
+      final current = await txn.query(
+        'products',
+        columns: ['stock_quantity', 'unit_id'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
       if (current.isEmpty) throw AppException('المنتج غير موجود');
       final targetUnitId = product.unitId ?? (current.single['unit_id'] as int?);
-      final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
-        where: 'id = ?', whereArgs: [targetUnitId], limit: 1);
+      final unitRows = await txn.query(
+        'product_units',
+        columns: ['allows_fraction'],
+        where: 'id = ?',
+        whereArgs: [targetUnitId],
+        limit: 1,
+      );
       if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
       final currentUnitId = current.single['unit_id'] as int?;
       if (targetUnitId != currentUnitId) {
-        final historicalSales = await txn.query('sale_items', columns: ['id'],
-          where: 'product_id = ?', whereArgs: [id], limit: 1);
+        final historicalSales = await txn.query(
+          'sale_items',
+          columns: ['id'],
+          where: 'product_id = ?',
+          whereArgs: [id],
+          limit: 1,
+        );
         if (historicalSales.isNotEmpty) {
           throw AppException('لا يمكن تغيير وحدة المنتج بعد تسجيل مبيعات سابقة');
         }
@@ -142,6 +160,7 @@ class ProductRepository implements ProductStore, CatalogStore {
       if (changed == 0) throw AppException('المنتج غير موجود');
     });
   }
+
   /// Deactivates/reactivates a product without deleting its history or stock.
   Future<void> setActive({required int productId, required bool isActive}) async {
     final changed = await _db.update(
@@ -201,7 +220,8 @@ class ProductRepository implements ProductStore, CatalogStore {
         WHERE p.id = ? AND p.is_active = 1 LIMIT 1
       ''', [productId]);
       if (products.isEmpty) throw AppException('المنتج غير موجود أو غير نشط');
-      if (products.single['allows_fraction'] != 1 && quantityDelta % Quantity.scale != 0) {
+      if (products.single['allows_fraction'] != 1 &&
+          quantityDelta % Quantity.scale != 0) {
         throw AppException('وحدة قياس المنتج لا تقبل الكميات الكسرية');
       }
       final warehouses = await txn.rawQuery('''
@@ -213,22 +233,28 @@ class ProductRepository implements ProductStore, CatalogStore {
       ''');
       if (warehouses.isEmpty) throw AppException('المخزن الرئيسي الافتراضي غير موجود');
       final warehouseId = warehouses.single['id']! as int;
-      final balances = await txn.query('product_warehouse_stock',
+      final balances = await txn.query(
+        'product_warehouse_stock',
         columns: ['id', 'quantity'],
         where: 'product_id = ? AND warehouse_id = ?',
-        whereArgs: [productId, warehouseId], limit: 1);
+        whereArgs: [productId, warehouseId],
+        limit: 1,
+      );
       final current = balances.isEmpty ? 0 : balances.single['quantity']! as int;
       final next = current + quantityDelta;
       if (next < 0) throw AppException('الكمية غير كافية؛ لا يسمح بالمخزون السالب');
       final stamp = DateTime.now().toUtc().toIso8601String();
       if (balances.isEmpty) {
         await txn.insert('product_warehouse_stock', {
-          'product_id': productId, 'warehouse_id': warehouseId,
-          'quantity': next, 'updated_at': stamp,
+          'product_id': productId,
+          'warehouse_id': warehouseId,
+          'quantity': next,
+          'updated_at': stamp,
         });
       } else {
         await txn.update('product_warehouse_stock', {
-          'quantity': next, 'updated_at': stamp,
+          'quantity': next,
+          'updated_at': stamp,
         }, where: 'id = ?', whereArgs: [balances.single['id']]);
       }
       final totals = await txn.rawQuery(
@@ -236,7 +262,7 @@ class ProductRepository implements ProductStore, CatalogStore {
         [productId],
       );
       await txn.update('products', {'stock_quantity': totals.single['total']},
-        where: 'id = ?', whereArgs: [productId]);
+          where: 'id = ?', whereArgs: [productId]);
       await txn.insert('inventory_movements', {
         'product_id': productId,
         'warehouse_id': warehouseId,
@@ -250,10 +276,11 @@ class ProductRepository implements ProductStore, CatalogStore {
   @override
   Future<List<ProductCategory>> categories({bool includeInactive = false}) async {
     final rows = await _db.query('product_categories',
-      where: includeInactive ? null : 'is_active = 1',
-      orderBy: 'name COLLATE NOCASE ASC');
+        where: includeInactive ? null : 'is_active = 1',
+        orderBy: 'name COLLATE NOCASE ASC');
     return rows.map((row) => ProductCategory(
-      id: row['id']! as int, name: row['name']! as String,
+      id: row['id']! as int,
+      name: row['name']! as String,
       isActive: row['is_active'] == 1,
     )).toList(growable: false);
   }
@@ -263,7 +290,8 @@ class ProductRepository implements ProductStore, CatalogStore {
     final value = name.trim();
     if (value.isEmpty) throw AppException('اسم التصنيف مطلوب');
     return _db.insert('product_categories', {
-      'name': value, 'is_active': 1,
+      'name': value,
+      'is_active': 1,
       'created_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
@@ -273,24 +301,25 @@ class ProductRepository implements ProductStore, CatalogStore {
     final value = name.trim();
     if (value.isEmpty) throw AppException('اسم التصنيف مطلوب');
     final changed = await _db.update('product_categories', {'name': value},
-      where: 'id = ?', whereArgs: [id]);
+        where: 'id = ?', whereArgs: [id]);
     if (changed == 0) throw AppException('التصنيف غير موجود');
   }
 
   @override
   Future<void> setCategoryActive({required int id, required bool isActive}) async {
     final changed = await _db.update('product_categories',
-      {'is_active': isActive ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
+        {'is_active': isActive ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
     if (changed == 0) throw AppException('التصنيف غير موجود');
   }
 
   @override
   Future<List<ProductUnit>> units({bool includeInactive = false}) async {
     final rows = await _db.query('product_units',
-      where: includeInactive ? null : 'is_active = 1',
-      orderBy: 'name COLLATE NOCASE ASC');
+        where: includeInactive ? null : 'is_active = 1',
+        orderBy: 'name COLLATE NOCASE ASC');
     return rows.map((row) => ProductUnit(
-      id: row['id']! as int, name: row['name']! as String,
+      id: row['id']! as int,
+      name: row['name']! as String,
       abbreviation: row['abbreviation']! as String,
       allowsFraction: row['allows_fraction'] == 1,
       isActive: row['is_active'] == 1,
@@ -349,6 +378,6 @@ class ProductRepository implements ProductStore, CatalogStore {
       throw AppException('لا يمكن إيقاف وحدة «قطعة» الافتراضية');
     }
     await _db.update('product_units', {'is_active': isActive ? 1 : 0},
-      where: 'id = ?', whereArgs: [id]);
+        where: 'id = ?', whereArgs: [id]);
   }
 }
