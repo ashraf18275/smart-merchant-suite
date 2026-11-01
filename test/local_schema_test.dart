@@ -23,13 +23,16 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );
     final names = tables.map((row) => row['name']).toSet();
-    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses']));
+    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units']));
+    final units = await database.query('product_units');
+    expect(units, hasLength(1));
+    expect(units.single['name'], 'قطعة');
   });
 
   test('upgrades a version 1 database and safely reapplies later migrations', () async {
@@ -67,6 +70,16 @@ void main() {
 
     await createSalesSchema(database);
     await createExpensesSchema(database);
+    await database.insert('products', {
+      'name': 'منتج قديم',
+      'sku': 'OLD-01',
+      'cost_minor': 100,
+      'price_minor': 150,
+      'stock_quantity': 6,
+      'is_active': 1,
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
+    await createCatalogSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
@@ -75,7 +88,11 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4]);
+    final migratedProduct = (await database.query('products')).single;
+    expect(migratedProduct['stock_quantity'], 6);
+    expect(migratedProduct['unit_id'], isNotNull);
+    expect(migratedProduct['category_id'], isNull);
     expect(await database.query('sales'), isEmpty);
     expect(await database.query('expenses'), isEmpty);
   });
