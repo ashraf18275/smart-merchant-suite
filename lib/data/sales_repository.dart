@@ -3,6 +3,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 import '../application/ports/sales_store.dart';
 import '../core/app_error.dart';
 import '../domain/sale_record.dart';
+import '../core/quantity.dart';
 
 class SalesRepository implements SalesStore {
   SalesRepository(this._db);
@@ -48,7 +49,10 @@ class SalesRepository implements SalesStore {
         if (stock < entry.value) throw AppException('الكمية غير كافية لأحد المنتجات.');
         final price = product['price_minor']! as int;
         final cost = product['cost_minor']! as int;
-        final lineTotal = price * entry.value;
+        final lineTotal = Quantity.lineTotalMinor(
+          unitPriceMinor: price,
+          quantityScaled: entry.value,
+        );
         total += lineTotal;
         items.add({
           'productId': entry.key,
