@@ -206,7 +206,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
                 items: [for (final w in targets) DropdownMenuItem(value: w.id, child: Text(w.branchName + ' — ' + w.name))],
                 onChanged: (v) { if (v != null) setDialogState(() => targetId = v); },
               ),
-              TextFormField(controller: quantity, keyboardType: TextInputType.number,
+              TextFormField(controller: quantity,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(labelText: 'المتاح: ' + _quantity(item.quantity) + ' ' + item.unitName),
                 validator: (v) {
