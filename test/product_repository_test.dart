@@ -29,6 +29,9 @@ void main() {
     await database.close();
   });
 
+  Future<int> mainWarehouseId() async =>
+      (await WarehouseRepository(database).warehouses()).firstWhere((w) => w.name == 'المخزن الرئيسي').id;
+
 
   test('manages categories and units without deleting historical references', () async {
     final catalog = ProductRepository(database);
@@ -340,6 +343,53 @@ void main() {
     expect(movements[1]['quantity_delta'], -2);
   });
 
+  test('sale deducts stock only from the selected warehouse', () async {
+    final productId = await products.add(const Product(
+      name: 'صنف فرع المدينة',
+      costMinor: 100,
+      priceMinor: 200,
+      stockQuantity: 5,
+    ));
+    final store = WarehouseRepository(database);
+    final branchId = await store.addBranch(name: 'فرع المدينة');
+    final otherWarehouseId = await store.addWarehouse(
+      branchId: branchId,
+      name: 'مخزن البيع',
+    );
+    await store.transferStock(
+      productId: productId,
+      fromWarehouseId: await mainWarehouseId(),
+      toWarehouseId: otherWarehouseId,
+      quantity: 3,
+      reason: 'تجهيز الفرع',
+    );
+
+    final sales = SalesApplicationService(SalesRepository(database));
+    await sales.createSale(
+      quantities: {productId: 2},
+      paidMinor: 400,
+      warehouseId: otherWarehouseId,
+    );
+
+    final mainId = await mainWarehouseId();
+    final mainBalance = (await store.stock(warehouseId: mainId))
+        .singleWhere((item) => item.productId == productId);
+    final branchBalance = (await store.stock(warehouseId: otherWarehouseId))
+        .singleWhere((item) => item.productId == productId);
+    expect(mainBalance.quantity, 2);
+    expect(branchBalance.quantity, 1);
+    expect((await products.all()).single.stockQuantity, 3);
+    final lastMovement = (await database.query(
+      'inventory_movements',
+      where: 'product_id = ?',
+      whereArgs: [productId],
+      orderBy: 'id DESC',
+      limit: 1,
+    )).single;
+    expect(lastMovement['warehouse_id'], otherWarehouseId);
+    expect(lastMovement['quantity_delta'], -2);
+  });
+
   test('sale rejects insufficient stock without partial invoice', () async {
     final id = await products.add(const Product(
       name: 'سماعة',
@@ -473,17 +523,17 @@ void main() {
     final sales = SalesApplicationService(SalesRepository(database));
 
     await expectLater(
-      sales.createSale(quantities: const {}, paidMinor: 0),
+      sales.createSale(quantities: const {}, paidMinor: 0, warehouseId: await mainWarehouseId()),
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     await expectLater(
-      sales.createSale(quantities: {1: 0}, paidMinor: 0),
+      sales.createSale(quantities: {1: 0}, paidMinor: 0, warehouseId: await mainWarehouseId()),
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     await expectLater(
-      sales.createSale(quantities: {1: 1}, paidMinor: -1),
+      sales.createSale(quantities: {1: 1}, paidMinor: -1, warehouseId: await mainWarehouseId()),
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
