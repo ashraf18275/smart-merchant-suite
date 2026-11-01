@@ -183,7 +183,7 @@ class ProductRepository implements ProductStore, CatalogStore {
     final args = <Object?>[];
     if (!includeInactive) conditions.add('p.is_active = 1');
     if (normalized.isNotEmpty) {
-      conditions.add('(name LIKE ? OR sku LIKE ?)');
+      conditions.add('(p.name LIKE ? OR p.sku LIKE ?)');
       args.addAll(['%$normalized%', '%$normalized%']);
     }
     final rows = await _db.rawQuery('''
