@@ -524,17 +524,14 @@ void main() {
 
     await expectLater(
       sales.createSale(quantities: const {}, paidMinor: 0, warehouseId: await mainWarehouseId()),
-      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     await expectLater(
       sales.createSale(quantities: {1: 0}, paidMinor: 0, warehouseId: await mainWarehouseId()),
-      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     await expectLater(
       sales.createSale(quantities: {1: 1}, paidMinor: -1, warehouseId: await mainWarehouseId()),
-      warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
       throwsA(isA<AppException>()),
     );
     expect(await database.query('sales'), isEmpty);
