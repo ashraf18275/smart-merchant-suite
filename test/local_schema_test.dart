@@ -42,6 +42,61 @@ void main() {
     expect(warehouses.single['branch_id'], branches.single['id']);
   });
 
+  test('scales a version 6 database exactly once and preserves invoice money', () async {
+    await createLocalSchema(database);
+    final productId = await database.insert('products', {
+      'name': 'منتج v6',
+      'cost_minor': 100,
+      'price_minor': 200,
+      'stock_quantity': 2,
+      'unit_id': (await database.query('product_units')).single['id'],
+      'is_active': 1,
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
+    final warehouseId = (await database.query('warehouses')).single['id'];
+    await database.insert('product_warehouse_stock', {
+      'product_id': productId,
+      'warehouse_id': warehouseId,
+      'quantity': 2,
+      'updated_at': DateTime.utc(2025).toIso8601String(),
+    });
+    final saleId = await database.insert('sales', {
+      'total_minor': 400,
+      'paid_minor': 100,
+      'warehouse_id': warehouseId,
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
+    await database.insert('sale_items', {
+      'sale_id': saleId,
+      'product_id': productId,
+      'quantity': 2,
+      'unit_price_minor': 200,
+      'unit_cost_minor': 100,
+      'line_total_minor': 400,
+    });
+    await database.insert('inventory_movements', {
+      'product_id': productId,
+      'warehouse_id': warehouseId,
+      'quantity_delta': -1,
+      'reason': 'حركة v6',
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
+    await database.delete('schema_migrations', where: 'version = ?', whereArgs: [7]);
+
+    await createFractionalQuantitiesSchema(database);
+    expect((await database.query('products')).single['stock_quantity'], 2000);
+    expect((await database.query('product_warehouse_stock')).single['quantity'], 2000);
+    expect((await database.query('sale_items')).single['quantity'], 2000);
+    expect((await database.query('inventory_movements')).single['quantity_delta'], -1000);
+    final invoice = (await database.query('sales')).single;
+    expect(invoice['total_minor'], 400);
+    expect(invoice['paid_minor'], 100);
+
+    await createFractionalQuantitiesSchema(database);
+    expect((await database.query('products')).single['stock_quantity'], 2000);
+    expect((await database.query('sale_items')).single['quantity'], 2000);
+  });
+
   test('upgrades a version 1 database and safely reapplies later migrations', () async {
     await database.execute('''
       CREATE TABLE products (
