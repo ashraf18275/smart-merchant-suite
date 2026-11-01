@@ -13,19 +13,18 @@ class SalesRepository implements SalesStore {
   Future<int> createSale({
     required Map<int, int> quantities,
     required int paidMinor,
+    required int warehouseId,
   }) async {
     return _db.transaction((txn) async {
-      final defaultWarehouses = await txn.rawQuery("""
+      final selectedWarehouses = await txn.rawQuery("""
         SELECT w.id FROM warehouses w
         JOIN branches b ON b.id = w.branch_id
-        WHERE w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'
-          AND w.is_active = 1 AND b.is_active = 1
+        WHERE w.id = ? AND w.is_active = 1 AND b.is_active = 1
         LIMIT 1
-      """);
-      if (defaultWarehouses.isEmpty) {
-        throw AppException('المخزن الرئيسي الافتراضي غير موجود أو غير نشط');
+      """, [warehouseId]);
+      if (selectedWarehouses.isEmpty) {
+        throw AppException('المخزن المحدد أو الفرع التابع له غير موجود أو غير نشط');
       }
-      final warehouseId = defaultWarehouses.single['id']! as int;
       final items = <Map<String, int>>[];
       var total = 0;
       for (final entry in quantities.entries) {
@@ -66,6 +65,7 @@ class SalesRepository implements SalesStore {
       final saleId = await txn.insert('sales', {
         'total_minor': total,
         'paid_minor': paidMinor,
+        'warehouse_id': warehouseId,
         'created_at': createdAt,
       });
       for (final item in items) {
