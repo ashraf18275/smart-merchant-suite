@@ -181,7 +181,7 @@ class _SalesPageState extends State<SalesPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('المبيعات والفواتير')),
     floatingActionButton: FloatingActionButton.extended(
-      onPressed: _createSale,
+      onPressed: _loading || _selectedWarehouseId == null ? null : _createSale,
       icon: const Icon(Icons.add_shopping_cart),
       label: const Text('فاتورة جديدة'),
     ),
