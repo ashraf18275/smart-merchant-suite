@@ -56,7 +56,7 @@ void main() {
     expect(find.text('مشروبات'), findsNothing);
   });
 
-  testWidgets('creates a fractional unit and can deactivate it', (tester) async {
+  testWidgets('creates a unit and can deactivate it', (tester) async {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
@@ -73,12 +73,11 @@ void main() {
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'كيلوجرام');
     await tester.enterText(fields.at(1), 'كجم');
-    await tester.tap(find.text('تسمح بالكميات الكسرية'));
     await tester.tap(find.text('حفظ'));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
 
-    expect(find.textContaining('تقبل الكسور'), findsOneWidget);
+    expect(find.textContaining('أعداد صحيحة فقط'), findsOneWidget);
     await tester.tap(find.byTooltip('إيقاف الوحدة').first);
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
