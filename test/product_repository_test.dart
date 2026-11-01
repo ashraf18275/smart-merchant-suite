@@ -155,7 +155,7 @@ void main() {
     await store.adjustStock(warehouseId: warehouseId, productId: productId, quantityDelta: 5000, reason: 'رصيد جرد');
     expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5000);
     expect((await products.all()).single.stockQuantity, 8000);
-    expect((await products.all()).single.defaultWarehouseStock, 3);
+    expect((await products.all()).single.defaultWarehouseStock, 3000);
     await products.changeStock(productId: productId, quantityDelta: -2000, reason: 'بيع من المخزن الرئيسي');
     expect((await products.all()).single.stockQuantity, 6000);
     expect((await store.stock(warehouseId: warehouseId)).single.quantity, 5000);
@@ -344,6 +344,36 @@ void main() {
     expect(movements[1]['quantity_delta'], -2000);
   });
 
+  test('sells a fractional quantity and rounds invoice money in piastres', () async {
+    final catalog = ProductRepository(database);
+    final unitId = await catalog.addUnit(
+      name: 'كيلوجرام',
+      abbreviation: 'كجم',
+      allowsFraction: true,
+    );
+    final productId = await products.add(Product(
+      name: 'أرز',
+      costMinor: 500,
+      priceMinor: 1000,
+      stockQuantity: 2500,
+      unitId: unitId,
+    ));
+
+    final saleId = await SalesApplicationService(SalesRepository(database)).createSale(
+      quantities: {productId: 1500},
+      paidMinor: 1500,
+      warehouseId: await mainWarehouseId(),
+    );
+
+    final invoice = (await database.query('sales', where: 'id = ?', whereArgs: [saleId])).single;
+    final line = (await database.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId])).single;
+    expect(line['quantity'], 1500);
+    expect(line['line_total_minor'], 1500);
+    expect(invoice['total_minor'], 1500);
+    expect((await products.all()).single.stockQuantity, 1000);
+    expect((await WarehouseRepository(database).stock(warehouseId: await mainWarehouseId())).single.quantity, 1000);
+  });
+
   test('sale deducts stock only from the selected warehouse', () async {
     final productId = await products.add(const Product(
       name: 'صنف فرع المدينة',
@@ -361,7 +391,7 @@ void main() {
       productId: productId,
       fromWarehouseId: await mainWarehouseId(),
       toWarehouseId: otherWarehouseId,
-      quantity: 3,
+      quantity: 3000,
       reason: 'تجهيز الفرع',
     );
 
