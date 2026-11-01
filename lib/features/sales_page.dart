@@ -197,7 +197,7 @@ class _SalesPageState extends State<SalesPage> {
               : Column(
                   children: [
                     DropdownButtonFormField<int>(
-                      value: _selectedWarehouseId,
+                      initialValue: _selectedWarehouseId,
                       decoration: const InputDecoration(labelText: 'المخزن الذي ستتم منه المبيعات'),
                       items: [
                         for (final warehouse in _warehouses)
