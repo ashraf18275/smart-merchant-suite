@@ -2,6 +2,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../application/ports/branch_warehouse_store.dart';
 import '../core/app_error.dart';
+import '../core/quantity.dart';
 import '../domain/branch.dart';
 import '../domain/warehouse.dart';
 import '../domain/warehouse_stock.dart';
@@ -243,6 +244,7 @@ class WarehouseRepository implements BranchWarehouseStore {
       final products = await txn.query('products', columns: ['id'],
         where: 'id = ? AND is_active = 1', whereArgs: [productId], limit: 1);
       if (products.isEmpty) throw AppException('المنتج غير موجود أو غير نشط');
+      await _ensureQuantityAllowed(txn, productId, quantityDelta);
       final current = await _balance(txn, productId, warehouseId);
       final next = current + quantityDelta;
       if (next < 0) throw AppException('لا يمكن أن تصبح كمية المخزن سالبة');
@@ -270,6 +272,7 @@ class WarehouseRepository implements BranchWarehouseStore {
       final products = await txn.query('products', columns: ['id'],
         where: 'id = ? AND is_active = 1', whereArgs: [productId], limit: 1);
       if (products.isEmpty) throw AppException('المنتج غير موجود أو غير نشط');
+      await _ensureQuantityAllowed(txn, productId, quantity);
       final available = await _balance(txn, productId, fromWarehouseId);
       if (available < quantity) throw AppException('الكمية المتاحة في المخزن المصدر غير كافية');
       final destination = await _balance(txn, productId, toWarehouseId);
@@ -280,6 +283,18 @@ class WarehouseRepository implements BranchWarehouseStore {
       await _writeMovement(txn, productId, toWarehouseId, quantity, 'تحويل من مخزن آخر: $note', stamp);
       await _writeAggregate(txn, productId);
     });
+  }
+
+  Future<void> _ensureQuantityAllowed(Transaction txn, int productId, int quantity) async {
+    final rows = await txn.rawQuery('''
+      SELECT COALESCE(u.allows_fraction, 0) AS allows_fraction
+      FROM products p LEFT JOIN product_units u ON u.id = p.unit_id
+      WHERE p.id = ? LIMIT 1
+    ''', [productId]);
+    if (rows.isEmpty) throw AppException('المنتج غير موجود');
+    if (rows.single['allows_fraction'] != 1 && quantity % Quantity.scale != 0) {
+      throw AppException('وحدة قياس المنتج لا تقبل الكميات الكسرية');
+    }
   }
 
   Future<void> _ensureActiveWarehouse(Transaction txn, int warehouseId) async {
