@@ -85,7 +85,7 @@ class _SalesPageState extends State<SalesPage> {
                 ...availableProducts.map((p) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(children: [
-                    Expanded(child: Text('${p.name}\nالمتاح: ${p.stockQuantity} • السعر: ${_money(p.priceMinor)}')),
+                    Expanded(child: Text('${p.name}\nالمتاح بالمخزن الرئيسي: ${p.defaultWarehouseStock ?? p.stockQuantity} • السعر: ${_money(p.priceMinor)}')),
                     const SizedBox(width: 12),
                     SizedBox(width: 92, child: TextFormField(
                       controller: quantityControllers[p.id],
