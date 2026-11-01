@@ -31,6 +31,7 @@ Product _productFromRow(Map<String, Object?> row) => Product(
       costMinor: row['cost_minor']! as int,
       priceMinor: row['price_minor']! as int,
       stockQuantity: row['stock_quantity']! as int,
+      defaultWarehouseStock: row['default_warehouse_stock'] as int?,
       categoryId: row['category_id'] as int?,
       unitId: row['unit_id'] as int?,
       isActive: row['is_active'] == 1,
@@ -140,12 +141,22 @@ class ProductRepository implements ProductStore, CatalogStore {
       conditions.add('(name LIKE ? OR sku LIKE ?)');
       args.addAll(['%$normalized%', '%$normalized%']);
     }
-    final rows = await _db.query(
-      'products',
-      where: conditions.isEmpty ? null : conditions.join(' AND '),
-      whereArgs: args.isEmpty ? null : args,
-      orderBy: 'name COLLATE NOCASE ASC',
-    );
+    final rows = await _db.rawQuery('''
+      SELECT p.*,
+        COALESCE((
+          SELECT s.quantity
+          FROM product_warehouse_stock s
+          JOIN warehouses w ON w.id = s.warehouse_id
+          JOIN branches b ON b.id = w.branch_id
+          WHERE s.product_id = p.id
+            AND w.name = 'المخزن الرئيسي'
+            AND b.name = 'الفرع الرئيسي'
+          LIMIT 1
+        ), 0) AS default_warehouse_stock
+      FROM products p
+      ${conditions.isEmpty ? '' : 'WHERE ${conditions.join(' AND ')}'}
+      ORDER BY p.name COLLATE NOCASE ASC
+    ''', args);
     return rows.map(_productFromRow).toList(growable: false);
   }
 
