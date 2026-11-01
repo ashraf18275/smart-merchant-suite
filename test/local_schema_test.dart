@@ -77,6 +77,11 @@ void main() {
 
     await createSalesSchema(database);
     await createExpensesSchema(database);
+    final oldSaleId = await database.insert('sales', {
+      'total_minor': 250,
+      'paid_minor': 100,
+      'created_at': DateTime.utc(2025).toIso8601String(),
+    });
     final oldProductId = await database.insert('products', {
       'name': 'منتج قديم',
       'sku': 'OLD-01',
@@ -122,6 +127,9 @@ void main() {
     final defaultWarehouse = (await database.query('warehouses')).single;
     expect(migratedMovement['warehouse_id'], defaultWarehouse['id']);
     expect(migratedMovement['product_id'], oldProductId);
+    final migratedSale = (await database.query('sales')).single;
+    expect(migratedSale['id'], oldSaleId);
+    expect(migratedSale['warehouse_id'], isNull);
     final salesColumns = await database.rawQuery('PRAGMA table_info(sales)');
     expect(salesColumns.map((row) => row['name']), contains('warehouse_id'));
     final historicalSale = (await database.query(
