@@ -42,6 +42,7 @@ Future<void> createLocalSchema(Database db) async {
   await createCatalogSchema(db);
   await createBranchWarehouseSchema(db);
   await createSaleWarehouseSchema(db);
+  await createFractionalQuantitiesSchema(db);
 }
 
 /// Adds sales tables for databases that were created at version 1.
@@ -324,4 +325,47 @@ Future<void> createSaleWarehouseSchema(Database db) async {
       'applied_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
+}
+
+
+/// Converts every persisted quantity from whole units to integer thousandths.
+/// Monetary columns are deliberately untouched. The migration marker prevents
+/// accidental double scaling when this helper is safely re-entered.
+Future<void> createFractionalQuantitiesSchema(Database db) async {
+  final applied = await db.query(
+    'schema_migrations',
+    columns: ['version'],
+    where: 'version = ?',
+    whereArgs: [7],
+    limit: 1,
+  );
+  if (applied.isNotEmpty) return;
+
+  const maxWholeQuantity = 9223372036854775;
+  final overflow = await db.rawQuery('''
+    SELECT
+      (SELECT COUNT(*) FROM products WHERE stock_quantity > ?) +
+      (SELECT COUNT(*) FROM product_warehouse_stock WHERE quantity > ?) +
+      (SELECT COUNT(*) FROM sale_items WHERE quantity > ?) +
+      (SELECT COUNT(*) FROM inventory_movements
+        WHERE quantity_delta > ? OR quantity_delta < -?) AS count
+  ''', [
+    maxWholeQuantity,
+    maxWholeQuantity,
+    maxWholeQuantity,
+    maxWholeQuantity,
+    maxWholeQuantity,
+  ]);
+  if ((overflow.single['count'] as num).toInt() > 0) {
+    throw StateError('A stored quantity is too large to migrate safely to thousandths.');
+  }
+
+  await db.execute('UPDATE products SET stock_quantity = stock_quantity * 1000');
+  await db.execute('UPDATE product_warehouse_stock SET quantity = quantity * 1000');
+  await db.execute('UPDATE sale_items SET quantity = quantity * 1000');
+  await db.execute('UPDATE inventory_movements SET quantity_delta = quantity_delta * 1000');
+  await db.insert('schema_migrations', {
+    'version': 7,
+    'applied_at': DateTime.now().toUtc().toIso8601String(),
+  });
 }
