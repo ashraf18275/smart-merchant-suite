@@ -72,6 +72,7 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
           ),
         ],
       ),
+      ),
     );
     if (saved == true) {
       try {
@@ -90,10 +91,12 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
   Future<void> _unitDialog([ProductUnit? unit]) async {
     var unitName = unit?.name ?? '';
     var unitAbbreviation = unit?.abbreviation ?? '';
+    var allowsFraction = unit?.allowsFraction ?? false;
     final key = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         title: Text(unit == null ? 'إضافة وحدة قياس' : 'تعديل وحدة القياس'),
         content: Form(
           key: key,
@@ -113,6 +116,13 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
                 decoration: const InputDecoration(labelText: 'الاختصار (مثل كجم أو لتر)'),
                 validator: (value) => value == null || value.trim().isEmpty ? 'اكتب اختصار الوحدة' : null,
               ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: allowsFraction,
+                title: const Text('السماح بالكميات الكسرية'),
+                subtitle: const Text('مثل 1.5 كجم أو 0.75 لتر، حتى 3 خانات عشرية'),
+                onChanged: (value) => setDialogState(() => allowsFraction = value ?? false),
+              ),
             ],
           ),
         ),
@@ -131,14 +141,14 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
           await widget.catalog.addUnit(
             name: unitName,
             abbreviation: unitAbbreviation,
-            allowsFraction: false,
+            allowsFraction: allowsFraction,
           );
         } else {
           await widget.catalog.updateUnit(
             id: unit.id,
             name: unitName,
             abbreviation: unitAbbreviation,
-            allowsFraction: false,
+            allowsFraction: allowsFraction,
           );
         }
         await _load();
