@@ -109,7 +109,7 @@ class ProductRepository implements ProductStore, CatalogStore {
       final current = await txn.query('products', columns: ['stock_quantity', 'unit_id'],
         where: 'id = ?', whereArgs: [id], limit: 1);
       if (current.isEmpty) throw AppException('المنتج غير موجود');
-      final targetUnitId = product.unitId ?? current.single['unit_id'] as int?;
+      final targetUnitId = product.unitId ?? (current.single['unit_id'] as int?);
       final unitRows = await txn.query('product_units', columns: ['allows_fraction'],
         where: 'id = ?', whereArgs: [targetUnitId], limit: 1);
       if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
