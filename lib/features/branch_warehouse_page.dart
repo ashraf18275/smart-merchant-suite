@@ -303,7 +303,11 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         value: _branchId,
         decoration: const InputDecoration(labelText: 'تصفية حسب الفرع'),
         items: [for (final b in _branches.where((x) => x.isActive)) DropdownMenuItem(value: b.id, child: Text(b.name))],
-        onChanged: (v) async { _branchId = v; await _load(); },
+        onChanged: (v) async {
+          _branchId = v;
+          _warehouseId = null;
+          await _load();
+        },
       ),
       const SizedBox(height: 12),
       for (final item in _warehouses.where((x) => x.branchId == _branchId))
