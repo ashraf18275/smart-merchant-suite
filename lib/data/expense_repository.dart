@@ -55,7 +55,7 @@ class ExpenseRepository implements ExpenseStore {
       'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM sales$salesWhere', bounds);
     final costWhere = _whereDateRange(from, to, 's.created_at');
     final cost = await _db.rawQuery('''
-      SELECT COALESCE(SUM(i.quantity * i.unit_cost_minor), 0) AS amount
+      SELECT COALESCE(SUM((i.quantity * i.unit_cost_minor + 500) / 1000), 0) AS amount
       FROM sale_items i JOIN sales s ON s.id = i.sale_id$costWhere
     ''', bounds);
     final expenseWhere = _whereDateRange(from, to, 'created_at');
