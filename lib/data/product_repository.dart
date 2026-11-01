@@ -36,7 +36,25 @@ class ProductRepository implements ProductStore {
   final Database _db;
 
   Future<int> add(Product product) async {
-    return _db.insert('products', _productToRow(product));
+    return _db.transaction((txn) async {
+      final createdAt = product.createdAt ?? DateTime.now();
+      final productId = await txn.insert(
+        'products',
+        _productToRow(product),
+      );
+
+      // The opening balance is a stock movement, not an unexplained balance.
+      // Keep both writes in one transaction so the ledger and balance agree.
+      if (product.stockQuantity > 0) {
+        await txn.insert('inventory_movements', {
+          'product_id': productId,
+          'quantity_delta': product.stockQuantity,
+          'reason': 'رصيد افتتاحي',
+          'created_at': createdAt.toUtc().toIso8601String(),
+        });
+      }
+      return productId;
+    });
   }
 
   /// Updates editable product details without changing the stock balance.
