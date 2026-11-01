@@ -105,10 +105,13 @@ class SalesRepository implements SalesStore {
   Future<List<SaleRecord>> all() async {
     final rows = await _db.rawQuery('''
       SELECT s.id, s.total_minor, s.paid_minor, s.created_at,
-             COUNT(i.id) AS item_count
+             COUNT(i.id) AS item_count,
+             w.name AS warehouse_name, b.name AS branch_name
       FROM sales s
       LEFT JOIN sale_items i ON i.sale_id = s.id
-      GROUP BY s.id
+      LEFT JOIN warehouses w ON w.id = s.warehouse_id
+      LEFT JOIN branches b ON b.id = w.branch_id
+      GROUP BY s.id, w.name, b.name
       ORDER BY s.id DESC
     ''');
     return rows.map((row) => SaleRecord(
@@ -117,6 +120,8 @@ class SalesRepository implements SalesStore {
       paidMinor: row['paid_minor']! as int,
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
       itemCount: row['item_count']! as int,
+      warehouseName: row['warehouse_name'] as String?,
+      branchName: row['branch_name'] as String?,
     )).toList(growable: false);
   }
 }
