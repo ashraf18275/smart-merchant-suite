@@ -13,6 +13,8 @@ Map<String, Object?> _productToRow(Product product) {
     'cost_minor': product.costMinor,
     'price_minor': product.priceMinor,
     'stock_quantity': product.stockQuantity,
+    'category_id': product.categoryId,
+    'unit_id': product.unitId,
     'is_active': product.isActive ? 1 : 0,
     'created_at':
         (product.createdAt ?? DateTime.now()).toUtc().toIso8601String(),
@@ -81,6 +83,8 @@ class ProductRepository implements ProductStore {
             : normalizedSku,
         'cost_minor': product.costMinor,
         'price_minor': product.priceMinor,
+        'category_id': product.categoryId,
+        'unit_id': product.unitId,
       },
       where: 'id = ?',
       whereArgs: [id],
