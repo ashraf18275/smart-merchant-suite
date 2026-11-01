@@ -38,7 +38,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: ProductsPage(repository: repository),
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
       ),
     ));
     await pumpDatabaseResult(tester);
@@ -51,7 +51,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: ProductsPage(repository: repository),
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
       ),
     ));
     await pumpDatabaseResult(tester);
@@ -93,7 +93,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: ProductsPage(repository: repository),
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
       ),
     ));
     await pumpDatabaseResult(tester);
@@ -117,7 +117,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: ProductsPage(repository: repository),
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
       ),
     ));
     await pumpDatabaseResult(tester);
@@ -154,7 +154,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: ProductsPage(repository: repository),
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
       ),
     ));
     await pumpDatabaseResult(tester);
@@ -194,7 +194,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: ProductsPage(repository: repository),
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
       ),
     ));
     await pumpDatabaseResult(tester);
