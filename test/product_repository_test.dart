@@ -95,7 +95,7 @@ void main() {
     final branches = await warehouseStore.branches();
     final secondBranchId = await warehouseStore.addBranch(name: 'فرع المدينة');
     final secondWarehouseId = await warehouseStore.addWarehouse(branchId: secondBranchId, name: 'مخزن الفرع');
-    final mainWarehouse = (await warehouseStore.warehouses()).single;
+    final mainWarehouse = (await warehouseStore.warehouses()).firstWhere((warehouse) => warehouse.name == 'المخزن الرئيسي');
     final productId = await products.add(const Product(name: 'صنف متعدد المخازن', costMinor: 100, priceMinor: 150, stockQuantity: 10));
 
     await warehouseStore.transferStock(productId: productId, fromWarehouseId: mainWarehouse.id, toWarehouseId: secondWarehouseId, quantity: 4, reason: 'توزيع مخزون');
@@ -118,7 +118,7 @@ void main() {
     final warehouseStore = WarehouseRepository(database);
     final branchId = await warehouseStore.addBranch(name: 'فرع آخر');
     final targetId = await warehouseStore.addWarehouse(branchId: branchId, name: 'مخزن آخر');
-    final source = (await warehouseStore.warehouses()).single;
+    final source = (await warehouseStore.warehouses()).firstWhere((warehouse) => warehouse.name == 'المخزن الرئيسي');
     final productId = await products.add(const Product(name: 'مخزون محدود', costMinor: 10, priceMinor: 20, stockQuantity: 2));
     await expectLater(warehouseStore.transferStock(productId: productId, fromWarehouseId: source.id, toWarehouseId: targetId, quantity: 3, reason: 'تحويل زائد'), throwsA(isA<AppException>()));
     expect((await products.all()).single.stockQuantity, 2);
