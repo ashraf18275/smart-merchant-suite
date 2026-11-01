@@ -76,6 +76,39 @@ void main() {
     expect(find.text('3'), findsOneWidget);
   });
 
+  testWidgets('adds fractional opening stock when the selected unit allows it', (tester) async {
+    await ProductRepository(database).addUnit(
+      name: 'كيلوجرام',
+      abbreviation: 'كجم',
+      allowsFraction: true,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: ProductsPage(repository: repository, catalog: ProductRepository(database)),
+      ),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.text('إضافة منتج'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('قطعة (قطعة)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('كيلوجرام (كجم)').last);
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'أرز');
+    await tester.enterText(fields.at(2), '10.00');
+    await tester.enterText(fields.at(3), '15.00');
+    await tester.enterText(fields.at(4), '1.25');
+    await tester.tap(find.text('حفظ المنتج'));
+    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
+
+    expect((await repository.all()).single.stockQuantity, 1250);
+  });
+
   testWidgets('filters products by search text', (tester) async {
     await repository.add(const Product(
       name: 'كابل USB',
