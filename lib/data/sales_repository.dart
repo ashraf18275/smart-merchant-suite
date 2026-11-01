@@ -15,19 +15,37 @@ class SalesRepository implements SalesStore {
     required int paidMinor,
   }) async {
     return _db.transaction((txn) async {
+      final defaultWarehouses = await txn.rawQuery("""
+        SELECT w.id FROM warehouses w
+        JOIN branches b ON b.id = w.branch_id
+        WHERE w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'
+          AND w.is_active = 1 AND b.is_active = 1
+        LIMIT 1
+      """);
+      if (defaultWarehouses.isEmpty) {
+        throw AppException('المخزن الرئيسي الافتراضي غير موجود أو غير نشط');
+      }
+      final warehouseId = defaultWarehouses.single['id']! as int;
       final items = <Map<String, int>>[];
       var total = 0;
       for (final entry in quantities.entries) {
         final rows = await txn.query(
           'products',
-          columns: ['cost_minor', 'price_minor', 'stock_quantity'],
+          columns: ['cost_minor', 'price_minor'],
           where: 'id = ? AND is_active = 1',
           whereArgs: [entry.key],
           limit: 1,
         );
         if (rows.isEmpty) throw AppException('أحد المنتجات غير موجود أو غير نشط');
+        final balances = await txn.query(
+          'product_warehouse_stock',
+          columns: ['quantity'],
+          where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [entry.key, warehouseId],
+          limit: 1,
+        );
+        final stock = balances.isEmpty ? 0 : balances.single['quantity']! as int;
         final product = rows.single;
-        final stock = product['stock_quantity']! as int;
         if (stock < entry.value) throw AppException('الكمية غير كافية لأحد المنتجات.');
         final price = product['price_minor']! as int;
         final cost = product['cost_minor']! as int;
@@ -61,11 +79,20 @@ class SalesRepository implements SalesStore {
           'unit_cost_minor': item['cost']!,
           'line_total_minor': item['lineTotal']!,
         });
-        await txn.update('products', {
-          'stock_quantity': item['stock']! - quantity,
-        }, where: 'id = ?', whereArgs: [productId]);
+        await txn.update('product_warehouse_stock', {
+          'quantity': item['stock']! - quantity,
+          'updated_at': createdAt,
+        }, where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [productId, warehouseId]);
+        final totals = await txn.rawQuery(
+          'SELECT COALESCE(SUM(quantity), 0) AS total FROM product_warehouse_stock WHERE product_id = ?',
+          [productId],
+        );
+        await txn.update('products', {'stock_quantity': totals.single['total']},
+          where: 'id = ?', whereArgs: [productId]);
         await txn.insert('inventory_movements', {
           'product_id': productId,
+          'warehouse_id': warehouseId,
           'quantity_delta': -quantity,
           'reason': 'بيع فاتورة رقم $saleId',
           'created_at': createdAt,
