@@ -10,7 +10,7 @@ class SalesRepository implements SalesStore {
   final Database _db;
 
   /// Creates a multi-item invoice, deducts stock and writes movement audit rows
-  /// in one transaction. Keys are product IDs and values are positive quantities.
+  /// in one transaction. Keys are product IDs and values are positive integer thousandths.
   Future<int> createSale({
     required Map<int, int> quantities,
     required int paidMinor,
@@ -35,6 +35,7 @@ class SalesRepository implements SalesStore {
           FROM products p LEFT JOIN product_units u ON u.id = p.unit_id
           WHERE p.id = ? AND p.is_active = 1 LIMIT 1
         ''', [entry.key]);
+        if (entry.value <= 0) throw AppException('كمية البيع يجب أن تكون أكبر من صفر');
         if (rows.isEmpty) throw AppException('أحد المنتجات غير موجود أو غير نشط');
         if (rows.single['allows_fraction'] != 1 && entry.value % Quantity.scale != 0) {
           throw AppException('وحدة قياس أحد المنتجات لا تقبل الكميات الكسرية');
