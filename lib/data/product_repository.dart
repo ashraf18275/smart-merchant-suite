@@ -3,6 +3,9 @@ import 'package:sqflite_common/sqlite_api.dart';
 import '../application/ports/product_store.dart';
 import '../core/app_error.dart';
 import '../domain/product.dart';
+import '../domain/product_category.dart';
+import '../domain/product_unit.dart';
+import '../application/ports/catalog_store.dart';
 
 Map<String, Object?> _productToRow(Product product) {
   final normalizedSku = product.sku?.trim();
@@ -34,7 +37,7 @@ Product _productFromRow(Map<String, Object?> row) => Product(
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
     );
 
-class ProductRepository implements ProductStore {
+class ProductRepository implements ProductStore, CatalogStore {
   ProductRepository(this._db);
 
   final Database _db;
@@ -166,5 +169,93 @@ class ProductRepository implements ProductStore {
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
     });
+  }
+
+  @override
+  Future<List<ProductCategory>> categories({bool includeInactive = false}) async {
+    final rows = await _db.query('product_categories',
+      where: includeInactive ? null : 'is_active = 1',
+      orderBy: 'name COLLATE NOCASE ASC');
+    return rows.map((row) => ProductCategory(
+      id: row['id']! as int, name: row['name']! as String,
+      isActive: row['is_active'] == 1,
+    )).toList(growable: false);
+  }
+
+  @override
+  Future<int> addCategory(String name) async {
+    final value = name.trim();
+    if (value.isEmpty) throw AppException('اسم التصنيف مطلوب');
+    return _db.insert('product_categories', {
+      'name': value, 'is_active': 1,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> updateCategory({required int id, required String name}) async {
+    final value = name.trim();
+    if (value.isEmpty) throw AppException('اسم التصنيف مطلوب');
+    final changed = await _db.update('product_categories', {'name': value},
+      where: 'id = ?', whereArgs: [id]);
+    if (changed == 0) throw AppException('التصنيف غير موجود');
+  }
+
+  @override
+  Future<void> setCategoryActive({required int id, required bool isActive}) async {
+    final changed = await _db.update('product_categories',
+      {'is_active': isActive ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
+    if (changed == 0) throw AppException('التصنيف غير موجود');
+  }
+
+  @override
+  Future<List<ProductUnit>> units({bool includeInactive = false}) async {
+    final rows = await _db.query('product_units',
+      where: includeInactive ? null : 'is_active = 1',
+      orderBy: 'name COLLATE NOCASE ASC');
+    return rows.map((row) => ProductUnit(
+      id: row['id']! as int, name: row['name']! as String,
+      abbreviation: row['abbreviation']! as String,
+      allowsFraction: row['allows_fraction'] == 1,
+      isActive: row['is_active'] == 1,
+    )).toList(growable: false);
+  }
+
+  @override
+  Future<int> addUnit({required String name, required String abbreviation,
+    required bool allowsFraction}) async {
+    final unitName = name.trim(), shortName = abbreviation.trim();
+    if (unitName.isEmpty) throw AppException('اسم وحدة القياس مطلوب');
+    if (shortName.isEmpty) throw AppException('اختصار وحدة القياس مطلوب');
+    return _db.insert('product_units', {
+      'name': unitName, 'abbreviation': shortName,
+      'allows_fraction': allowsFraction ? 1 : 0, 'is_active': 1,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> updateUnit({required int id, required String name,
+    required String abbreviation, required bool allowsFraction}) async {
+    final unitName = name.trim(), shortName = abbreviation.trim();
+    if (unitName.isEmpty) throw AppException('اسم وحدة القياس مطلوب');
+    if (shortName.isEmpty) throw AppException('اختصار وحدة القياس مطلوب');
+    final changed = await _db.update('product_units', {
+      'name': unitName, 'abbreviation': shortName,
+      'allows_fraction': allowsFraction ? 1 : 0,
+    }, where: 'id = ?', whereArgs: [id]);
+    if (changed == 0) throw AppException('وحدة القياس غير موجودة');
+  }
+
+  @override
+  Future<void> setUnitActive({required int id, required bool isActive}) async {
+    final rows = await _db.query('product_units', columns: ['name'],
+      where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) throw AppException('وحدة القياس غير موجودة');
+    if (!isActive && rows.single['name'] == 'قطعة') {
+      throw AppException('لا يمكن إيقاف وحدة «قطعة» الافتراضية');
+    }
+    await _db.update('product_units', {'is_active': isActive ? 1 : 0},
+      where: 'id = ?', whereArgs: [id]);
   }
 }
