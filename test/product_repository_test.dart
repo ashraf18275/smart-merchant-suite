@@ -49,8 +49,8 @@ void main() {
     await catalog.updateCategory(id: categoryId, name: 'مشروبات باردة');
     await catalog.updateUnit(
       id: unitId,
-      name: 'عبوة',
-      abbreviation: 'عبوة',
+      name: 'زجاجة مياه',
+      abbreviation: 'زجاجة مياه',
       allowsFraction: false,
     );
     await catalog.setCategoryActive(id: categoryId, isActive: false);
@@ -60,7 +60,7 @@ void main() {
     expect(saved.categoryId, categoryId);
     expect(saved.unitId, unitId);
     expect((await catalog.categories(includeInactive: true)).single.name, 'مشروبات باردة');
-    expect((await catalog.units(includeInactive: true)).firstWhere((u) => u.id == unitId).name, 'عبوة');
+    expect((await catalog.units(includeInactive: true)).firstWhere((u) => u.id == unitId).name, 'زجاجة مياه');
     expect(await catalog.categories(), isEmpty);
     expect((await catalog.units()).map((u) => u.name), contains('قطعة'));
 
