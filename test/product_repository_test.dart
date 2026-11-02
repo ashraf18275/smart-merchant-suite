@@ -36,11 +36,7 @@ void main() {
   test('manages categories and units without deleting historical references', () async {
     final catalog = ProductRepository(database);
     final categoryId = await catalog.addCategory('مشروبات');
-    final unitId = await catalog.addUnit(
-      name: 'زجاجة',
-      abbreviation: 'زجاجة',
-      allowsFraction: false,
-    );
+    final unitId = (await catalog.units()).firstWhere((unit) => unit.name == 'زجاجة').id;
     final productId = await products.add(Product(
       name: 'مياه',
       costMinor: 100,
@@ -108,7 +104,7 @@ void main() {
 
   test('prevents disabling the default piece unit', () async {
     final catalog = ProductRepository(database);
-    final unit = (await catalog.units()).single;
+    final unit = (await catalog.units()).firstWhere((unit) => unit.name == 'قطعة');
     expect(unit.name, 'قطعة');
     await expectLater(
       catalog.setUnitActive(id: unit.id, isActive: false),
@@ -369,11 +365,7 @@ void main() {
 
   test('supports fractional stock adjustment and warehouse transfer', () async {
     final catalog = ProductRepository(database);
-    final unitId = await catalog.addUnit(
-      name: 'لتر',
-      abbreviation: 'لتر',
-      allowsFraction: true,
-    );
+    final unitId = (await catalog.units()).firstWhere((unit) => unit.name == 'لتر').id;
     final store = WarehouseRepository(database);
     final main = await mainWarehouseId();
     final branchId = await store.addBranch(name: 'فرع السوائل');
@@ -442,11 +434,7 @@ void main() {
 
   test('sells a fractional quantity and rounds invoice money in piastres', () async {
     final catalog = ProductRepository(database);
-    final unitId = await catalog.addUnit(
-      name: 'كيلوجرام',
-      abbreviation: 'كجم',
-      allowsFraction: true,
-    );
+    final unitId = (await catalog.units()).firstWhere((unit) => unit.name == 'كيلوجرام').id;
     final productId = await products.add(Product(
       name: 'أرز',
       costMinor: 500,
