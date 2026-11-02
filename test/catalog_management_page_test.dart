@@ -77,11 +77,19 @@ void main() {
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
 
-    expect(find.text('طن • أعداد صحيحة فقط • نشطة'), findsOneWidget);
+    final createdUnits = await catalog.units(includeInactive: true);
+    final createdUnit = createdUnits.singleWhere((unit) => unit.name == 'طن');
+    expect(createdUnit.abbreviation, 'طن');
+    expect(createdUnit.allowsFraction, isFalse);
+    expect(createdUnit.isActive, isTrue);
+    expect(find.text('طن'), findsOneWidget);
     final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إيقاف الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
-    expect(find.text('طن • أعداد صحيحة فقط • موقوفة'), findsOneWidget);
+    final deactivatedUnits = await catalog.units(includeInactive: true);
+    final deactivatedUnit = deactivatedUnits.singleWhere((unit) => unit.name == 'طن');
+    expect(deactivatedUnit.isActive, isFalse);
+    expect(find.text('طن'), findsOneWidget);
   });
 }
