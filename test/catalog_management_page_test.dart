@@ -76,17 +76,17 @@ void main() {
     await tester.tap(find.text('حفظ'));
     await tester.pumpAndSettle();
 
+    // The selected units page must render the newly saved row without
+    // requiring the user to switch tabs away and back again.
+    final createdUnitFinder = find.text('وحدة تجريبية');
+    expect(createdUnitFinder, findsOneWidget);
+
     final createdUnits = await catalog.units(includeInactive: true);
     final createdUnit = createdUnits.singleWhere((unit) => unit.name == 'وحدة تجريبية');
     expect(createdUnit.abbreviation, 'وحدة تجريبية');
     expect(createdUnit.allowsFraction, isFalse);
     expect(createdUnit.isActive, isTrue);
 
-    // Re-select the units tab after closing the dialog to verify the visible page.
-    await tester.tap(find.text('وحدات القياس').first);
-    await tester.pumpAndSettle();
-    final createdUnitFinder = find.text('وحدة تجريبية');
-    expect(createdUnitFinder, findsOneWidget);
     final unitCard = find.ancestor(of: createdUnitFinder, matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
     await tester.pumpAndSettle();
