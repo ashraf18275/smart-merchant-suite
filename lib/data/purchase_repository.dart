@@ -122,7 +122,7 @@ class PurchaseRepository {
             quantity * item['unitCost']!;
         final newAverageCost = newQuantity == 0
             ? item['unitCost']!
-            : (weightedNumerator / newQuantity).round();
+            : (weightedNumerator + newQuantity ~/ 2) ~/ newQuantity;
 
         await txn.insert('purchase_items', {
           'purchase_id': purchaseId,
