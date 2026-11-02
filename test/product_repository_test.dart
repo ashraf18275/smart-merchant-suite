@@ -54,13 +54,17 @@ void main() {
       allowsFraction: false,
     );
     await catalog.setCategoryActive(id: categoryId, isActive: false);
-    await catalog.setUnitActive(id: unitId, isActive: false);
+    await expectLater(
+      catalog.setUnitActive(id: unitId, isActive: false),
+      throwsA(isA<AppException>()),
+    );
 
     final saved = (await products.all()).single;
     expect(saved.categoryId, categoryId);
     expect(saved.unitId, unitId);
     expect((await catalog.categories(includeInactive: true)).single.name, 'مشروبات باردة');
     expect((await catalog.units(includeInactive: true)).firstWhere((u) => u.id == unitId).name, 'زجاجة مياه');
+    expect((await catalog.units()).map((u) => u.id), contains(unitId));
     expect(await catalog.categories(), isEmpty);
     expect((await catalog.units()).map((u) => u.name), contains('قطعة'));
 
