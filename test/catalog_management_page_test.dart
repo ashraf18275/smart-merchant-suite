@@ -11,6 +11,17 @@ Future<void> pumpCatalog(WidgetTester tester) async {
   await tester.pump();
 }
 
+Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 30; attempt++) {
+    if (finder.evaluate().isNotEmpty) return;
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+  }
+  expect(finder, findsOneWidget);
+}
+
 void main() {
   late Database database;
   late ProductRepository catalog;
@@ -75,7 +86,6 @@ void main() {
     await tester.enterText(fields.at(1), 'وحدة تجريبية');
     await tester.tap(find.text('حفظ'));
     await tester.pumpAndSettle();
-    await pumpCatalog(tester);
 
     final createdUnits = await catalog.units(includeInactive: true);
     final createdUnit = createdUnits.singleWhere((unit) => unit.name == 'وحدة تجريبية');
@@ -83,25 +93,16 @@ void main() {
     expect(createdUnit.allowsFraction, isFalse);
     expect(createdUnit.isActive, isTrue);
 
-    // The database write and the widget rebuild are separate asynchronous
-    // operations. Wait for the catalog reload to be rendered before asserting
-    // that the newly-created unit is visible.
-    // sqflite_ffi completes through the real async event loop. Widget-test
-    // frame settling alone does not wait for the repository reload started by
-    // the dialog callback, so allow that future to complete before rendering.
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    });
-    await tester.pump();
-    expect(find.text('وحدة تجريبية'), findsOneWidget);
-    final unitCard = find.ancestor(of: find.text('وحدة تجريبية'), matching: find.byType(Card));
+    final createdUnitFinder = find.text('وحدة تجريبية');
+    await pumpUntilFound(tester, createdUnitFinder);
+    final unitCard = find.ancestor(of: createdUnitFinder, matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
     final deactivatedUnits = await catalog.units(includeInactive: true);
     final deactivatedUnit = deactivatedUnits.singleWhere((unit) => unit.name == 'وحدة تجريبية');
     expect(deactivatedUnit.isActive, isFalse);
-    expect(find.text('وحدة تجريبية'), findsOneWidget);
+    expect(createdUnitFinder, findsOneWidget);
     await tester.tap(find.byTooltip('إظهار الوحدة'));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
