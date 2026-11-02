@@ -17,6 +17,7 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
   List<ProductCategory> _categories = [];
   List<ProductUnit> _units = [];
   bool _loading = true;
+  bool _hasLoaded = false;
   String? _error;
 
   @override
@@ -26,7 +27,9 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    if (!_hasLoaded) {
+      setState(() { _loading = true; _error = null; });
+    }
     try {
       final values = await Future.wait([
         widget.catalog.categories(includeInactive: true),
@@ -37,11 +40,13 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
         _categories = values[0] as List<ProductCategory>;
         _units = values[1] as List<ProductUnit>;
         _loading = false;
+        _hasLoaded = true;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _hasLoaded = true;
         _error = appErrorMessage(error, fallback: 'تعذر تحميل التصنيفات والوحدات.', operation: 'catalog.load');
       });
     }
@@ -229,7 +234,7 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
               children: [
                 IconButton(tooltip: 'تعديل وحدة القياس', onPressed: () => _unitDialog(item), icon: const Icon(Icons.edit_outlined)),
                 IconButton(
-                  tooltip: item.isActive ? 'إيقاف الوحدة' : 'تفعيل الوحدة',
+                  tooltip: item.isActive ? 'إخفاء الوحدة' : 'إظهار الوحدة',
                   onPressed: () => _toggleUnit(item),
                   icon: Icon(item.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline),
                 ),
