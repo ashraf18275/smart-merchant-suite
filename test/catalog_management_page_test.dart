@@ -86,7 +86,13 @@ void main() {
     // The database write and the widget rebuild are separate asynchronous
     // operations. Wait for the catalog reload to be rendered before asserting
     // that the newly-created unit is visible.
-    await tester.pumpAndSettle();
+    // sqflite_ffi completes through the real async event loop. Widget-test
+    // frame settling alone does not wait for the repository reload started by
+    // the dialog callback, so allow that future to complete before rendering.
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump();
     expect(find.text('طن'), findsOneWidget);
     final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
