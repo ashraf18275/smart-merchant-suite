@@ -95,9 +95,8 @@ class _ProductsPageState extends State<ProductsPage> {
     final key = GlobalKey<FormState>();
     final name = TextEditingController();
     final sku = TextEditingController();
-    final cost = TextEditingController(text: '0.00');
-    final price = TextEditingController(text: '0.00');
-    final stock = TextEditingController(text: '0');
+    final cost = TextEditingController();
+    final price = TextEditingController();
     int? selectedCategoryId;
     int? selectedUnitId = _units.where((u) => u.isActive).firstWhere(
       (u) => u.name == 'قطعة',
@@ -145,9 +144,6 @@ class _ProductsPageState extends State<ProductsPage> {
                 TextFormField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'سعر البيع بالجنيه *'),
                   validator: (v) => v == null || _minor(v) == null ? 'أدخل سعرًا صحيحًا' : null),
-                TextFormField(controller: stock, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'الكمية الافتتاحية', helperText: 'حتى 3 خانات عشرية للوحدات التي تقبل الكسور'),
-                  validator: (v) { final n = Quantity.parse(v ?? '', allowsFraction: _allowsFraction(selectedUnitId)); return n == null || n < 0 ? 'أدخل كمية صحيحة حسب وحدة القياس' : null; }),
               ]),
             ),
           ),
@@ -171,7 +167,7 @@ class _ProductsPageState extends State<ProductsPage> {
           sku: sku.text.trim().isEmpty ? null : sku.text.trim(),
           costMinor: _minor(cost.text)!,
           priceMinor: _minor(price.text)!,
-          stockQuantity: Quantity.parse(stock.text, allowsFraction: _allowsFraction(selectedUnitId))!,
+          stockQuantity: 0,
           categoryId: selectedCategoryId,
           unitId: selectedUnitId,
         ));
@@ -181,7 +177,7 @@ class _ProductsPageState extends State<ProductsPage> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر حفظ المنتج.', operation: 'products.create'))));
       }
     }
-    name.dispose(); sku.dispose(); cost.dispose(); price.dispose(); stock.dispose();
+    name.dispose(); sku.dispose(); cost.dispose(); price.dispose();
   }
 
   Future<void> _edit(Product product) async {

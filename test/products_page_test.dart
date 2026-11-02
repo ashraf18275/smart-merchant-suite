@@ -60,12 +60,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(TextFormField);
-    expect(fields, findsNWidgets(5));
+    expect(fields, findsNWidgets(4));
     await tester.enterText(fields.at(0), 'كابل USB');
     await tester.enterText(fields.at(1), 'USB-01');
     await tester.enterText(fields.at(2), '12.50');
     await tester.enterText(fields.at(3), '20.00');
-    await tester.enterText(fields.at(4), '3');
     await tester.tap(find.text('حفظ المنتج'));
     await tester.pumpAndSettle();
     await pumpDatabaseResult(tester);
@@ -73,10 +72,10 @@ void main() {
     expect(find.text('كابل USB'), findsOneWidget);
     expect(find.textContaining('12.50 ج.م'), findsOneWidget);
     expect(find.textContaining('20.00 ج.م'), findsOneWidget);
-    expect(find.text('3'), findsOneWidget);
+    expect((await repository.all()).single.stockQuantity, 0);
   });
 
-  testWidgets('adds fractional opening stock when the selected unit allows it', (tester) async {
+  testWidgets('new catalog products start with zero stock until stock is received', (tester) async {
     await ProductRepository(database).addUnit(
       name: 'كيلوجرام',
       abbreviation: 'كجم',
@@ -92,21 +91,16 @@ void main() {
 
     await tester.tap(find.text('إضافة منتج'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('قطعة (قطعة)'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('كيلوجرام (كجم)').last);
-    await tester.pumpAndSettle();
 
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'أرز');
     await tester.enterText(fields.at(2), '10.00');
     await tester.enterText(fields.at(3), '15.00');
-    await tester.enterText(fields.at(4), '1.25');
     await tester.tap(find.text('حفظ المنتج'));
     await tester.pumpAndSettle();
     await pumpDatabaseResult(tester);
 
-    expect((await repository.all()).single.stockQuantity, 1250);
+    expect((await repository.all()).single.stockQuantity, 0);
   });
 
   testWidgets('filters products by search text', (tester) async {
