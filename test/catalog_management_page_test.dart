@@ -73,17 +73,15 @@ void main() {
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'طن');
     await tester.enterText(fields.at(1), 'طن');
-    await tester.tap(find.text('السماح بالكميات الكسرية'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('حفظ'));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
 
-    expect(find.text('طن • تقبل الكسور • نشطة'), findsOneWidget);
+    expect(find.text('طن • أعداد صحيحة فقط • نشطة'), findsOneWidget);
     final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إيقاف الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
-    expect(find.text('طن • تقبل الكسور • موقوفة'), findsOneWidget);
+    expect(find.text('طن • أعداد صحيحة فقط • موقوفة'), findsOneWidget);
   });
 }
