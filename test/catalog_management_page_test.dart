@@ -82,6 +82,11 @@ void main() {
     expect(createdUnit.abbreviation, 'طن');
     expect(createdUnit.allowsFraction, isFalse);
     expect(createdUnit.isActive, isTrue);
+
+    // The database write and the widget rebuild are separate asynchronous
+    // operations. Wait for the catalog reload to be rendered before asserting
+    // that the newly-created unit is visible.
+    await tester.pumpAndSettle();
     expect(find.text('طن'), findsOneWidget);
     final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
