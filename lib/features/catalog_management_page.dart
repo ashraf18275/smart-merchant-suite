@@ -39,16 +39,17 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> with Sing
       setState(() { _loading = true; _error = null; });
     }
     try {
-      final values = await Future.wait([
-        widget.catalog.categories(includeInactive: true),
-        widget.catalog.units(includeInactive: true),
-      ]);
+      // Keep reads sequential: both queries share the same local SQLite connection.
+      // This avoids overlapping database operations during a post-save refresh.
+      final categories = await widget.catalog.categories(includeInactive: true);
+      final units = await widget.catalog.units(includeInactive: true);
       if (!mounted) return;
       setState(() {
-        _categories = values[0] as List<ProductCategory>;
-        _units = values[1] as List<ProductUnit>;
+        _categories = categories;
+        _units = units;
         _loading = false;
         _hasLoaded = true;
+        _error = null;
       });
     } catch (error) {
       if (!mounted) return;
