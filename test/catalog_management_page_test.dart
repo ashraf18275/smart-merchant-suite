@@ -79,7 +79,7 @@ void main() {
     await pumpCatalog(tester);
 
     expect(find.text('طن • تقبل الكسور • نشطة'), findsOneWidget);
-    final unitCard = find.ancestor(of: find.text('كيلوجرام'), matching: find.byType(Card));
+    final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إيقاف الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
