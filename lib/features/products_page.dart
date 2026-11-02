@@ -95,9 +95,9 @@ class _ProductsPageState extends State<ProductsPage> {
     final key = GlobalKey<FormState>();
     final name = TextEditingController();
     final sku = TextEditingController();
-    final cost = TextEditingController(text: '0.00');
-    final price = TextEditingController(text: '0.00');
-    final stock = TextEditingController(text: '0');
+    final cost = TextEditingController();
+    final price = TextEditingController();
+    final stock = TextEditingController();
     int? selectedCategoryId;
     int? selectedUnitId = _units.where((u) => u.isActive).firstWhere(
       (u) => u.name == 'قطعة',
@@ -147,7 +147,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   validator: (v) => v == null || _minor(v) == null ? 'أدخل سعرًا صحيحًا' : null),
                 TextFormField(controller: stock, keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'الكمية الافتتاحية', helperText: 'حتى 3 خانات عشرية للوحدات التي تقبل الكسور'),
-                  validator: (v) { final n = Quantity.parse(v ?? '', allowsFraction: _allowsFraction(selectedUnitId)); return n == null || n < 0 ? 'أدخل كمية صحيحة حسب وحدة القياس' : null; }),
+                  validator: (v) { if (v == null || v.trim().isEmpty) return null; final n = Quantity.parse(v, allowsFraction: _allowsFraction(selectedUnitId)); return n == null || n < 0 ? 'أدخل كمية صحيحة حسب وحدة القياس' : null; }),
               ]),
             ),
           ),
@@ -171,7 +171,7 @@ class _ProductsPageState extends State<ProductsPage> {
           sku: sku.text.trim().isEmpty ? null : sku.text.trim(),
           costMinor: _minor(cost.text)!,
           priceMinor: _minor(price.text)!,
-          stockQuantity: Quantity.parse(stock.text, allowsFraction: _allowsFraction(selectedUnitId))!,
+          stockQuantity: Quantity.parse(stock.text.trim().isEmpty ? '0' : stock.text, allowsFraction: _allowsFraction(selectedUnitId))!,
           categoryId: selectedCategoryId,
           unitId: selectedUnitId,
         ));
