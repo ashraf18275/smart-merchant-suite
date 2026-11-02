@@ -11,17 +11,6 @@ Future<void> pumpCatalog(WidgetTester tester) async {
   await tester.pump();
 }
 
-Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
-  for (var attempt = 0; attempt < 30; attempt++) {
-    if (finder.evaluate().isNotEmpty) return;
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
-  }
-  expect(finder, findsOneWidget);
-}
-
 void main() {
   late Database database;
   late ProductRepository catalog;
@@ -93,8 +82,11 @@ void main() {
     expect(createdUnit.allowsFraction, isFalse);
     expect(createdUnit.isActive, isTrue);
 
+    // Re-select the units tab after closing the dialog to verify the visible page.
+    await tester.tap(find.text('وحدات القياس').first);
+    await tester.pumpAndSettle();
     final createdUnitFinder = find.text('وحدة تجريبية');
-    await pumpUntilFound(tester, createdUnitFinder);
+    expect(createdUnitFinder, findsOneWidget);
     final unitCard = find.ancestor(of: createdUnitFinder, matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
     await tester.pumpAndSettle();
