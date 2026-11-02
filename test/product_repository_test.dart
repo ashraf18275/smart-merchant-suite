@@ -83,6 +83,29 @@ void main() {
     expect(updated.stockQuantity, 4000);
   });
 
+  test('seeds common retail measurement units and keeps custom units available', () async {
+    final catalog = ProductRepository(database);
+    final units = await catalog.units();
+    final names = units.map((unit) => unit.name).toSet();
+
+    expect(names, containsAll([
+      'قطعة', 'علبة', 'كرتونة', 'دستة', 'كيلوجرام', 'جرام',
+      'لتر', 'ملليلتر', 'متر', 'سنتيمتر', 'زوج', 'عبوة',
+      'شريط', 'زجاجة', 'لفة', 'طقم',
+    ]));
+    expect(
+      units.firstWhere((unit) => unit.name == 'كيلوجرام').allowsFraction,
+      isTrue,
+    );
+
+    final customId = await catalog.addUnit(
+      name: 'صينية',
+      abbreviation: 'صينية',
+      allowsFraction: false,
+    );
+    expect((await catalog.units()).any((unit) => unit.id == customId), isTrue);
+  });
+
   test('prevents disabling the default piece unit', () async {
     final catalog = ProductRepository(database);
     final unit = (await catalog.units()).single;
