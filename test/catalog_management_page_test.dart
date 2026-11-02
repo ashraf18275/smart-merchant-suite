@@ -71,15 +71,15 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), 'طن');
-    await tester.enterText(fields.at(1), 'طن');
+    await tester.enterText(fields.at(0), 'وحدة تجريبية');
+    await tester.enterText(fields.at(1), 'وحدة تجريبية');
     await tester.tap(find.text('حفظ'));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
 
     final createdUnits = await catalog.units(includeInactive: true);
-    final createdUnit = createdUnits.singleWhere((unit) => unit.name == 'طن');
-    expect(createdUnit.abbreviation, 'طن');
+    final createdUnit = createdUnits.singleWhere((unit) => unit.name == 'وحدة تجريبية');
+    expect(createdUnit.abbreviation, 'وحدة تجريبية');
     expect(createdUnit.allowsFraction, isFalse);
     expect(createdUnit.isActive, isTrue);
 
@@ -93,20 +93,20 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     });
     await tester.pump();
-    expect(find.text('طن'), findsOneWidget);
-    final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
+    expect(find.text('وحدة تجريبية'), findsOneWidget);
+    final unitCard = find.ancestor(of: find.text('وحدة تجريبية'), matching: find.byType(Card));
     await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
     final deactivatedUnits = await catalog.units(includeInactive: true);
-    final deactivatedUnit = deactivatedUnits.singleWhere((unit) => unit.name == 'طن');
+    final deactivatedUnit = deactivatedUnits.singleWhere((unit) => unit.name == 'وحدة تجريبية');
     expect(deactivatedUnit.isActive, isFalse);
-    expect(find.text('طن'), findsOneWidget);
+    expect(find.text('وحدة تجريبية'), findsOneWidget);
     await tester.tap(find.byTooltip('إظهار الوحدة'));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
     final restoredUnits = await catalog.units(includeInactive: true);
-    final restoredUnit = restoredUnits.singleWhere((unit) => unit.name == 'طن');
+    final restoredUnit = restoredUnits.singleWhere((unit) => unit.name == 'وحدة تجريبية');
     expect(restoredUnit.isActive, isTrue);
   });
 }
