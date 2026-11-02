@@ -56,7 +56,7 @@ void main() {
     expect(find.text('مشروبات'), findsNothing);
   });
 
-  testWidgets('creates a unit and can deactivate it', (tester) async {
+  testWidgets('creates a unit and can hide and restore an unused unit', (tester) async {
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
@@ -84,12 +84,18 @@ void main() {
     expect(createdUnit.isActive, isTrue);
     expect(find.text('طن'), findsOneWidget);
     final unitCard = find.ancestor(of: find.text('طن'), matching: find.byType(Card));
-    await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إيقاف الوحدة')));
+    await tester.tap(find.descendant(of: unitCard, matching: find.byTooltip('إخفاء الوحدة')));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
     final deactivatedUnits = await catalog.units(includeInactive: true);
     final deactivatedUnit = deactivatedUnits.singleWhere((unit) => unit.name == 'طن');
     expect(deactivatedUnit.isActive, isFalse);
     expect(find.text('طن'), findsOneWidget);
+    await tester.tap(find.byTooltip('إظهار الوحدة'));
+    await tester.pumpAndSettle();
+    await pumpCatalog(tester);
+    final restoredUnits = await catalog.units(includeInactive: true);
+    final restoredUnit = restoredUnits.singleWhere((unit) => unit.name == 'طن');
+    expect(restoredUnit.isActive, isTrue);
   });
 }
