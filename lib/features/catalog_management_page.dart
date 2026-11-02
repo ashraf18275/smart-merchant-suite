@@ -13,17 +13,25 @@ class CatalogManagementPage extends StatefulWidget {
   State<CatalogManagementPage> createState() => _CatalogManagementPageState();
 }
 
-class _CatalogManagementPageState extends State<CatalogManagementPage> {
+class _CatalogManagementPageState extends State<CatalogManagementPage> with SingleTickerProviderStateMixin {
   List<ProductCategory> _categories = [];
   List<ProductUnit> _units = [];
   bool _loading = true;
   bool _hasLoaded = false;
   String? _error;
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -247,29 +255,24 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
   }
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
-    child: Scaffold(
+  Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(
         title: const Text('التصنيفات ووحدات القياس'),
-        bottom: const TabBar(tabs: [
+        bottom: TabBar(controller: _tabController, tabs: [
           Tab(text: 'التصنيفات', icon: Icon(Icons.category_outlined)),
           Tab(text: 'وحدات القياس', icon: Icon(Icons.straighten)),
         ]),
       ),
-      floatingActionButton: Builder(
-        builder: (context) => FloatingActionButton.extended(
-          onPressed: () {
-            final index = DefaultTabController.of(context).index;
-            if (index == 0) {
-              _categoryDialog();
-            } else {
-              _unitDialog();
-            }
-          },
-          icon: const Icon(Icons.add),
-          label: const Text('إضافة'),
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (_tabController.index == 0) {
+            _categoryDialog();
+          } else {
+            _unitDialog();
+          }
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('إضافة'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -278,7 +281,6 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> {
                   Text(_error!, textAlign: TextAlign.center),
                   OutlinedButton(onPressed: _load, child: const Text('إعادة المحاولة')),
                 ]))
-              : TabBarView(children: [_categoryList(), _unitList()]),
-    ),
+              : TabBarView(controller: _tabController, children: [_categoryList(), _unitList()]),
   );
 }
