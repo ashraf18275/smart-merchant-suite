@@ -43,6 +43,7 @@ Future<void> createLocalSchema(Database db) async {
   await createBranchWarehouseSchema(db);
   await createSaleWarehouseSchema(db);
   await createFractionalQuantitiesSchema(db);
+  await createPurchaseSchema(db);
 }
 
 /// Adds sales tables for databases that were created at version 1.
@@ -368,4 +369,47 @@ Future<void> createFractionalQuantitiesSchema(Database db) async {
     'version': 7,
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   });
+}
+
+
+/// Adds supplier and purchase documents with immutable purchase-line costs.
+Future<void> createPurchaseSchema(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+      phone TEXT,
+      address TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_id INTEGER NOT NULL,
+      warehouse_id INTEGER NOT NULL,
+      total_minor INTEGER NOT NULL CHECK (total_minor > 0),
+      paid_minor INTEGER NOT NULL CHECK (paid_minor >= 0 AND paid_minor <= total_minor),
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+      FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS purchase_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchase_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_cost_minor INTEGER NOT NULL CHECK (unit_cost_minor >= 0),
+      line_total_minor INTEGER NOT NULL CHECK (line_total_minor > 0),
+      FOREIGN KEY (purchase_id) REFERENCES purchases(id),
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+  ''');
+  await db.insert('schema_migrations', {
+    'version': 8,
+    'applied_at': DateTime.now().toUtc().toIso8601String(),
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
 }
