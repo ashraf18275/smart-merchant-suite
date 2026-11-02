@@ -48,7 +48,7 @@ void main() {
       'cost_minor': 100,
       'price_minor': 200,
       'stock_quantity': 2,
-      'unit_id': (await database.query('product_units')).single['id'],
+      'unit_id': (await database.query('product_units', where: 'name = ?', whereArgs: ['قطعة'])).single['id'],
       'is_active': 1,
       'created_at': DateTime.utc(2025).toIso8601String(),
     });
@@ -183,7 +183,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8]);
     final migratedProduct = (await database.query('products')).single;
     expect(migratedProduct['stock_quantity'], 6000);
     expect(migratedProduct['unit_id'], isNotNull);
