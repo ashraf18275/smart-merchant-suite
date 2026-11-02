@@ -13,25 +13,18 @@ class CatalogManagementPage extends StatefulWidget {
   State<CatalogManagementPage> createState() => _CatalogManagementPageState();
 }
 
-class _CatalogManagementPageState extends State<CatalogManagementPage> with SingleTickerProviderStateMixin {
+class _CatalogManagementPageState extends State<CatalogManagementPage> {
   List<ProductCategory> _categories = [];
   List<ProductUnit> _units = [];
   bool _loading = true;
   bool _hasLoaded = false;
   String? _error;
-  late final TabController _tabController;
+  int _selectedTab = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _load();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -256,32 +249,52 @@ class _CatalogManagementPageState extends State<CatalogManagementPage> with Sing
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(
-        title: const Text('التصنيفات ووحدات القياس'),
-        bottom: TabBar(controller: _tabController, tabs: [
-          Tab(text: 'التصنيفات', icon: Icon(Icons.category_outlined)),
-          Tab(text: 'وحدات القياس', icon: Icon(Icons.straighten)),
-        ]),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          if (_tabController.index == 0) {
-            _categoryDialog();
-          } else {
-            _unitDialog();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('إضافة'),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, textAlign: TextAlign.center),
-                  OutlinedButton(onPressed: _load, child: const Text('إعادة المحاولة')),
-                ]))
-              : TabBarView(controller: _tabController, children: [_categoryList(), _unitList()]),
-  );
+  Widget build(BuildContext context) => DefaultTabController(
+        length: 2,
+        initialIndex: _selectedTab,
+        child: Builder(
+          builder: (context) => Scaffold(
+            appBar: AppBar(
+              title: const Text('التصنيفات ووحدات القياس'),
+              bottom: TabBar(
+                onTap: (index) => setState(() => _selectedTab = index),
+                tabs: const [
+                  Tab(text: 'التصنيفات', icon: Icon(Icons.category_outlined)),
+                  Tab(text: 'وحدات القياس', icon: Icon(Icons.straighten)),
+                ],
+              ),
+            ),
+            floatingActionButton: FloatingActionButton.extended(
+              onPressed: () {
+                if (_selectedTab == 0) {
+                  _categoryDialog();
+                } else {
+                  _unitDialog();
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة'),
+            ),
+            body: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!, textAlign: TextAlign.center),
+                            OutlinedButton(
+                              onPressed: _load,
+                              child: const Text('إعادة المحاولة'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : IndexedStack(
+                        index: _selectedTab,
+                        children: [_categoryList(), _unitList()],
+                      ),
+          ),
+        ),
+      );
 }
