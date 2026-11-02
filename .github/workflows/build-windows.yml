@@ -2,27 +2,6 @@ name: Build Windows desktop
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - "feature/**"
-    paths:
-      - "lib/**"
-      - "test/**"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - "windows/**"
-      - ".github/workflows/build-windows.yml"
-  push:
-    branches:
-      - "feature/**"
-    paths:
-      - "lib/**"
-      - "test/**"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - "windows/**"
-      - ".github/workflows/build-windows.yml"
-
 permissions:
   contents: read
 
