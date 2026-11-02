@@ -43,6 +43,7 @@ Future<void> createLocalSchema(Database db) async {
   await createBranchWarehouseSchema(db);
   await createSaleWarehouseSchema(db);
   await createFractionalQuantitiesSchema(db);
+  await createCommonUnitsSchema(db);
 }
 
 /// Adds sales tables for databases that were created at version 1.
@@ -368,4 +369,54 @@ Future<void> createFractionalQuantitiesSchema(Database db) async {
     'version': 7,
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   });
+}
+
+
+/// Seeds common retail units for existing and newly created databases.
+/// Stores may still add their own units from catalog management.
+Future<void> createCommonUnitsSchema(Database db) async {
+  final now = DateTime.now().toUtc().toIso8601String();
+  const units = <({String name, String abbreviation, bool allowsFraction})>[
+    (name: 'علبة', abbreviation: 'علبة', allowsFraction: false),
+    (name: 'كرتونة', abbreviation: 'كرتونة', allowsFraction: false),
+    (name: 'دستة', abbreviation: 'دستة', allowsFraction: false),
+    (name: 'كيلوجرام', abbreviation: 'كجم', allowsFraction: true),
+    (name: 'جرام', abbreviation: 'جم', allowsFraction: true),
+    (name: 'لتر', abbreviation: 'لتر', allowsFraction: true),
+    (name: 'ملليلتر', abbreviation: 'مل', allowsFraction: true),
+    (name: 'متر', abbreviation: 'م', allowsFraction: true),
+    (name: 'سنتيمتر', abbreviation: 'سم', allowsFraction: true),
+    (name: 'زوج', abbreviation: 'زوج', allowsFraction: false),
+    (name: 'عبوة', abbreviation: 'عبوة', allowsFraction: false),
+    (name: 'شريط', abbreviation: 'شريط', allowsFraction: false),
+    (name: 'زجاجة', abbreviation: 'زجاجة', allowsFraction: false),
+    (name: 'لفة', abbreviation: 'لفة', allowsFraction: false),
+    (name: 'طقم', abbreviation: 'طقم', allowsFraction: false),
+  ];
+  for (final unit in units) {
+    await db.insert(
+      'product_units',
+      {
+        'name': unit.name,
+        'abbreviation': unit.abbreviation,
+        'allows_fraction': unit.allowsFraction ? 1 : 0,
+        'is_active': 1,
+        'created_at': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+  final applied = await db.query(
+    'schema_migrations',
+    columns: ['version'],
+    where: 'version = ?',
+    whereArgs: [8],
+    limit: 1,
+  );
+  if (applied.isEmpty) {
+    await db.insert('schema_migrations', {
+      'version': 8,
+      'applied_at': now,
+    });
+  }
 }
