@@ -98,9 +98,12 @@ class _SalesPageState extends State<SalesPage> {
     };
     final paid = TextEditingController();
     final key = GlobalKey<FormState>();
+    ModalRoute<dynamic>? saleDialogRoute;
     final result = await showDialog<Map<String, Object?>?>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) {
+        saleDialogRoute = ModalRoute.of(ctx);
+        return AlertDialog(
         title: const Text('فاتورة بيع متعددة الأصناف'),
         content: SizedBox(
           width: 520,
@@ -165,8 +168,12 @@ class _SalesPageState extends State<SalesPage> {
             child: const Text('حفظ الفاتورة'),
           ),
         ],
-      ),
+        );
+      },
     );
+    // showDialog's result can arrive before the reverse transition removes its
+    // fields. Wait for the route overlay to be removed before disposing controllers.
+    await saleDialogRoute?.completed;
     for (final controller in quantityControllers.values) { controller.dispose(); }
     paid.dispose();
     if (result == null) return;
