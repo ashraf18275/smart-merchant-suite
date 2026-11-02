@@ -163,8 +163,8 @@ class HomeDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final width = MediaQuery.sizeOf(context).width;
+    final columns = width >= 900 ? 4 : width >= 600 ? 3 : 2;
 
     return Scaffold(
       appBar: AppBar(
@@ -172,192 +172,57 @@ class HomeDashboard extends StatelessWidget {
       ),
       body: SafeArea(
         top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
-          children: [
-            _WelcomePanel(textTheme: textTheme),
-            const SizedBox(height: 26),
-            Row(
-              children: [
-                Text(
-                  'أقسام البرنامج',
-                  style: textTheme.titleLarge?.copyWith(
-                    color: const Color(0xFF183C2B),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '5 أقسام',
-                  style: textTheme.labelMedium?.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...List.generate(modules.length, (index) {
-              final module = modules[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Card(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: () => _openModule(context, index),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 15,
+        child: GridView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: modules.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.05,
+          ),
+          itemBuilder: (context, index) {
+            final module = modules[index];
+            return Card(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _openModule(context, index),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF4ED),
+                          borderRadius: BorderRadius.circular(17),
+                        ),
+                        child: Icon(
+                          module.icon,
+                          color: const Color(0xFF247A52),
+                          size: 30,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEAF4ED),
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: Icon(
-                              module.icon,
-                              color: const Color(0xFF247A52),
-                              size: 25,
-                            ),
-                          ),
-                          const SizedBox(width: 13),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  module.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: const Color(0xFF20372A),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  module.subtitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: const Color(0xFF68766D),
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.chevron_left_rounded,
-                            color: Color(0xFF8A9A8F),
-                            size: 23,
-                          ),
-                        ],
+                      const SizedBox(height: 12),
+                      Text(
+                        module.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: const Color(0xFF20372A),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              );
-            }),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                'إدارة متجرك ببساطة ووضوح',
-                style: textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF829087),
-                ),
               ),
-            ),
-          ],
+            );
+          },
         ),
-      ),
-    );
-  }
-}
-
-class _WelcomePanel extends StatelessWidget {
-  const _WelcomePanel({required this.textTheme});
-
-  final TextTheme textTheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [Color(0xFF247A52), Color(0xFF18583B)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1C18583B),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-            ),
-            child: const Text(
-              'نسخة تجريبية',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 17),
-          Text(
-            'إدارة متجرك من مكان واحد',
-            style: textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              height: 1.3,
-            ),
-          ),
-          const SizedBox(height: 9),
-          Text(
-            'تابع المنتجات والمخزون والمبيعات والمصروفات من واجهة واحدة سهلة الاستخدام.',
-            style: textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.92),
-              height: 1.65,
-            ),
-          ),
-          const SizedBox(height: 17),
-          const Row(
-            children: [
-              Icon(Icons.touch_app_outlined, color: Colors.white, size: 18),
-              SizedBox(width: 7),
-              Text(
-                'اختر أحد الأقسام للبدء',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
