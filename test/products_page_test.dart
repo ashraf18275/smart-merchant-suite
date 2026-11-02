@@ -77,11 +77,6 @@ void main() {
   });
 
   testWidgets('adds fractional opening stock when the selected unit allows it', (tester) async {
-    await ProductRepository(database).addUnit(
-      name: 'كيلوجرام',
-      abbreviation: 'كجم',
-      allowsFraction: true,
-    );
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
