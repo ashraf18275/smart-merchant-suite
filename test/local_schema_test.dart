@@ -23,7 +23,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -33,8 +33,7 @@ void main() {
     expect(saleColumns.map((row) => row['name']), contains('warehouse_id'));
     expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock']));
     final units = await database.query('product_units');
-    expect(units, hasLength(1));
-    expect(units.single['name'], 'قطعة');
+    expect(units.map((row) => row['name']), containsAll(['قطعة', 'علبة', 'كرتونة', 'دستة', 'كيلوجرام', 'جرام', 'لتر', 'ملليلتر', 'متر', 'سنتيمتر', 'زوج', 'عبوة', 'شريط', 'زجاجة', 'لفة', 'طقم']));
     final branches = await database.query('branches');
     expect(branches.single['name'], 'الفرع الرئيسي');
     final warehouses = await database.query('warehouses');
@@ -175,6 +174,7 @@ void main() {
       'line_total_minor': 300,
     });
     await createFractionalQuantitiesSchema(database);
+    await createCommonUnitsSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
