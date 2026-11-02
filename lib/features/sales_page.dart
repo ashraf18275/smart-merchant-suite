@@ -134,7 +134,7 @@ class _SalesPageState extends State<SalesPage> {
                   controller: paid,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'المبلغ المدفوع بالجنيه'),
-                  validator: (v) => v == null || v.trim().isEmpty || _parseMoney(v) == null ? 'أدخل مبلغًا صحيحًا' : null,
+                  validator: (v) => v == null || v.trim().isEmpty ? null : (_parseMoney(v) == null ? 'أدخل مبلغًا صحيحًا' : null),
                 ),
               ]),
             ),
