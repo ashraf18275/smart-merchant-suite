@@ -73,7 +73,7 @@ void main() {
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'طن');
     await tester.enterText(fields.at(1), 'طن');
-    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(Checkbox));
     await tester.tap(find.text('حفظ'));
     await tester.pumpAndSettle();
     await pumpCatalog(tester);
