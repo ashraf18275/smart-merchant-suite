@@ -94,9 +94,9 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
     final quantityControllers = <int, TextEditingController>{
-      for (final p in availableProducts) p.id!: TextEditingController(text: '0'),
+      for (final p in availableProducts) p.id!: TextEditingController(),
     };
-    final paid = TextEditingController(text: '0.00');
+    final paid = TextEditingController();
     final key = GlobalKey<FormState>();
     final result = await showDialog<Map<String, Object?>?>(
       context: context,
@@ -121,6 +121,7 @@ class _SalesPageState extends State<SalesPage> {
                       decoration: const InputDecoration(labelText: 'الكمية', isDense: true),
                       validator: (v) {
                         final n = Quantity.parse(v ?? '', allowsFraction: _stockUnit(p.id).allowsFraction);
+                        if ((v ?? '').trim().isEmpty) return null;
                         if (n == null || n < 0) return 'كمية غير صحيحة';
                         if (n > (quantitiesByProduct[p.id] ?? 0)) return 'المتاح ${_quantity(quantitiesByProduct[p.id] ?? 0)}';
                         return null;
@@ -133,7 +134,7 @@ class _SalesPageState extends State<SalesPage> {
                   controller: paid,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'المبلغ المدفوع بالجنيه'),
-                  validator: (v) => v == null || _parseMoney(v) == null ? 'أدخل مبلغًا صحيحًا' : null,
+                  validator: (v) => v == null || v.trim().isEmpty || _parseMoney(v) == null ? 'أدخل مبلغًا صحيحًا' : null,
                 ),
               ]),
             ),
@@ -147,7 +148,7 @@ class _SalesPageState extends State<SalesPage> {
               final quantities = <int, int>{};
               for (final entry in quantityControllers.entries) {
                 final stockItem = _stockUnit(entry.key);
-                final n = Quantity.parse(entry.value.text, allowsFraction: stockItem.allowsFraction)!;
+                final n = Quantity.parse(entry.value.text.trim().isEmpty ? '0' : entry.value.text, allowsFraction: stockItem.allowsFraction)!;
                 if (n > 0) quantities[entry.key] = n;
               }
               if (quantities.isEmpty) {
@@ -158,7 +159,7 @@ class _SalesPageState extends State<SalesPage> {
               }
               Navigator.pop(ctx, {
                 'quantities': quantities,
-                'paidMinor': _parseMoney(paid.text)!,
+                'paidMinor': _parseMoney(paid.text.trim().isEmpty ? '0' : paid.text)!,
               });
             },
             child: const Text('حفظ الفاتورة'),
