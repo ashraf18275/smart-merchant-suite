@@ -371,13 +371,22 @@ class ProductRepository implements ProductStore, CatalogStore {
 
   @override
   Future<void> setUnitActive({required int id, required bool isActive}) async {
-    final rows = await _db.query('product_units', columns: ['name'],
-      where: 'id = ?', whereArgs: [id], limit: 1);
-    if (rows.isEmpty) throw AppException('وحدة القياس غير موجودة');
-    if (!isActive && rows.single['name'] == 'قطعة') {
-      throw AppException('لا يمكن إيقاف وحدة «قطعة» الافتراضية');
-    }
-    await _db.update('product_units', {'is_active': isActive ? 1 : 0},
-        where: 'id = ?', whereArgs: [id]);
+    await _db.transaction((txn) async {
+      final rows = await txn.query('product_units', columns: ['name'],
+        where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) throw AppException('وحدة القياس غير موجودة');
+      if (!isActive && rows.single['name'] == 'قطعة') {
+        throw AppException('لا يمكن إخفاء وحدة «قطعة» الافتراضية');
+      }
+      if (!isActive) {
+        final linkedProducts = await txn.query('products',
+          columns: ['id'], where: 'unit_id = ?', whereArgs: [id], limit: 1);
+        if (linkedProducts.isNotEmpty) {
+          throw AppException('لا يمكن إخفاء وحدة مرتبطة بمنتج. غيّر وحدة المنتج أولاً.');
+        }
+      }
+      await txn.update('product_units', {'is_active': isActive ? 1 : 0},
+          where: 'id = ?', whereArgs: [id]);
+    });
   }
 }
