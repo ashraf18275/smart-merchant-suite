@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/data/backup_schema.dart';
+import 'package:smart_merchant_suite/data/backup_restore_writer.dart';
 import 'package:smart_merchant_suite/data/backup_snapshot.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -15,6 +16,7 @@ void main() {
     final snapshotPath = '${directory.path}/snapshot.db';
     Database? source;
     Database? snapshot;
+    Database? restored;
 
     try {
       source = await databaseFactoryFfi.openDatabase(sourcePath);
@@ -141,7 +143,30 @@ void main() {
         (await snapshot.query('purchases')).single['supplier_id'],
         supplierId,
       );
+
+      // Exercise the complete file-backup -> restore path, not just snapshot
+      // readability. Restore into a separate database with the current schema.
+      restored = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+      await restored.execute('PRAGMA foreign_keys = ON');
+      await createLocalSchema(restored);
+      final backupData = <String, List<Map<String, Object?>>>{};
+      for (final table in BackupSchema.restoreInsertOrder) {
+        backupData[table] = await snapshot.query(table, orderBy: 'id ASC');
+      }
+      await restored.transaction(
+        (txn) => replaceBackupBusinessData(txn, backupData),
+      );
+
+      for (final table in BackupSchema.restoreInsertOrder) {
+        expect(
+          await restored.query(table, orderBy: 'id ASC'),
+          equals(backupData[table]),
+          reason: 'restored database must match backup table $table',
+        );
+      }
+      expect(await restored.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     } finally {
+      if (restored != null) await restored.close();
       if (snapshot != null) await snapshot.close();
       if (source != null) await source.close();
       await directory.delete(recursive: true);
