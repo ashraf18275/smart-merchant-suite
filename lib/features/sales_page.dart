@@ -16,11 +16,13 @@ class SalesPage extends StatefulWidget {
     required this.products,
     required this.sales,
     required this.warehouseStore,
+    required this.accountRepository,
   });
 
   final ProductCatalog products;
   final SalesService sales;
   final BranchWarehouseStore warehouseStore;
+  final AccountRepository accountRepository;
 
   @override
   State<SalesPage> createState() => _SalesPageState();
@@ -54,13 +56,18 @@ class _SalesPageState extends State<SalesPage> {
 
   Future<void> _load() async {
     try {
-      final values = await Future.wait([_products.all(), _sales.all(), widget.warehouseStore.warehouses()]);
+      final values = await Future.wait([
+        _products.all(),
+        _sales.all(),
+        widget.warehouseStore.warehouses(),
+      ]);
       final warehouses = values[2] as List<Warehouse>;
       final defaultWarehouse = warehouses.where((item) => item.name == 'المخزن الرئيسي' && item.branchName == 'الفرع الرئيسي');
       final selectedId = warehouses.any((item) => item.id == _selectedWarehouseId)
           ? _selectedWarehouseId
           : (defaultWarehouse.isNotEmpty ? defaultWarehouse.first.id : (warehouses.isEmpty ? null : warehouses.first.id));
       final stock = selectedId == null ? <WarehouseStock>[] : await widget.warehouseStore.stock(warehouseId: selectedId);
+      final customers = await widget.accountRepository.customers();
       if (!mounted) return;
       setState(() {
         _productsList = values[0] as List<Product>;
@@ -68,6 +75,7 @@ class _SalesPageState extends State<SalesPage> {
         _warehouses = warehouses;
         _selectedWarehouseId = selectedId;
         _warehouseStock = stock;
+        _customers = customers;
         _loading = false;
         _error = null;
       });
@@ -76,6 +84,8 @@ class _SalesPageState extends State<SalesPage> {
       setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل المبيعات.', operation: 'sales.load'); });
     }
   }
+
+  List<Map<String, Object?>> _customers = [];
 
   WarehouseStock _stockUnit(int? productId) {
     for (final item in _warehouseStock) {
@@ -98,6 +108,7 @@ class _SalesPageState extends State<SalesPage> {
     };
     final paid = TextEditingController(text: '0.00');
     final key = GlobalKey<FormState>();
+    int? selectedCustomerId;
     final result = await showDialog<Map<String, Object?>?>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -108,12 +119,25 @@ class _SalesPageState extends State<SalesPage> {
             key: key,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Align(alignment: Alignment.centerRight, child: Text('أدخل الكمية المطلوبة أمام كل صنف، واترك غير المطلوب صفرًا.')),
+                const Align(alignment: Alignment.centerRight, child: Text('العميل (اختياري)')),
+                DropdownButtonFormField<int?>(
+                  initialValue: null,
+                  decoration: const InputDecoration(labelText: 'بيع نقدي بدون عميل أو اختر عميلًا'),
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('بيع نقدي — بدون عميل')),
+                    for (final customer in _customers)
+                      DropdownMenuItem<int?>(
+                        value: customer['id'] as int,
+                        child: Text(customer['name'] as String),
+                      ),
+                  ],
+                  onChanged: (value) => selectedCustomerId = value,
+                ),
                 const SizedBox(height: 8),
                 ...availableProducts.map((p) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(children: [
-                    Expanded(child: Text('${p.name}\\nالمتاح بالمخزن المحدد: ${_quantity(quantitiesByProduct[p.id] ?? 0)} ${_stockUnit(p.id).unitName} • السعر: ${_money(p.priceMinor)}')),
+                    Expanded(child: Text('${p.name}\nالمتاح بالمخزن المحدد: ${_quantity(quantitiesByProduct[p.id] ?? 0)} ${_stockUnit(p.id).unitName} • السعر: ${_money(p.priceMinor)}')),
                     const SizedBox(width: 12),
                     SizedBox(width: 92, child: TextFormField(
                       controller: quantityControllers[p.id],
@@ -159,6 +183,7 @@ class _SalesPageState extends State<SalesPage> {
               Navigator.pop(ctx, {
                 'quantities': quantities,
                 'paidMinor': _parseMoney(paid.text)!,
+                'customerId': selectedCustomerId,
               });
             },
             child: const Text('حفظ الفاتورة'),
@@ -174,6 +199,7 @@ class _SalesPageState extends State<SalesPage> {
         quantities: Map<int, int>.from(result['quantities']! as Map),
         paidMinor: result['paidMinor']! as int,
         warehouseId: _selectedWarehouseId!,
+        customerId: result['customerId'] as int?,
       );
       await _load();
       if (mounted) {
@@ -233,7 +259,7 @@ class _SalesPageState extends State<SalesPage> {
                                   leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
                                   title: Text('فاتورة رقم ${sale.id}'),
                                   subtitle: Text(
-                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\\nالمصدر: ${sale.branchName ?? 'غير محدد'} — ${sale.warehouseName ?? 'فاتورة قديمة'}\\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
+                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\nالمصدر: ${sale.branchName ?? 'غير محدد'} — ${sale.warehouseName ?? 'فاتورة قديمة'}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
                                   ),
                                   isThreeLine: true,
                                   trailing: Text(_money(sale.totalMinor)),

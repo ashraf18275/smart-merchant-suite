@@ -20,6 +20,13 @@ class AccountRepository {
     });
   }
 
+  /// Returns active customers for selection in sales and account screens.
+  Future<List<Map<String, Object?>>> customers() => _db.query(
+    'customers',
+    where: 'is_active = 1',
+    orderBy: 'name COLLATE NOCASE ASC, id ASC',
+  );
+
   Future<int> recordSupplierPayment({
     required int supplierId,
     required int amountMinor,

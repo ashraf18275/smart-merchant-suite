@@ -19,6 +19,17 @@ void main() {
   });
   tearDown(() async => db.close());
 
+  test('lists only active customers alphabetically for sales selection', () async {
+    final zed = await accounts.addCustomer(name: 'زيد');
+    final ali = await accounts.addCustomer(name: 'علي');
+    final inactive = await accounts.addCustomer(name: 'عميل موقوف');
+    await db.update('customers', {'is_active': 0}, where: 'id = ?', whereArgs: [inactive]);
+
+    final customers = await accounts.customers();
+    expect(customers.map((row) => row['id']), [ali, zed]);
+    expect(customers.map((row) => row['name']), ['علي', 'زيد']);
+  });
+
   test('records supplier payments and returns a chronological running balance', () async {
     final supplierId = await purchases.addSupplier(name: 'مورد');
     await db.insert('supplier_account_entries', {
@@ -27,9 +38,7 @@ void main() {
       'entry_type': 'purchase',
       'created_at': '2026-01-01T10:00:00.000Z',
     });
-    await accounts.recordSupplierPayment(
-      supplierId: supplierId, amountMinor: 2500,
-    );
+    await accounts.recordSupplierPayment(supplierId: supplierId, amountMinor: 2500);
     expect(await accounts.supplierBalance(supplierId), 7500);
     final statement = await accounts.supplierStatement(supplierId);
     expect(statement.map((row) => row['running_balance_minor']), [10000, 7500]);
@@ -44,9 +53,7 @@ void main() {
       'entry_type': 'sale',
       'created_at': '2026-01-01T10:00:00.000Z',
     });
-    await accounts.recordCustomerReceipt(
-      customerId: customerId, amountMinor: 1500,
-    );
+    await accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 1500);
     expect(await accounts.customerBalance(customerId), 2500);
     await expectLater(
       accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 2501),

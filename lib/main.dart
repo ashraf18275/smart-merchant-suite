@@ -4,6 +4,7 @@ import 'application/services/expense_application_service.dart';
 import 'application/services/product_application_service.dart';
 import 'application/services/sales_application_service.dart';
 import 'core/app_error.dart';
+import 'data/account_repository.dart';
 import 'data/expense_repository.dart';
 import 'data/local_database.dart';
 import 'data/product_repository.dart';
@@ -69,31 +70,11 @@ class HomeDashboard extends StatelessWidget {
   const HomeDashboard({super.key});
 
   static const modules = <({IconData icon, String title, String subtitle})>[
-    (
-      icon: Icons.inventory_2_outlined,
-      title: 'المنتجات والمخزون',
-      subtitle: 'إضافة المنتجات ومتابعة الأرصدة',
-    ),
-    (
-      icon: Icons.point_of_sale_outlined,
-      title: 'المبيعات والفواتير',
-      subtitle: 'تسجيل عمليات البيع والمرتجعات',
-    ),
-    (
-      icon: Icons.account_balance_wallet_outlined,
-      title: 'المصروفات والأرباح',
-      subtitle: 'تسجيل المصروفات ومراجعة الملخص',
-    ),
-    (
-      icon: Icons.backup_outlined,
-      title: 'النسخ الاحتياطي وتصدير البيانات',
-      subtitle: 'حفظ نسخة محلية وتصدير ملفات CSV',
-    ),
-    (
-      icon: Icons.warehouse_outlined,
-      title: 'الفروع والمخازن',
-      subtitle: 'إدارة الأرصدة والتحويلات والتسويات',
-    ),
+    (icon: Icons.inventory_2_outlined, title: 'المنتجات والمخزون', subtitle: 'إضافة المنتجات ومتابعة الأرصدة'),
+    (icon: Icons.point_of_sale_outlined, title: 'المبيعات والفواتير', subtitle: 'تسجيل عمليات البيع والمرتجعات'),
+    (icon: Icons.account_balance_wallet_outlined, title: 'المصروفات والأرباح', subtitle: 'تسجيل المصروفات ومراجعة الملخص'),
+    (icon: Icons.backup_outlined, title: 'النسخ الاحتياطي وتصدير البيانات', subtitle: 'حفظ نسخة محلية وتصدير ملفات CSV'),
+    (icon: Icons.warehouse_outlined, title: 'الفروع والمخازن', subtitle: 'إدارة الأرصدة والتحويلات والتسويات'),
   ];
 
   Future<void> _openModule(BuildContext context, int index) async {
@@ -107,29 +88,22 @@ class HomeDashboard extends StatelessWidget {
       try {
         final Widget page = switch (index) {
           0 => ProductsPage(
-              repository: ProductApplicationService(
-                ProductRepository(database),
-              ),
+              repository: ProductApplicationService(ProductRepository(database)),
               catalog: ProductRepository(database),
             ),
           1 => SalesPage(
               products: ProductApplicationService(ProductRepository(database)),
               sales: SalesApplicationService(SalesRepository(database)),
               warehouseStore: WarehouseRepository(database),
+              accountRepository: AccountRepository(database),
             ),
-          2 => ExpensesPage(
-              repository: ExpenseApplicationService(
-                ExpenseRepository(database),
-              ),
-            ),
+          2 => ExpensesPage(repository: ExpenseApplicationService(ExpenseRepository(database))),
           3 => DataTransferPage(database: database),
           4 => BranchWarehousePage(store: WarehouseRepository(database)),
           _ => const SizedBox.shrink(),
         };
 
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => page),
-        );
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
       } finally {
         await database.close();
       }
@@ -152,11 +126,7 @@ class HomeDashboard extends StatelessWidget {
         _ => 'module.open',
       };
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            appErrorMessage(error, fallback: fallback, operation: operation),
-          ),
-        ),
+        SnackBar(content: Text(appErrorMessage(error, fallback: fallback, operation: operation))),
       );
     }
   }
@@ -167,9 +137,7 @@ class HomeDashboard extends StatelessWidget {
     final columns = width >= 900 ? 4 : width >= 600 ? 3 : 2;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('عدة التاجر الذكي'),
-      ),
+      appBar: AppBar(title: const Text('عدة التاجر الذكي')),
       body: SafeArea(
         top: false,
         child: GridView.builder(
@@ -195,15 +163,8 @@ class HomeDashboard extends StatelessWidget {
                       Container(
                         width: 58,
                         height: 58,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF4ED),
-                          borderRadius: BorderRadius.circular(17),
-                        ),
-                        child: Icon(
-                          module.icon,
-                          color: const Color(0xFF247A52),
-                          size: 30,
-                        ),
+                        decoration: BoxDecoration(color: const Color(0xFFEAF4ED), borderRadius: BorderRadius.circular(17)),
+                        child: Icon(module.icon, color: const Color(0xFF247A52), size: 30),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -211,10 +172,7 @@ class HomeDashboard extends StatelessWidget {
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: const Color(0xFF20372A),
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: const Color(0xFF20372A), fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
