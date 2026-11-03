@@ -17,6 +17,14 @@ class SalesRepository implements SalesStore {
     required int warehouseId,
     int? customerId,
   }) async {
+    // Keep core invariants enforced at the persistence boundary as well as
+    // in the application service; repositories may be called by other flows.
+    if (quantities.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل');
+    if (quantities.values.any((quantity) => quantity <= 0)) {
+      throw AppException('كمية البيع يجب أن تكون أكبر من صفر');
+    }
+    if (paidMinor < 0) throw AppException('المبلغ المدفوع لا يمكن أن يكون سالبًا');
+
     return _db.transaction((txn) async {
       if (customerId != null) {
         final customers = await txn.query(
