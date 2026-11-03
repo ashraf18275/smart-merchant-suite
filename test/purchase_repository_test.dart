@@ -477,4 +477,59 @@ void main() {
     expect((await db.query('inventory_movements')).single['quantity_delta'], 500);
   });
 
+
+
+  test('rejects purchase when the warehouse branch is inactive', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج فرع موقوف', costMinor: 500, priceMinor: 800,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد فرع موقوف');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    final warehouse = (await db.query(
+      'warehouses', columns: ['branch_id'],
+      where: 'id = ?', whereArgs: [warehouseId],
+    )).single;
+    await db.update('branches', {'is_active': 0},
+        where: 'id = ?', whereArgs: [warehouse['branch_id']]);
+
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId,
+        warehouseId: warehouseId,
+        items: [PurchaseLineInput(
+          productId: productId, quantity: 1000, unitCostMinor: 500,
+        )],
+        paidMinor: 0,
+      ),
+      throwsA(isA<AppException>()),
+    );
+
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect(await db.query('supplier_account_entries'), isEmpty);
+    expect(await db.query('inventory_movements'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 0);
+  });
+
+  test('rounds a half-piastre weighted average upward', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج متوسط نصف قرش', costMinor: 1000, priceMinor: 1500,
+      stockQuantity: 1000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد التقريب');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(
+        productId: productId, quantity: 1000, unitCostMinor: 1001,
+      )],
+      paidMinor: 0,
+    );
+
+    expect((await products.all()).single.costMinor, 1001);
+    expect((await db.query('purchases')).single['total_minor'], 1001);
+  });
+
 }
