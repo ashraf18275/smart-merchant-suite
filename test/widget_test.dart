@@ -17,6 +17,7 @@ void main() {
     expect(find.text('إدارة متجرك من مكان واحد'), findsNothing);
     expect(find.text('المنتجات والمخزون'), findsOneWidget);
     expect(find.text('المبيعات والفواتير'), findsOneWidget);
+    expect(find.text('المشتريات والاستلام'), findsOneWidget);
     expect(find.text('المصروفات والأرباح'), findsOneWidget);
     expect(find.text('النسخ الاحتياطي وتصدير البيانات'), findsOneWidget);
     expect(find.text('الفروع والمخازن'), findsOneWidget);

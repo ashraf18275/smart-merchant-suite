@@ -100,14 +100,14 @@ class HomeDashboard extends StatelessWidget {
               warehouseStore: WarehouseRepository(database),
               accountRepository: AccountRepository(database),
             ),
-          2 => ExpensesPage(repository: ExpenseApplicationService(ExpenseRepository(database))),
-          5 => PurchasesPage(
+          2 => PurchasesPage(
               purchases: PurchaseRepository(database),
               products: ProductRepository(database),
               warehouses: WarehouseRepository(database),
             ),
-          3 => DataTransferPage(database: database),
-          4 => BranchWarehousePage(store: WarehouseRepository(database)),
+          3 => ExpensesPage(repository: ExpenseApplicationService(ExpenseRepository(database))),
+          4 => DataTransferPage(database: database),
+          5 => BranchWarehousePage(store: WarehouseRepository(database)),
           _ => const SizedBox.shrink(),
         };
 
@@ -120,19 +120,19 @@ class HomeDashboard extends StatelessWidget {
       final fallback = switch (index) {
         0 => 'تعذر فتح قاعدة البيانات المحلية.',
         1 => 'تعذر فتح شاشة المبيعات.',
-        2 => 'تعذر فتح شاشة المصروفات.',
-        3 => 'تعذر فتح أدوات تصدير البيانات.',
-        4 => 'تعذر فتح إدارة الفروع والمخازن.',
-        5 => 'تعذر فتح شاشة المشتريات.',
+        2 => 'تعذر فتح شاشة المشتريات.',
+        3 => 'تعذر فتح شاشة المصروفات.',
+        4 => 'تعذر فتح أدوات تصدير البيانات.',
+        5 => 'تعذر فتح إدارة الفروع والمخازن.',
         _ => 'تعذر فتح القسم المطلوب.',
       };
       final operation = switch (index) {
         0 => 'database.open',
         1 => 'sales.open',
-        2 => 'expenses.open',
-        3 => 'data_transfer.open',
-        4 => 'warehouse.open',
-        5 => 'purchases.open',
+        2 => 'purchases.open',
+        3 => 'expenses.open',
+        4 => 'data_transfer.open',
+        5 => 'warehouse.open',
         _ => 'module.open',
       };
       ScaffoldMessenger.of(context).showSnackBar(
