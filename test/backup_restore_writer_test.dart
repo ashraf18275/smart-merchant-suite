@@ -231,4 +231,58 @@ void main() {
     }
   });
 
+
+  test('restores normalized version 8 and version 7 payloads without inventing history', () async {
+    final ids = await seedCompleteBusinessData();
+    final current = await captureBusinessData(database);
+
+    final version8 = {
+      for (final entry in current.entries)
+        entry.key: entry.value.map((row) => Map<String, Object?>.from(row)).toList(),
+    };
+    version8['customers'] = [];
+    version8['supplier_account_entries'] = [];
+    version8['customer_account_entries'] = [];
+    version8['sales'] = version8['sales']!.map((row) {
+      final compatible = Map<String, Object?>.from(row)..remove('customer_id');
+      return compatible;
+    }).toList();
+
+    await database.transaction(
+      (txn) => replaceBackupBusinessData(txn, version8),
+    );
+    expect(await database.query('purchases'), hasLength(1));
+    expect(await database.query('purchase_items'), hasLength(1));
+    expect(await database.query('customers'), isEmpty);
+    expect(await database.query('customer_account_entries'), isEmpty);
+    expect(
+      (await database.query('sales')).single['customer_id'],
+      isNull,
+    );
+    expect(
+      (await database.query('purchases')).single['supplier_id'],
+      ids['supplier_id'],
+    );
+
+    final version7 = {
+      for (final entry in version8.entries)
+        entry.key: entry.value.map((row) => Map<String, Object?>.from(row)).toList(),
+    };
+    version7['suppliers'] = [];
+    version7['purchases'] = [];
+    version7['purchase_items'] = [];
+    version7['supplier_account_entries'] = [];
+
+    await database.transaction(
+      (txn) => replaceBackupBusinessData(txn, version7),
+    );
+    expect(await database.query('suppliers'), isEmpty);
+    expect(await database.query('purchases'), isEmpty);
+    expect(await database.query('purchase_items'), isEmpty);
+    expect(await database.query('supplier_account_entries'), isEmpty);
+    expect(await database.query('customers'), isEmpty);
+    expect(await database.query('customer_account_entries'), isEmpty);
+    expect(await database.rawQuery('PRAGMA foreign_key_check'), isEmpty);
+  });
+
 }
