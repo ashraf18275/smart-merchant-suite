@@ -44,7 +44,60 @@ Future<void> createLocalSchema(Database db) async {
   await createSaleWarehouseSchema(db);
   await createFractionalQuantitiesSchema(db);
   await createPurchaseSchema(db);
+  await createAccountSchema(db);
 }
+
+import 'package:sqflite_common/sqlite_api.dart';
+
+/// Adds customer records and append-only account ledgers.
+/// Positive entries increase the balance owed; negative entries reduce it.
+Future<void> createAccountSchema(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+      phone TEXT,
+      address TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS supplier_account_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_id INTEGER NOT NULL,
+      amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+      entry_type TEXT NOT NULL CHECK (entry_type IN ('purchase', 'payment', 'adjustment')),
+      reference_id INTEGER,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS customer_account_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+      entry_type TEXT NOT NULL CHECK (entry_type IN ('sale', 'receipt', 'adjustment')),
+      reference_id INTEGER,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (customer_id) REFERENCES customers(id)
+    )
+  ''');
+  final salesColumns = await db.rawQuery('PRAGMA table_info(sales)');
+  if (!salesColumns.any((row) => row['name'] == 'customer_id')) {
+    await db.execute(
+      'ALTER TABLE sales ADD COLUMN customer_id INTEGER REFERENCES customers(id)',
+    );
+  }
+  await db.insert('schema_migrations', {
+    'version': 9,
+    'applied_at': DateTime.now().toUtc().toIso8601String(),
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+}
+
 
 /// Adds sales tables for databases that were created at version 1.
 Future<void> createSalesSchema(Database db) async {

@@ -106,6 +106,24 @@ class PurchaseRepository {
         'paid_minor': paidMinor,
         'created_at': stamp,
       });
+      await txn.insert('supplier_account_entries', {
+        'supplier_id': supplierId,
+        'amount_minor': total,
+        'entry_type': 'purchase',
+        'reference_id': purchaseId,
+        'note': 'فاتورة مشتريات رقم $purchaseId',
+        'created_at': stamp,
+      });
+      if (paidMinor > 0) {
+        await txn.insert('supplier_account_entries', {
+          'supplier_id': supplierId,
+          'amount_minor': -paidMinor,
+          'entry_type': 'payment',
+          'reference_id': purchaseId,
+          'note': 'سداد عند إنشاء فاتورة مشتريات رقم $purchaseId',
+          'created_at': stamp,
+        });
+      }
 
       for (final item in prepared) {
         final productId = item['productId']!;

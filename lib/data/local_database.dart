@@ -20,7 +20,7 @@ Future<sqflite.Database> openLocalDatabase() async {
   if (isMobile) {
     return sqflite.openDatabase(
       databasePath,
-      version: 8,
+      version: 9,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
@@ -30,6 +30,7 @@ Future<sqflite.Database> openLocalDatabase() async {
         if (oldVersion < 6) await createSaleWarehouseSchema(db);
         if (oldVersion < 7) await createFractionalQuantitiesSchema(db);
         if (oldVersion < 8) await createPurchaseSchema(db);
+        if (oldVersion < 9) await createAccountSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');

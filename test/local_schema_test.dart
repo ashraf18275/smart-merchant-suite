@@ -23,15 +23,15 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );
     final names = tables.map((row) => row['name']).toSet();
     final saleColumns = await database.rawQuery('PRAGMA table_info(sales)');
-    expect(saleColumns.map((row) => row['name']), contains('warehouse_id'));
-    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items']));
+    expect(saleColumns.map((row) => row['name']), containsAll(['warehouse_id', 'customer_id']));
+    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries']));
     final units = await database.query('product_units');
     expect(units, hasLength(1));
     expect(units.single['name'], 'قطعة');
@@ -175,6 +175,8 @@ void main() {
       'line_total_minor': 300,
     });
     await createFractionalQuantitiesSchema(database);
+    await createPurchaseSchema(database);
+    await createAccountSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
@@ -183,7 +185,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     final migratedProduct = (await database.query('products')).single;
     expect(migratedProduct['stock_quantity'], 6000);
     expect(migratedProduct['unit_id'], isNotNull);

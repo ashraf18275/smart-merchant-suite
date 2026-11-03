@@ -45,6 +45,9 @@ void main() {
     expect(purchase['id'], purchaseId);
     expect(purchase['total_minor'], 6000);
     expect(purchase['paid_minor'], 3000);
+    final supplierEntries = await db.query('supplier_account_entries', orderBy: 'id ASC');
+    expect(supplierEntries.map((row) => row['amount_minor']), [6000, -3000]);
+    expect(supplierEntries.map((row) => row['entry_type']), ['purchase', 'payment']);
     final line = (await db.query('purchase_items')).single;
     expect(line['quantity'], 3000);
     expect(line['unit_cost_minor'], 2000);
