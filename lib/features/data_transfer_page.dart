@@ -13,6 +13,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../core/app_error.dart';
 import '../core/quantity.dart';
 
+import '../data/backup_schema.dart';
 import '../data/csv_encoder.dart';
 
 class _ExportTable {
@@ -273,7 +274,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion < 3 || schemaVersion > 9) {
+      if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
           'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 9).',
         );
@@ -345,12 +346,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
           ...row, 'warehouse_id': warehouseId,
         }).toList(growable: false);
       }
-      if (schemaVersion < 8) {
+      if (!BackupSchema.hasPurchaseData(schemaVersion)) {
         data['suppliers'] = [];
         data['purchases'] = [];
         data['purchase_items'] = [];
       }
-      if (schemaVersion < 9) {
+      if (!BackupSchema.hasAccountData(schemaVersion)) {
         data['customers'] = [];
         data['supplier_account_entries'] = [];
         data['customer_account_entries'] = [];
@@ -410,46 +411,11 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (confirmed != true || !mounted) return;
 
       await widget.database.transaction((txn) async {
-        // Remove dependent records before their referenced owners.
-        for (final table in [
-          'inventory_movements',
-          'sale_items',
-          'supplier_account_entries',
-          'customer_account_entries',
-          'purchase_items',
-          'sales',
-          'purchases',
-          'expenses',
-          'product_warehouse_stock',
-          'products',
-          'product_categories',
-          'product_units',
-          'warehouses',
-          'branches',
-          'customers',
-          'suppliers',
-        ]) {
+        // Centralized order preserves all foreign-key dependencies.
+        for (final table in BackupSchema.restoreDeleteOrder) {
           await txn.delete(table);
         }
-        // Rebuild owners before dependent documents and account-ledger rows.
-        for (final table in [
-          'branches',
-          'warehouses',
-          'product_categories',
-          'product_units',
-          'products',
-          'product_warehouse_stock',
-          'customers',
-          'sales',
-          'sale_items',
-          'expenses',
-          'inventory_movements',
-          'suppliers',
-          'purchases',
-          'purchase_items',
-          'supplier_account_entries',
-          'customer_account_entries',
-        ]) {
+        for (final table in BackupSchema.restoreInsertOrder) {
           for (final row in data[table]!) {
             await txn.insert(table, row, conflictAlgorithm: ConflictAlgorithm.abort);
           }
@@ -494,8 +460,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 9) {
+      if (schemaVersion != BackupSchema.currentVersion) {
         throw AppException('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
+      }
+      final exportedTableNames = _tables.map((spec) => spec.table).toSet();
+      if (!exportedTableNames.containsAll(BackupSchema.currentTableNames)) {
+        throw AppException('تعريف النسخة الاحتياطية لا يشمل كل جداول بيانات النشاط.');
       }
 
       // Require SQLite to finish checkpointing before copying the database file.
@@ -542,7 +512,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final backupVersion = backupVersionRows.isEmpty
           ? 0
           : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (backupVersion != 9) {
+      if (backupVersion != BackupSchema.currentVersion) {
         throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
