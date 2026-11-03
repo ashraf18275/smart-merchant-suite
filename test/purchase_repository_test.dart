@@ -93,8 +93,6 @@ void main() {
     expect(await db.query('purchase_items'), isEmpty);
     expect((await products.all()).single.stockQuantity, 0);
   });
-}
-
 
   test('recalculates weighted average using remaining stock after a sale', () async {
     final productId = await products.add(const Product(
@@ -249,3 +247,5 @@ void main() {
         .singleWhere((row) => row.productId == productId);
     expect(warehouseStock.quantity, 0);
   });
+
+}
