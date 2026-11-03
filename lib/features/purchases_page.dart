@@ -285,7 +285,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
               ),
           ]),
           DropdownButtonFormField<int>(
-            value: line.productId,
+            initialValue: line.productId,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'اختر المنتج'),
             items: [
@@ -347,7 +347,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
                 children: [
                   Row(children: [
                     Expanded(child: DropdownButtonFormField<int>(
-                      value: _supplierId,
+                      initialValue: _supplierId,
                       isExpanded: true,
                       decoration: const InputDecoration(labelText: 'المورد'),
                       items: [for (final s in _suppliers)
@@ -364,7 +364,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
                   ]),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: _warehouseId,
+                    initialValue: _warehouseId,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'مخزن الاستلام'),
                     items: [for (final w in _warehouses)
