@@ -7,7 +7,8 @@ insert into auth.users (id) values
   ('10000000-0000-0000-0000-000000000002'),
   ('10000000-0000-0000-0000-000000000003'),
   ('10000000-0000-0000-0000-000000000004'),
-  ('10000000-0000-0000-0000-000000000005')
+  ('10000000-0000-0000-0000-000000000005'),
+  ('10000000-0000-0000-0000-000000000006')
 on conflict (id) do nothing;
 
 insert into public.businesses (id, name, owner_user_id) values
@@ -26,7 +27,11 @@ insert into public.business_members (
   ('21000000-0000-0000-0000-000000000004',
    '20000000-0000-0000-0000-000000000001',
    '10000000-0000-0000-0000-000000000004',
-   'Inactive member', false, false)
+   'Inactive member', false, false),
+  ('21000000-0000-0000-0000-000000000006',
+   '20000000-0000-0000-0000-000000000001',
+   '10000000-0000-0000-0000-000000000006',
+   'Delegated administrator', false, true)
 on conflict (id) do nothing;
 
 insert into public.member_permissions (
@@ -37,7 +42,13 @@ insert into public.member_permissions (
    'products.view', true),
   ('20000000-0000-0000-0000-000000000001',
    '21000000-0000-0000-0000-000000000004',
-   'products.view', true)
+   'products.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
+   'products.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
+   'users.edit', true)
 on conflict (member_id, permission_key) do nothing;
 
 insert into public.cloud_products (
@@ -65,7 +76,7 @@ on conflict (id) do nothing;
 -- The minimal PostgreSQL CI database emulates Supabase's public-schema read grants.
 grant usage on schema public to authenticated;
 grant select on public.businesses, public.cloud_products, public.cloud_inventory_movements,
-  public.cloud_sales, public.cloud_sale_items, public.cloud_expenses to authenticated;
+  public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
@@ -80,6 +91,10 @@ declare
   v_stock bigint;
   v_mismatched_sale_rejected boolean := false;
   v_mismatched_adjustment_rejected boolean := false;
+  v_owner_member_id uuid;
+  v_count_audit integer;
+  v_delegated_escalation_rejected boolean := false;
+  v_owner_change_rejected boolean := false;
   v_other_business_adjustment_rejected boolean := false;
 begin
   select count(*) into v_count from public.cloud_products;
@@ -267,6 +282,68 @@ begin
   select count(*) into v_count from public.cloud_products;
   if v_count <> 0 then
     raise exception 'inactive membership failed: inactive member sees % products', v_count;
+  end if;
+
+  -- The owner can change a member's permissions and the RPC writes an audit event atomically.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+  perform public.replace_member_permissions(
+    '20000000-0000-0000-0000-000000000001',
+    '21000000-0000-0000-0000-000000000003',
+    array['products.view']
+  );
+
+  select count(*) into v_count_audit
+  from public.audit_events
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and action_key = 'users.permissions.update'
+    and entity_id = '21000000-0000-0000-0000-000000000003';
+
+  if v_count_audit <> 1 then
+    raise exception 'audit regression: expected one permission-change event, got %', v_count_audit;
+  end if;
+
+  -- Delegated admin may preserve or grant only capabilities it already holds.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006', true);
+  perform public.replace_member_permissions(
+    '20000000-0000-0000-0000-000000000001',
+    '21000000-0000-0000-0000-000000000003',
+    array['products.view']
+  );
+
+  begin
+    perform public.replace_member_permissions(
+      '20000000-0000-0000-0000-000000000001',
+      '21000000-0000-0000-0000-000000000003',
+      array['sales.create']
+    );
+    raise exception 'delegation regression: admin granted a permission it does not hold';
+  exception when insufficient_privilege then
+    v_delegated_escalation_rejected := true;
+  end;
+
+  if not v_delegated_escalation_rejected then
+    raise exception 'delegation regression: privilege escalation was not rejected';
+  end if;
+
+  select id into v_owner_member_id
+  from public.business_members
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and user_id = '10000000-0000-0000-0000-000000000001'
+    and is_owner = true;
+
+  begin
+    perform public.replace_member_permissions(
+      '20000000-0000-0000-0000-000000000001',
+      v_owner_member_id,
+      array['products.view']
+    );
+    raise exception 'owner protection regression: owner permissions were changed';
+  exception when insufficient_privilege then
+    v_owner_change_rejected := true;
+  end;
+
+  if not v_owner_change_rejected then
+    raise exception 'owner protection regression: owner permission change was not rejected';
   end if;
 
   -- A user with no membership in either business receives no tenant data.
