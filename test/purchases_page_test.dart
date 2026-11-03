@@ -11,7 +11,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 Future<void> pumpDatabaseResult(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
-  await tester.pump();
+  await tester.pumpAndSettle();
 }
 
 void main() {
