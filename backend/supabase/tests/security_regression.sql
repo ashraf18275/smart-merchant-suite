@@ -75,7 +75,11 @@ declare
   v_count integer;
   v_sale_one uuid;
   v_sale_two uuid;
+  v_movement_one uuid;
+  v_movement_two uuid;
   v_stock bigint;
+  v_mismatched_sale_rejected boolean := false;
+  v_mismatched_adjustment_rejected boolean := false;
   v_other_business_adjustment_rejected boolean := false;
 begin
   select count(*) into v_count from public.cloud_products;
@@ -148,6 +152,70 @@ begin
 
   if v_stock <> 8 then
     raise exception 'idempotency failed: expected stock 8 after one sale and retry, got %', v_stock;
+  end if;
+
+  begin
+    perform public.create_cloud_sale(
+      '20000000-0000-0000-0000-000000000001',
+      jsonb_build_array(jsonb_build_object(
+        'product_id', '30000000-0000-0000-0000-000000000001',
+        'quantity', 1
+      )),
+      100,
+      '50000000-0000-0000-0000-000000000001'
+    );
+    raise exception 'idempotency failed: reused sale key accepted a different payload';
+  exception when invalid_parameter_value then
+    v_mismatched_sale_rejected := true;
+  end;
+
+  if not v_mismatched_sale_rejected then
+    raise exception 'idempotency failed: mismatched sale payload was not rejected';
+  end if;
+
+  v_movement_one := public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    3,
+    'test inventory count',
+    '50000000-0000-0000-0000-000000000010'
+  );
+
+  v_movement_two := public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    3,
+    'test inventory count',
+    '50000000-0000-0000-0000-000000000010'
+  );
+
+  if v_movement_one is distinct from v_movement_two then
+    raise exception 'idempotency failed: inventory retry returned a different movement id';
+  end if;
+
+  begin
+    perform public.adjust_cloud_inventory(
+      '20000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001',
+      4,
+      'test inventory count',
+      '50000000-0000-0000-0000-000000000010'
+    );
+    raise exception 'idempotency failed: reused inventory key accepted a different payload';
+  exception when invalid_parameter_value then
+    v_mismatched_adjustment_rejected := true;
+  end;
+
+  if not v_mismatched_adjustment_rejected then
+    raise exception 'idempotency failed: mismatched inventory payload was not rejected';
+  end if;
+
+  select stock_quantity into v_stock
+  from public.cloud_products
+  where id = '30000000-0000-0000-0000-000000000001';
+
+  if v_stock <> 11 then
+    raise exception 'idempotency failed: expected stock 11 after one adjustment and retry, got %', v_stock;
   end if;
 
   select count(*) into v_count from public.cloud_sales
