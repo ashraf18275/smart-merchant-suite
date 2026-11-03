@@ -80,6 +80,7 @@ void main() {
     expect(find.text('إجمالي البند: 60.00 ج.م'), findsOneWidget);
     expect(find.text('60.00 ج.م'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('حفظ الفاتورة واستلام المخزون'));
     await tester.tap(find.text('حفظ الفاتورة واستلام المخزون'));
     await tester.pumpAndSettle();
     await pumpDatabaseResult(tester);

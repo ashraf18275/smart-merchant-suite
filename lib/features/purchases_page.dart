@@ -112,58 +112,19 @@ class _PurchasesPageState extends State<PurchasesPage> {
   }
 
   Future<void> _addSupplier() async {
-    final name = TextEditingController();
-    final phone = TextEditingController();
-    final address = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final saved = await showDialog<bool>(
+    final draft = await showDialog<_SupplierDraft>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة مورد'),
-        content: Form(
-          key: formKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(
-              controller: name,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'اسم المورد *'),
-              validator: (v) => v == null || v.trim().isEmpty
-                  ? 'اسم المورد مطلوب'
-                  : null,
-            ),
-            TextField(controller: phone,
-                decoration: const InputDecoration(labelText: 'الهاتف')),
-            TextField(controller: address,
-                decoration: const InputDecoration(labelText: 'العنوان')),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: const Text('حفظ المورد'),
-          ),
-        ],
-      ),
+      builder: (ctx) => const _AddSupplierDialog(),
     );
-    if (saved == true) {
-      try {
-        final id = await widget.purchases.addSupplier(
-          name: name.text, phone: phone.text, address: address.text);
-        await _load();
-        if (mounted) setState(() => _supplierId = id);
-      } catch (error) {
-        _showError(error, 'تعذر حفظ المورد.');
-      }
+    if (draft == null) return;
+    try {
+      final id = await widget.purchases.addSupplier(
+        name: draft.name, phone: draft.phone, address: draft.address);
+      await _load();
+      if (mounted) setState(() => _supplierId = id);
+    } catch (error) {
+      _showError(error, 'تعذر حفظ المورد.');
     }
-    name.dispose();
-    phone.dispose();
-    address.dispose();
   }
 
   Product? _product(int? id) {
@@ -422,5 +383,79 @@ class _PurchasesPageState extends State<PurchasesPage> {
                   ),
                 ],
               ),
+  );
+}
+
+
+class _SupplierDraft {
+  const _SupplierDraft({
+    required this.name,
+    required this.phone,
+    required this.address,
+  });
+  final String name;
+  final String phone;
+  final String address;
+}
+
+class _AddSupplierDialog extends StatefulWidget {
+  const _AddSupplierDialog();
+
+  @override
+  State<_AddSupplierDialog> createState() => _AddSupplierDialogState();
+}
+
+class _AddSupplierDialogState extends State<_AddSupplierDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _address = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _address.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('إضافة مورد'),
+    content: Form(
+      key: _formKey,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextFormField(
+          controller: _name,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'اسم المورد *'),
+          validator: (value) => value == null || value.trim().isEmpty
+              ? 'اسم المورد مطلوب'
+              : null,
+        ),
+        TextField(controller: _phone,
+          decoration: const InputDecoration(labelText: 'الهاتف')),
+        TextField(controller: _address,
+          decoration: const InputDecoration(labelText: 'العنوان')),
+      ]),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_formKey.currentState!.validate()) {
+            Navigator.pop(context, _SupplierDraft(
+              name: _name.text,
+              phone: _phone.text,
+              address: _address.text,
+            ));
+          }
+        },
+        child: const Text('حفظ المورد'),
+      ),
+    ],
   );
 }
