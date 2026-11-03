@@ -500,35 +500,28 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (backupVersion != BackupSchema.currentVersion) {
         throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
+      // Validate the snapshot's complete schema. Do not compare its rows with
+      // the live database here: writes may legitimately commit after VACUUM
+      // INTO has captured its consistent point-in-time snapshot.
       for (final spec in _tables) {
-        final originalRows = await widget.database.query(
-          spec.table,
-          columns: spec.columns,
-          orderBy: 'id ASC',
+        final tableInfo = await opened.rawQuery(
+          'PRAGMA table_info(${spec.table})',
         );
-        final backupRows = await opened.query(
-          spec.table,
-          columns: spec.columns,
-          orderBy: 'id ASC',
-        );
-        // Compare actual row contents as well as counts; equal counts alone
-        // cannot detect a stale or mismatched copy.
-        if (jsonEncode(originalRows) != jsonEncode(backupRows)) {
-          throw AppException('لم تتطابق بيانات جدول ${spec.label} في النسخة الاحتياطية.');
+        final availableColumns = tableInfo
+            .map((column) => column['name'] as String)
+            .toSet();
+        if (tableInfo.isEmpty || !spec.columns.every(availableColumns.contains)) {
+          throw AppException('ملف النسخة الاحتياطية لا يحتوي على بنية جدول ${spec.label} المتوقعة.');
         }
       }
-      final originalMigrations = await widget.database.query(
-        'schema_migrations',
-        columns: ['version', 'applied_at'],
-        orderBy: 'version ASC',
+      final migrationInfo = await opened.rawQuery(
+        'PRAGMA table_info(schema_migrations)',
       );
-      final backupMigrations = await opened.query(
-        'schema_migrations',
-        columns: ['version', 'applied_at'],
-        orderBy: 'version ASC',
-      );
-      if (jsonEncode(originalMigrations) != jsonEncode(backupMigrations)) {
-        throw AppException('لم تتطابق بيانات إصدارات المخطط في النسخة الاحتياطية.');
+      final migrationColumns = migrationInfo
+          .map((column) => column['name'] as String)
+          .toSet();
+      if (!migrationColumns.containsAll({'version', 'applied_at'})) {
+        throw AppException('ملف النسخة الاحتياطية لا يحتوي على سجل إصدارات المخطط المتوقع.');
       }
 
       final foreignKeyErrors = await opened.rawQuery('PRAGMA foreign_key_check');
