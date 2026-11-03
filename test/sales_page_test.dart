@@ -4,6 +4,8 @@ import 'package:smart_merchant_suite/data/account_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
+import 'package:smart_merchant_suite/application/services/product_application_service.dart';
+import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
 import 'package:smart_merchant_suite/features/sales_page.dart';
@@ -17,8 +19,10 @@ Future<void> pumpDatabaseResult(WidgetTester tester) async {
 
 void main() {
   late Database database;
-  late ProductRepository products;
-  late SalesRepository sales;
+  late ProductApplicationService products;
+  late SalesApplicationService sales;
+  late ProductRepository productStore;
+  late SalesRepository salesStore;
   late WarehouseRepository warehouses;
   late AccountRepository accounts;
 
@@ -27,8 +31,10 @@ void main() {
   setUp(() async {
     database = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(database);
-    products = ProductRepository(database);
-    sales = SalesRepository(database);
+    productStore = ProductRepository(database);
+    salesStore = SalesRepository(database);
+    products = ProductApplicationService(productStore);
+    sales = SalesApplicationService(salesStore);
     warehouses = WarehouseRepository(database);
     accounts = AccountRepository(database);
     await products.add(const Product(
