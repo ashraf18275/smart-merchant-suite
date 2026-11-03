@@ -62,11 +62,11 @@ void main() {
     await purchases.createPurchase(
       supplierId: supplierId,
       warehouseId: warehouseId,
-      items: [PurchaseLineInput(productId: productId, quantity: 1500, unitCostMinor: 1250)],
+      items: [PurchaseLineInput(productId: productId, quantity: 1000, unitCostMinor: 1250)],
       paidMinor: 0,
     );
     final product = (await products.all()).single;
-    expect(product.stockQuantity, 1500);
+    expect(product.stockQuantity, 1000);
     expect(product.costMinor, 1250);
   });
 
