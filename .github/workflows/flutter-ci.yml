@@ -1,4 +1,4 @@
-name: Flutter CI
+name: Flutter CI and Gated Builds
 
 on:
   push:
@@ -12,7 +12,9 @@ on:
       - "pubspec.yaml"
       - "pubspec.lock"
       - "analysis_options.yaml"
-      - ".github/workflows/flutter-ci.yml"
+      - "android/**"
+      - "windows/**"
+      - ".github/workflows/**"
   pull_request:
     paths:
       - "lib/**"
@@ -20,11 +22,13 @@ on:
       - "pubspec.yaml"
       - "pubspec.lock"
       - "analysis_options.yaml"
-      - ".github/workflows/flutter-ci.yml"
+      - "android/**"
+      - "windows/**"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 concurrency:
-  group: flutter-ci-${{ github.ref }}
+  group: flutter-quality-gate-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -32,6 +36,7 @@ permissions:
 
 jobs:
   analyze-and-test:
+    name: Flutter analyze and tests (required gate)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -45,15 +50,128 @@ jobs:
         run: flutter pub get
       - name: Format application sources
         run: dart format lib/application
-      - name: Export formatted sources and dependency lock
+      - name: Export the exact tested sources and dependency lock
         uses: actions/upload-artifact@v4
         with:
           name: resolved-engineering-inputs
           path: |
             lib/application/
             pubspec.lock
+          if-no-files-found: error
           retention-days: 2
       - name: Analyze
         run: flutter analyze
       - name: Run tests
         run: flutter test
+
+  build-android:
+    name: Build Android (only after Flutter CI passes)
+    needs: analyze-and-test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/heads/feature/') ||
+      (github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Download the exact sources tested by Flutter CI
+        uses: actions/download-artifact@v4
+        with:
+          name: resolved-engineering-inputs
+          path: .
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform files
+        run: flutter create --platforms=android .
+      - name: Set Android compile SDK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          found = False
+          for path in candidates:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              updated = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              updated = updated.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              if updated != text:
+                  path.write_text(updated)
+                  found = True
+          if not found:
+              raise SystemExit("Could not find the generated Android compileSdk setting.")
+          PY
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Build debug APKs per architecture
+        run: flutter build apk --debug --split-per-abi
+      - name: Create checksums and build information
+        run: |
+          cd build/app/outputs/flutter-apk
+          sha256sum *-debug.apk > SHA256SUMS.txt
+          printf 'Platform: Android\nBuild: debug only\nABIs: arm64-v8a, armeabi-v7a, x86_64\nCommit: %s\nWorkflow run: %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > BUILD_INFO.txt
+          flutter --version | head -n 1 >> BUILD_INFO.txt
+      - name: Upload split APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-merchant-suite-android-debug-apks
+          path: |
+            build/app/outputs/flutter-apk/*-debug.apk
+            build/app/outputs/flutter-apk/SHA256SUMS.txt
+            build/app/outputs/flutter-apk/BUILD_INFO.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  build-windows:
+    name: Build Windows (only after Flutter CI passes)
+    needs: analyze-and-test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/heads/feature/') ||
+      (github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/'))
+    runs-on: windows-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+      - name: Download the exact sources tested by Flutter CI
+        uses: actions/download-artifact@v4
+        with:
+          name: resolved-engineering-inputs
+          path: .
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Windows runner
+        run: flutter create --platforms=windows --project-name smart_merchant_suite .
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Build Windows release
+        run: flutter build windows --release
+      - name: Package Windows app
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$releaseDir/smart_merchant_suite.exe")) { throw "Windows executable missing." }
+          foreach ($runtimeFile in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            $source = Join-Path (Join-Path $env:WINDIR "System32") $runtimeFile
+            if (-not (Test-Path $source)) { throw "Required Visual C++ runtime missing: $runtimeFile" }
+            Copy-Item -LiteralPath $source -Destination $releaseDir -Force
+          }
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          @("Platform: Windows", "Architecture: x64", "Build: Release", "Commit: $env:GITHUB_SHA", "Workflow run: $env:GITHUB_RUN_ID", "Visual C++ runtime: bundled", (flutter --version | Select-Object -First 1)) | Set-Content "dist/BUILD_INFO.txt"
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath "dist/smart-merchant-suite-windows-x64.zip" -CompressionLevel Optimal
+          $hash = (Get-FileHash "dist/smart-merchant-suite-windows-x64.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  smart-merchant-suite-windows-x64.zip" | Set-Content "dist/SHA256SUMS.txt"
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-merchant-suite-windows-x64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
