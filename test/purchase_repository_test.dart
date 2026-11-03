@@ -249,6 +249,52 @@ void main() {
   });
 
 
+  test('rolls back the entire purchase when inventory movement fails after stock updates', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج فشل حركة المخزون',
+      costMinor: 700,
+      priceMinor: 1000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد فشل حركة المخزون');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    await db.execute('''
+      CREATE TRIGGER reject_inventory_movement_insert
+      BEFORE INSERT ON inventory_movements
+      BEGIN
+        SELECT RAISE(ABORT, 'forced inventory movement failure');
+      END
+    ''');
+
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId,
+        warehouseId: warehouseId,
+        items: [PurchaseLineInput(
+          productId: productId,
+          quantity: 2000,
+          unitCostMinor: 500,
+        )],
+        paidMinor: 500,
+      ),
+      throwsA(anything),
+    );
+
+    // The failure is deliberately late: document, supplier ledger, purchase
+    // line, warehouse balance and product aggregate were already written
+    // inside the transaction and must all be rolled back together.
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect(await db.query('supplier_account_entries'), isEmpty);
+    expect(await db.query('inventory_movements'), isEmpty);
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 0);
+    expect(product.costMinor, 700);
+    final warehouseStock = (await warehouses.stock(warehouseId: warehouseId))
+        .singleWhere((row) => row.productId == productId);
+    expect(warehouseStock.quantity, 0);
+  });
+
+
   test('uses summed warehouse balances rather than a stale product aggregate for cost', () async {
     final productId = await products.add(const Product(
       name: 'منتج إجمالي مخزون غير متطابق',
