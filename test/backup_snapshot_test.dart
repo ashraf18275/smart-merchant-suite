@@ -19,7 +19,7 @@ void main() {
     try {
       source = await databaseFactoryFfi.openDatabase(sourcePath);
       await source.execute('PRAGMA foreign_keys = ON');
-      await source.execute('PRAGMA journal_mode = WAL');
+      await source.rawQuery('PRAGMA journal_mode = WAL');
       await createLocalSchema(source);
 
       final stamp = DateTime.utc(2026, 11, 4).toIso8601String();
