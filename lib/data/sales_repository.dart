@@ -1,0 +1,134 @@
+import 'package:sqflite_common/sqlite_api.dart';
+
+import '../application/ports/sales_store.dart';
+import '../core/app_error.dart';
+import '../domain/sale_record.dart';
+import '../core/quantity.dart';
+
+class SalesRepository implements SalesStore {
+  SalesRepository(this._db);
+  final Database _db;
+
+  /// Creates a multi-item invoice, deducts stock and writes movement audit rows
+  /// in one transaction. Keys are product IDs and values are positive integer thousandths.
+  Future<int> createSale({
+    required Map<int, int> quantities,
+    required int paidMinor,
+    required int warehouseId,
+  }) async {
+    return _db.transaction((txn) async {
+      final selectedWarehouses = await txn.rawQuery("""
+        SELECT w.id FROM warehouses w
+        JOIN branches b ON b.id = w.branch_id
+        WHERE w.id = ? AND w.is_active = 1 AND b.is_active = 1
+        LIMIT 1
+      """, [warehouseId]);
+      if (selectedWarehouses.isEmpty) {
+        throw AppException('المخزن المحدد أو الفرع التابع له غير موجود أو غير نشط');
+      }
+      final items = <Map<String, int>>[];
+      var total = 0;
+      for (final entry in quantities.entries) {
+        final rows = await txn.rawQuery('''
+          SELECT p.cost_minor, p.price_minor,
+                 COALESCE(u.allows_fraction, 0) AS allows_fraction
+          FROM products p LEFT JOIN product_units u ON u.id = p.unit_id
+          WHERE p.id = ? AND p.is_active = 1 LIMIT 1
+        ''', [entry.key]);
+        if (entry.value <= 0) throw AppException('كمية البيع يجب أن تكون أكبر من صفر');
+        if (rows.isEmpty) throw AppException('أحد المنتجات غير موجود أو غير نشط');
+        if (rows.single['allows_fraction'] != 1 && entry.value % Quantity.scale != 0) {
+          throw AppException('وحدة قياس أحد المنتجات لا تقبل الكميات الكسرية');
+        }
+        final balances = await txn.query(
+          'product_warehouse_stock',
+          columns: ['quantity'],
+          where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [entry.key, warehouseId],
+          limit: 1,
+        );
+        final stock = balances.isEmpty ? 0 : balances.single['quantity']! as int;
+        final product = rows.single;
+        if (stock < entry.value) throw AppException('الكمية غير كافية لأحد المنتجات.');
+        final price = product['price_minor']! as int;
+        final cost = product['cost_minor']! as int;
+        final lineTotal = Quantity.lineTotalMinor(
+          unitPriceMinor: price,
+          quantityScaled: entry.value,
+        );
+        total += lineTotal;
+        items.add({
+          'productId': entry.key,
+          'quantity': entry.value,
+          'stock': stock,
+          'price': price,
+          'cost': cost,
+          'lineTotal': lineTotal,
+        });
+      }
+      if (paidMinor > total) throw AppException('المبلغ المدفوع أكبر من إجمالي الفاتورة');
+
+      final createdAt = DateTime.now().toUtc().toIso8601String();
+      final saleId = await txn.insert('sales', {
+        'total_minor': total,
+        'paid_minor': paidMinor,
+        'warehouse_id': warehouseId,
+        'created_at': createdAt,
+      });
+      for (final item in items) {
+        final productId = item['productId']!;
+        final quantity = item['quantity']!;
+        await txn.insert('sale_items', {
+          'sale_id': saleId,
+          'product_id': productId,
+          'quantity': quantity,
+          'unit_price_minor': item['price']!,
+          'unit_cost_minor': item['cost']!,
+          'line_total_minor': item['lineTotal']!,
+        });
+        await txn.update('product_warehouse_stock', {
+          'quantity': item['stock']! - quantity,
+          'updated_at': createdAt,
+        }, where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [productId, warehouseId]);
+        final totals = await txn.rawQuery(
+          'SELECT COALESCE(SUM(quantity), 0) AS total FROM product_warehouse_stock WHERE product_id = ?',
+          [productId],
+        );
+        await txn.update('products', {'stock_quantity': totals.single['total']},
+          where: 'id = ?', whereArgs: [productId]);
+        await txn.insert('inventory_movements', {
+          'product_id': productId,
+          'warehouse_id': warehouseId,
+          'quantity_delta': -quantity,
+          'reason': 'بيع فاتورة رقم $saleId',
+          'created_at': createdAt,
+        });
+      }
+      return saleId;
+    });
+  }
+
+  Future<List<SaleRecord>> all() async {
+    final rows = await _db.rawQuery('''
+      SELECT s.id, s.total_minor, s.paid_minor, s.created_at,
+             COUNT(i.id) AS item_count,
+             w.name AS warehouse_name, b.name AS branch_name
+      FROM sales s
+      LEFT JOIN sale_items i ON i.sale_id = s.id
+      LEFT JOIN warehouses w ON w.id = s.warehouse_id
+      LEFT JOIN branches b ON b.id = w.branch_id
+      GROUP BY s.id, w.name, b.name
+      ORDER BY s.id DESC
+    ''');
+    return rows.map((row) => SaleRecord(
+      id: row['id']! as int,
+      totalMinor: row['total_minor']! as int,
+      paidMinor: row['paid_minor']! as int,
+      createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
+      itemCount: row['item_count']! as int,
+      warehouseName: row['warehouse_name'] as String?,
+      branchName: row['branch_name'] as String?,
+    )).toList(growable: false);
+  }
+}

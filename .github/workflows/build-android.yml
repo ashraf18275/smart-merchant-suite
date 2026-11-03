@@ -1,0 +1,79 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - "feature/**"
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+  push:
+    branches:
+      - "feature/**"
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform files
+        run: flutter create --platforms=android .
+      - name: Set Android compile SDK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          found = False
+          for path in candidates:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              updated = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              updated = updated.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              if updated != text:
+                  path.write_text(updated)
+                  found = True
+          if not found:
+              raise SystemExit("Could not find the generated Android compileSdk setting.")
+          PY
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Build debug APKs per architecture
+        run: flutter build apk --debug --split-per-abi
+      - name: Create checksums and build information
+        run: |
+          cd build/app/outputs/flutter-apk
+          sha256sum *-debug.apk > SHA256SUMS.txt
+          printf 'Platform: Android\nBuild: debug only\nABIs: arm64-v8a, armeabi-v7a, x86_64\nCommit: %s\nWorkflow run: %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > BUILD_INFO.txt
+          flutter --version | head -n 1 >> BUILD_INFO.txt
+      - name: Upload split APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-merchant-suite-android-debug-apks
+          path: |
+            build/app/outputs/flutter-apk/*-debug.apk
+            build/app/outputs/flutter-apk/SHA256SUMS.txt
+            build/app/outputs/flutter-apk/BUILD_INFO.txt
+          if-no-files-found: error
+          retention-days: 14
