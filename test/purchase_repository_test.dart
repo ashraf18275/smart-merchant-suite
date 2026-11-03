@@ -532,4 +532,46 @@ void main() {
     expect((await db.query('purchases')).single['total_minor'], 1001);
   });
 
+
+
+  test('rounds fractional purchase line totals half-up before invoice aggregation', () async {
+    final unitId = await products.addUnit(
+      name: 'وحدة نصفية',
+      abbreviation: 'نص',
+      allowsFraction: true,
+    );
+    final productId = await products.add(Product(
+      name: 'منتج إجمالي نصف قرش',
+      costMinor: 1000,
+      priceMinor: 1500,
+      unitId: unitId,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد تقريب البنود');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    final purchaseId = await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(
+        productId: productId,
+        quantity: 500,
+        unitCostMinor: 1001,
+      )],
+      paidMinor: 250,
+    );
+
+    final purchase = (await db.query('purchases')).single;
+    final line = (await db.query('purchase_items')).single;
+    expect(purchase['id'], purchaseId);
+    expect(line['line_total_minor'], 501);
+    expect(purchase['total_minor'], 501);
+    expect(purchase['paid_minor'], 250);
+    expect(
+      (await db.query('supplier_account_entries', orderBy: 'id ASC'))
+          .map((row) => row['amount_minor']),
+      [501, -250],
+    );
+    expect((await products.all()).single.stockQuantity, 500);
+  });
+
 }
