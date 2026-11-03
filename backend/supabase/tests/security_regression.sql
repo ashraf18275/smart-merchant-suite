@@ -10,6 +10,11 @@ insert into auth.users (id) values
   ('10000000-0000-0000-0000-000000000005')
 on conflict (id) do nothing;
 
+insert into public.businesses (id, name, owner_user_id) values
+  ('20000000-0000-0000-0000-000000000001', 'Security Test Business A', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000002', 'Security Test Business B', '10000000-0000-0000-0000-000000000002')
+on conflict (id) do nothing;
+
 -- One least-privilege active member and one inactive member in business A.
 insert into public.business_members (
   id, business_id, user_id, display_name, is_owner, is_active
@@ -34,11 +39,6 @@ insert into public.member_permissions (
    '21000000-0000-0000-0000-000000000004',
    'products.view', true)
 on conflict (member_id, permission_key) do nothing;
-
-insert into public.businesses (id, name, owner_user_id) values
-  ('20000000-0000-0000-0000-000000000001', 'Security Test Business A', '10000000-0000-0000-0000-000000000001'),
-  ('20000000-0000-0000-0000-000000000002', 'Security Test Business B', '10000000-0000-0000-0000-000000000002')
-on conflict (id) do nothing;
 
 insert into public.cloud_products (
   id, business_id, name, sku, cost_minor, price_minor, stock_quantity, created_by
@@ -76,7 +76,7 @@ declare
   v_sale_one uuid;
   v_sale_two uuid;
   v_stock bigint;
-  v_other_business_sale_rejected boolean := false;
+  v_other_business_adjustment_rejected boolean := false;
 begin
   select count(*) into v_count from public.cloud_products;
   if v_count <> 1 then
@@ -165,10 +165,10 @@ begin
       '50000000-0000-0000-0000-000000000002'
     );
   exception when insufficient_privilege then
-    v_other_business_sale_rejected := true;
+    v_other_business_adjustment_rejected := true;
   end;
 
-  if not v_other_business_sale_rejected then
+  if not v_other_business_adjustment_rejected then
     raise exception 'tenant isolation failed: owner A adjusted inventory in business B';
   end if;
 
