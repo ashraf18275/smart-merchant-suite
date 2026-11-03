@@ -14,6 +14,7 @@ import '../core/app_error.dart';
 import '../core/quantity.dart';
 
 import '../data/backup_schema.dart';
+import '../data/backup_restore_writer.dart';
 import '../data/csv_encoder.dart';
 
 class _ExportTable {
@@ -410,17 +411,9 @@ class _DataTransferPageState extends State<DataTransferPage> {
       );
       if (confirmed != true || !mounted) return;
 
-      await widget.database.transaction((txn) async {
-        // Centralized order preserves all foreign-key dependencies.
-        for (final table in BackupSchema.restoreDeleteOrder) {
-          await txn.delete(table);
-        }
-        for (final table in BackupSchema.restoreInsertOrder) {
-          for (final row in data[table]!) {
-            await txn.insert(table, row, conflictAlgorithm: ConflictAlgorithm.abort);
-          }
-        }
-      });
+      await widget.database.transaction(
+        (txn) => replaceBackupBusinessData(txn, data),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تمت استعادة البيانات بنجاح.')),
