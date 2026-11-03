@@ -5,8 +5,35 @@ begin;
 insert into auth.users (id) values
   ('10000000-0000-0000-0000-000000000001'),
   ('10000000-0000-0000-0000-000000000002'),
-  ('10000000-0000-0000-0000-000000000003')
+  ('10000000-0000-0000-0000-000000000003'),
+  ('10000000-0000-0000-0000-000000000004'),
+  ('10000000-0000-0000-0000-000000000005')
 on conflict (id) do nothing;
+
+-- One least-privilege active member and one inactive member in business A.
+insert into public.business_members (
+  id, business_id, user_id, display_name, is_owner, is_active
+) values
+  ('21000000-0000-0000-0000-000000000003',
+   '20000000-0000-0000-0000-000000000001',
+   '10000000-0000-0000-0000-000000000003',
+   'Read-only member', false, true),
+  ('21000000-0000-0000-0000-000000000004',
+   '20000000-0000-0000-0000-000000000001',
+   '10000000-0000-0000-0000-000000000004',
+   'Inactive member', false, false)
+on conflict (id) do nothing;
+
+insert into public.member_permissions (
+  business_id, member_id, permission_key, allowed
+) values
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000003',
+   'products.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000004',
+   'products.view', true)
+on conflict (member_id, permission_key) do nothing;
 
 insert into public.businesses (id, name, owner_user_id) values
   ('20000000-0000-0000-0000-000000000001', 'Security Test Business A', '10000000-0000-0000-0000-000000000001'),
@@ -145,7 +172,37 @@ begin
     raise exception 'tenant isolation failed: owner A adjusted inventory in business B';
   end if;
 
+  -- An active member with products.view can read products, but cannot sell.
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  select count(*) into v_count from public.cloud_products;
+  if v_count <> 1 then
+    raise exception 'least privilege failed: products.view member sees % products, expected 1', v_count;
+  end if;
+
+  begin
+    perform public.create_cloud_sale(
+      '20000000-0000-0000-0000-000000000001',
+      jsonb_build_array(jsonb_build_object(
+        'product_id', '30000000-0000-0000-0000-000000000001',
+        'quantity', 1
+      )),
+      0,
+      '50000000-0000-0000-0000-000000000003'
+    );
+    raise exception 'least privilege failed: products.view member created a sale';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  -- An inactive member receives no access even when a permission row remains.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+  select count(*) into v_count from public.cloud_products;
+  if v_count <> 0 then
+    raise exception 'inactive membership failed: inactive member sees % products', v_count;
+  end if;
+
+  -- A user with no membership in either business receives no tenant data.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000005', true);
   select count(*) into v_count from public.cloud_products;
   if v_count <> 0 then
     raise exception 'tenant isolation failed: non-member can see % products', v_count;
