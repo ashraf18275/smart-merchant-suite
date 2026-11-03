@@ -210,4 +210,25 @@ void main() {
     }
     expect(await database.rawQuery('PRAGMA foreign_key_check'), isEmpty);
   });
+
+  test('rejects an incomplete backup payload before deleting existing data', () async {
+    await seedCompleteBusinessData();
+    final before = await captureBusinessData(database);
+    final incomplete = Map<String, List<Map<String, Object?>>>.from(before)
+      ..remove('customer_account_entries');
+
+    await expectLater(
+      replaceBackupBusinessData(database, incomplete),
+      throwsA(isA<StateError>()),
+    );
+
+    for (final table in BackupSchema.restoreInsertOrder) {
+      expect(
+        await database.query(table, orderBy: 'id ASC'),
+        equals(before[table]),
+        reason: 'incomplete payload must not change $table',
+      );
+    }
+  });
+
 }
