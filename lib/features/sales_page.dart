@@ -4,6 +4,7 @@ import '../application/ports/product_catalog.dart';
 import '../application/ports/sales_service.dart';
 import '../application/ports/branch_warehouse_store.dart';
 import '../core/app_error.dart';
+import '../data/account_repository.dart';
 import '../domain/product.dart';
 import '../domain/sale_record.dart';
 import '../domain/warehouse.dart';
