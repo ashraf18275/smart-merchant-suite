@@ -203,7 +203,7 @@ Deno.serve(async (request: Request) => {
       if (permissionError) throw new Error("permission_assignment_failed");
     }
 
-    await adminClient.from("audit_events").insert({
+    const { error: auditError } = await adminClient.from("audit_events").insert({
       business_id: businessId,
       actor_user_id: authData.user.id,
       action_key: "users.create",
@@ -215,6 +215,12 @@ Deno.serve(async (request: Request) => {
         permission_keys: uniquePermissionKeys,
       },
     });
+    if (auditError) {
+      // Do not report a successful account creation when its required audit
+      // record could not be persisted. The catch block compensates by removing
+      // the membership and Auth user created above.
+      throw new Error("audit_event_creation_failed");
+    }
 
     return response(201, {
       member_id: memberId,
