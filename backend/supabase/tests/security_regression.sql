@@ -75,7 +75,7 @@ on conflict (id) do nothing;
 
 -- The minimal PostgreSQL CI database emulates Supabase's public-schema read grants.
 grant usage on schema public to authenticated;
-grant select on public.businesses, public.cloud_products, public.cloud_inventory_movements,
+grant select on public.businesses, public.business_members, public.cloud_products, public.cloud_inventory_movements,
   public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events to authenticated;
 
 set local role authenticated;
