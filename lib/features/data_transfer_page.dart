@@ -14,6 +14,7 @@ import '../core/app_error.dart';
 import '../core/quantity.dart';
 
 import '../data/backup_schema.dart';
+import '../data/backup_snapshot.dart';
 import '../data/backup_restore_writer.dart';
 import '../data/csv_encoder.dart';
 
@@ -461,30 +462,21 @@ class _DataTransferPageState extends State<DataTransferPage> {
         throw AppException('تعريف النسخة الاحتياطية لا يشمل كل جداول بيانات النشاط.');
       }
 
-      // Require SQLite to finish checkpointing before copying the database file.
-      final checkpoint = await widget.database.rawQuery('PRAGMA wal_checkpoint(FULL)');
-      if (checkpoint.isEmpty) {
-        throw AppException('تعذر التأكد من اكتمال تجهيز قاعدة البيانات للنسخ الاحتياطي.');
-      }
-      final checkpointRow = checkpoint.first;
-      final busy = (checkpointRow['busy'] as num?)?.toInt() ?? 0;
-      final walFrames = (checkpointRow['log'] as num?)?.toInt() ?? -1;
-      final checkpointedFrames =
-          (checkpointRow['checkpointed'] as num?)?.toInt() ?? -1;
-      if (busy != 0 ||
-          (walFrames >= 0 &&
-              checkpointedFrames >= 0 &&
-              checkpointedFrames < walFrames)) {
-        throw AppException('تعذر إكمال تجهيز قاعدة البيانات للنسخ؛ أغلق العمليات الجارية ثم أعد المحاولة.');
-      }
-
       final sourceFile = File(widget.database.path);
       if (!await sourceFile.exists()) {
         throw AppException('لم يتم العثور على ملف قاعدة البيانات.');
       }
       final directory = await getTemporaryDirectory();
-      backup = File(p.join(directory.path, 'smart_merchant_backup_${_timestamp()}.db'));
-      await sourceFile.copy(backup.path);
+      backup = File(p.join(
+        directory.path,
+        'smart_merchant_backup_${DateTime.now().microsecondsSinceEpoch}.db',
+      ));
+      if (await backup.exists()) {
+        throw AppException('يوجد ملف بنفس اسم النسخة الاحتياطية؛ أعد المحاولة.');
+      }
+      // VACUUM INTO creates a consistent SQLite snapshot, including committed
+      // WAL data, instead of copying the live database file after a checkpoint.
+      await createSqliteBackupSnapshot(widget.database, backup.path);
 
       // Validate the actual copied file, not just the live database.
       final isMobile = !kIsWeb &&
