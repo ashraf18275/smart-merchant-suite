@@ -112,4 +112,32 @@ void main() {
     expect((await products.all()).single.stockQuantity, 5000);
     expect(await db.query('inventory_movements', where: 'reason LIKE ?', whereArgs: ['بيع%']), isEmpty);
   });
+  test('rejects an empty invoice without writing any records', () async {
+    await expectLater(
+      sales.createSale(
+        quantities: const {},
+        paidMinor: 0,
+        warehouseId: warehouseId,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('sales'), isEmpty);
+    expect(await db.query('sale_items'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 5000);
+  });
+
+  test('rejects negative payment at the repository boundary', () async {
+    await expectLater(
+      sales.createSale(
+        quantities: {productId: 1000},
+        paidMinor: -1,
+        warehouseId: warehouseId,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('sales'), isEmpty);
+    expect(await db.query('sale_items'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 5000);
+  });
+
 }
