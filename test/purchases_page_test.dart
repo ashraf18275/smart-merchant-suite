@@ -80,7 +80,11 @@ void main() {
     expect(find.text('إجمالي البند: 60.00 ج.م'), findsOneWidget);
     expect(find.text('60.00 ج.م'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('حفظ الفاتورة واستلام المخزون'));
+    await tester.scrollUntilVisible(
+      find.text('حفظ الفاتورة واستلام المخزون'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('حفظ الفاتورة واستلام المخزون'));
     await tester.pumpAndSettle();
     await pumpDatabaseResult(tester);
@@ -100,8 +104,14 @@ void main() {
     expect((await database.query('inventory_movements')).length, 1);
   });
 
-  testWidgets('requires a supplier and product before saving',
+  testWidgets('requires a supplier before saving a purchase',
       (tester) async {
+    await products.add(const Product(
+      name: 'منتج اختبار',
+      costMinor: 1000,
+      priceMinor: 1500,
+    ));
+
     await tester.pumpWidget(MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
@@ -114,6 +124,11 @@ void main() {
     ));
     await pumpDatabaseResult(tester);
 
+    await tester.scrollUntilVisible(
+      find.text('حفظ الفاتورة واستلام المخزون'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('حفظ الفاتورة واستلام المخزون'));
     await tester.pump();
     expect(find.text('أضف موردًا واختر مخزنًا نشطًا أولًا.'), findsOneWidget);
