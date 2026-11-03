@@ -28,7 +28,8 @@ Future<sqflite.Database> openLocalDatabase() async {
         if (oldVersion < 4) await createCatalogSchema(db);
         if (oldVersion < 5) await createBranchWarehouseSchema(db);
         if (oldVersion < 6) await createSaleWarehouseSchema(db);
-        if (oldVersion < 7) await createFractionalQuantitiesSchema(db);\n        if (oldVersion < 8) await createPurchaseSchema(db);
+        if (oldVersion < 7) await createFractionalQuantitiesSchema(db);
+        if (oldVersion < 8) await createPurchaseSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
@@ -54,7 +55,8 @@ Future<sqflite.Database> openLocalDatabase() async {
         if (oldVersion < 4) await createCatalogSchema(db);
         if (oldVersion < 5) await createBranchWarehouseSchema(db);
         if (oldVersion < 6) await createSaleWarehouseSchema(db);
-        if (oldVersion < 7) await createFractionalQuantitiesSchema(db);\n        if (oldVersion < 8) await createPurchaseSchema(db);
+        if (oldVersion < 7) await createFractionalQuantitiesSchema(db);
+        if (oldVersion < 8) await createPurchaseSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
