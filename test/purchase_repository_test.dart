@@ -39,17 +39,17 @@ void main() {
 
     final product = (await products.all()).single;
     expect(product.id, productId);
-    expect(product.stockQuantity, 4000);
-    expect(product.costMinor, 1667);
+    expect(product.stockQuantity, 5000);
+    expect(product.costMinor, 1600);
     final purchase = (await db.query('purchases')).single;
     expect(purchase['id'], purchaseId);
-    expect(purchase['total_minor'], 2000);
+    expect(purchase['total_minor'], 6000);
     expect(purchase['paid_minor'], 3000);
     final line = (await db.query('purchase_items')).single;
-    expect(line['quantity'], 1000);
+    expect(line['quantity'], 3000);
     expect(line['unit_cost_minor'], 2000);
     final movement = (await db.query('inventory_movements', orderBy: 'id DESC')).first;
-    expect(movement['quantity_delta'], 1000);
+    expect(movement['quantity_delta'], 3000);
     expect(movement['reason'], 'استلام مشتريات رقم $purchaseId');
   });
 
@@ -62,11 +62,11 @@ void main() {
     await purchases.createPurchase(
       supplierId: supplierId,
       warehouseId: warehouseId,
-      items: [PurchaseLineInput(productId: productId, quantity: 1500, unitCostMinor: 1250)],
+      items: [PurchaseLineInput(productId: productId, quantity: 1000, unitCostMinor: 1250)],
       paidMinor: 0,
     );
     final product = (await products.all()).single;
-    expect(product.stockQuantity, 1500);
+    expect(product.stockQuantity, 1000);
     expect(product.costMinor, 1250);
   });
 
