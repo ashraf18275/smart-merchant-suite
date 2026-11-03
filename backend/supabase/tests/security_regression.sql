@@ -325,6 +325,7 @@ begin
     raise exception 'delegation regression: privilege escalation was not rejected';
   end if;
 
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
   select id into v_owner_member_id
   from public.business_members
   where business_id = '20000000-0000-0000-0000-000000000001'
