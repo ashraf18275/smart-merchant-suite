@@ -75,19 +75,18 @@ class _PurchasesPageState extends State<PurchasesPage> {
 
   Future<void> _load() async {
     try {
-      final results = await Future.wait([
-        widget.purchases.suppliers(),
-        widget.products.all(),
-        widget.warehouses.warehouses(),
-      ]);
+      // Keep reads sequential: the local SQLite connection is shared by
+      // these repositories, and serial reads avoid overlapping operations
+      // on desktop and in the no-isolate test backend.
+      final suppliers = await widget.purchases.suppliers();
+      final products = await widget.products.all();
+      final warehouses = await widget.warehouses.warehouses();
       if (!mounted) return;
-      final suppliers = results[0] as List<Map<String, Object?>>;
-      final warehouses = results[2] as List<Warehouse>;
       final defaultWarehouse = warehouses.where((w) =>
           w.name == 'المخزن الرئيسي' && w.branchName == 'الفرع الرئيسي');
       setState(() {
         _suppliers = suppliers;
-        _products = results[1] as List<Product>;
+        _products = products;
         _warehouses = warehouses;
         _supplierId = suppliers.any((s) => s['id'] == _supplierId)
             ? _supplierId
