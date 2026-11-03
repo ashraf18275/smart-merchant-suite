@@ -47,7 +47,7 @@ Future<void> createLocalSchema(Database db) async {
   await createAccountSchema(db);
 }
 
-import 'package:sqflite_common/sqlite_api.dart';
+
 
 /// Adds customer records and append-only account ledgers.
 /// Positive entries increase the balance owed; negative entries reduce it.
