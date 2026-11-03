@@ -128,15 +128,19 @@ class ProductRepository implements ProductStore, CatalogStore {
       if (unitRows.isEmpty) throw AppException('وحدة القياس غير موجودة');
       final currentUnitId = current.single['unit_id'] as int?;
       if (targetUnitId != currentUnitId) {
-        final historicalSales = await txn.query(
-          'sale_items',
-          columns: ['id'],
-          where: 'product_id = ?',
-          whereArgs: [id],
-          limit: 1,
-        );
-        if (historicalSales.isNotEmpty) {
-          throw AppException('لا يمكن تغيير وحدة المنتج بعد تسجيل مبيعات سابقة');
+        // A unit change reinterprets every stored quantity. Protect purchase,
+        // sale and stock history, not sales alone.
+        final history = await txn.rawQuery('''
+          SELECT
+            EXISTS(SELECT 1 FROM sale_items WHERE product_id = ?) OR
+            EXISTS(SELECT 1 FROM purchase_items WHERE product_id = ?) OR
+            EXISTS(SELECT 1 FROM inventory_movements WHERE product_id = ?)
+            AS has_history
+        ''', [id, id, id]);
+        if (history.single['has_history'] == 1) {
+          throw AppException(
+            'لا يمكن تغيير وحدة المنتج بعد تسجيل مشتريات أو مبيعات أو حركات مخزون',
+          );
         }
       }
       if (unitRows.single['allows_fraction'] != 1) {
