@@ -231,10 +231,48 @@ Deno.serve(async (request: Request) => {
       login_method: "username_password",
     });
   } catch (error) {
+    let cleanupFailure: "membership" | "auth_user" | null = null;
+
     if (memberId) {
-      await adminClient.from("business_members").delete().eq("id", memberId);
+      const { error: membershipCleanupError } = await adminClient
+        .from("business_members")
+        .delete()
+        .eq("id", memberId);
+
+      if (membershipCleanupError) {
+        // If deletion fails, deactivate the membership as a fail-closed fallback.
+        // Do not delete the Auth user while a membership may still reference it.
+        const { error: deactivationError } = await adminClient
+          .from("business_members")
+          .update({ is_active: false })
+          .eq("id", memberId);
+        cleanupFailure = "membership";
+        if (deactivationError) {
+          console.error("create-member compensation failed", {
+            stage: "membership_delete_and_deactivation",
+          });
+        } else {
+          console.error("create-member compensation required membership deactivation", {
+            stage: "membership_delete",
+          });
+        }
+      }
     }
-    await adminClient.auth.admin.deleteUser(newUserId);
+
+    if (!cleanupFailure) {
+      const { error: authCleanupError } = await adminClient.auth.admin.deleteUser(newUserId);
+      if (authCleanupError) {
+        cleanupFailure = "auth_user";
+        console.error("create-member compensation failed", {
+          stage: "auth_user_delete",
+        });
+      }
+    }
+
+    if (cleanupFailure) {
+      return response(500, { error: "account_creation_failed_cleanup_required" });
+    }
+
     const message = error instanceof Error ? error.message : "account_creation_failed";
     return response(message === "username_unavailable" ? 409 : 500, { error: message });
   }
