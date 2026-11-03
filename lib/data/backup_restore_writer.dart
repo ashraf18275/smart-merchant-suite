@@ -11,15 +11,19 @@ Future<void> replaceBackupBusinessData(
   DatabaseExecutor executor,
   Map<String, List<Map<String, Object?>>> data,
 ) async {
+  // Validate the complete payload before deleting anything, even when a
+  // caller accidentally invokes this helper outside a transaction.
+  for (final table in BackupSchema.currentTableNames) {
+    if (!data.containsKey(table)) {
+      throw StateError('Backup data is missing required table: $table');
+    }
+  }
+
   for (final table in BackupSchema.restoreDeleteOrder) {
     await executor.delete(table);
   }
   for (final table in BackupSchema.restoreInsertOrder) {
-    final rows = data[table];
-    if (rows == null) {
-      throw StateError('Backup data is missing required table: $table');
-    }
-    for (final row in rows) {
+    for (final row in data[table]!) {
       await executor.insert(
         table,
         row,
