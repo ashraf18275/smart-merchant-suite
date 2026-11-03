@@ -3,6 +3,7 @@ import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
+import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -93,3 +94,158 @@ void main() {
     expect((await products.all()).single.stockQuantity, 0);
   });
 }
+
+
+  test('recalculates weighted average using remaining stock after a sale', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج بعد البيع',
+      costMinor: 1000,
+      priceMinor: 2000,
+      stockQuantity: 2000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'المورد الثاني');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    await SalesRepository(db).createSale(
+      quantities: {productId: 1000},
+      paidMinor: 0,
+      warehouseId: warehouseId,
+    );
+    await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(
+        productId: productId,
+        quantity: 1000,
+        unitCostMinor: 2000,
+      )],
+      paidMinor: 0,
+    );
+
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 2000);
+    expect(product.costMinor, 1500);
+    final soldLine = (await db.query('sale_items')).single;
+    expect(soldLine['unit_cost_minor'], 1000);
+    final receivedLine = (await db.query('purchase_items')).single;
+    expect(receivedLine['unit_cost_minor'], 2000);
+  });
+
+  test('receives purchase into selected warehouse without changing other warehouse balance', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج متعدد المخازن',
+      costMinor: 1000,
+      priceMinor: 1500,
+      stockQuantity: 2000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد الفروع');
+    final mainWarehouseId = (await warehouses.warehouses()).single.id;
+    final branchId = await warehouses.addBranch(name: 'فرع الاختبار');
+    final targetWarehouseId = await warehouses.addWarehouse(
+      branchId: branchId,
+      name: 'مخزن الفرع',
+    );
+
+    await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: targetWarehouseId,
+      items: [PurchaseLineInput(
+        productId: productId,
+        quantity: 3000,
+        unitCostMinor: 2000,
+      )],
+      paidMinor: 0,
+    );
+
+    final mainStock = (await warehouses.stock(warehouseId: mainWarehouseId))
+        .singleWhere((row) => row.productId == productId);
+    final targetStock = (await warehouses.stock(warehouseId: targetWarehouseId))
+        .singleWhere((row) => row.productId == productId);
+    expect(mainStock.quantity, 2000);
+    expect(targetStock.quantity, 3000);
+    expect((await products.all()).single.stockQuantity, 5000);
+    expect((await products.all()).single.costMinor, 1600);
+    final movement = (await db.query(
+      'inventory_movements',
+      where: 'product_id = ?',
+      whereArgs: [productId],
+      orderBy: 'id DESC',
+      limit: 1,
+    )).single;
+    expect(movement['warehouse_id'], targetWarehouseId);
+    expect(movement['quantity_delta'], 3000);
+  });
+
+  test('rejects purchase payment above total without writing any records', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج مدفوع زائد',
+      costMinor: 700,
+      priceMinor: 1000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد المدفوع الزائد');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId,
+        warehouseId: warehouseId,
+        items: [PurchaseLineInput(
+          productId: productId,
+          quantity: 1000,
+          unitCostMinor: 1000,
+        )],
+        paidMinor: 1001,
+      ),
+      throwsA(isA<AppException>()),
+    );
+
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect(await db.query('supplier_account_entries'), isEmpty);
+    expect(await db.query('inventory_movements'), isEmpty);
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 0);
+    expect(product.costMinor, 700);
+  });
+
+  test('rolls back purchase and stock when supplier ledger write fails', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج فشل القيد',
+      costMinor: 700,
+      priceMinor: 1000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد فشل القيد');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    await db.execute('''
+      CREATE TRIGGER reject_supplier_ledger_insert
+      BEFORE INSERT ON supplier_account_entries
+      BEGIN
+        SELECT RAISE(ABORT, 'forced supplier ledger failure');
+      END
+    ''');
+
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId,
+        warehouseId: warehouseId,
+        items: [PurchaseLineInput(
+          productId: productId,
+          quantity: 2000,
+          unitCostMinor: 500,
+        )],
+        paidMinor: 0,
+      ),
+      throwsA(anything),
+    );
+
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect(await db.query('supplier_account_entries'), isEmpty);
+    expect(await db.query('inventory_movements'), isEmpty);
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 0);
+    expect(product.costMinor, 700);
+    final warehouseStock = (await warehouses.stock(warehouseId: warehouseId))
+        .singleWhere((row) => row.productId == productId);
+    expect(warehouseStock.quantity, 0);
+  });
