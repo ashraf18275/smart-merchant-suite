@@ -8,12 +8,14 @@ import 'data/account_repository.dart';
 import 'data/expense_repository.dart';
 import 'data/local_database.dart';
 import 'data/product_repository.dart';
+import 'data/purchase_repository.dart';
 import 'data/sales_repository.dart';
 import 'data/warehouse_repository.dart';
 import 'features/branch_warehouse_page.dart';
 import 'features/data_transfer_page.dart';
 import 'features/expenses_page.dart';
 import 'features/products_page.dart';
+import 'features/purchases_page.dart';
 import 'features/sales_page.dart';
 
 void main() {
@@ -72,6 +74,7 @@ class HomeDashboard extends StatelessWidget {
   static const modules = <({IconData icon, String title, String subtitle})>[
     (icon: Icons.inventory_2_outlined, title: 'المنتجات والمخزون', subtitle: 'إضافة المنتجات ومتابعة الأرصدة'),
     (icon: Icons.point_of_sale_outlined, title: 'المبيعات والفواتير', subtitle: 'تسجيل عمليات البيع والمرتجعات'),
+    (icon: Icons.shopping_cart_checkout_outlined, title: 'المشتريات والاستلام', subtitle: 'فواتير الموردين واستلام المخزون'),
     (icon: Icons.account_balance_wallet_outlined, title: 'المصروفات والأرباح', subtitle: 'تسجيل المصروفات ومراجعة الملخص'),
     (icon: Icons.backup_outlined, title: 'النسخ الاحتياطي وتصدير البيانات', subtitle: 'حفظ نسخة محلية وتصدير ملفات CSV'),
     (icon: Icons.warehouse_outlined, title: 'الفروع والمخازن', subtitle: 'إدارة الأرصدة والتحويلات والتسويات'),
@@ -98,6 +101,11 @@ class HomeDashboard extends StatelessWidget {
               accountRepository: AccountRepository(database),
             ),
           2 => ExpensesPage(repository: ExpenseApplicationService(ExpenseRepository(database))),
+          5 => PurchasesPage(
+              purchases: PurchaseRepository(database),
+              products: ProductRepository(database),
+              warehouses: WarehouseRepository(database),
+            ),
           3 => DataTransferPage(database: database),
           4 => BranchWarehousePage(store: WarehouseRepository(database)),
           _ => const SizedBox.shrink(),
@@ -115,6 +123,7 @@ class HomeDashboard extends StatelessWidget {
         2 => 'تعذر فتح شاشة المصروفات.',
         3 => 'تعذر فتح أدوات تصدير البيانات.',
         4 => 'تعذر فتح إدارة الفروع والمخازن.',
+        5 => 'تعذر فتح شاشة المشتريات.',
         _ => 'تعذر فتح القسم المطلوب.',
       };
       final operation = switch (index) {
@@ -123,6 +132,7 @@ class HomeDashboard extends StatelessWidget {
         2 => 'expenses.open',
         3 => 'data_transfer.open',
         4 => 'warehouse.open',
+        5 => 'purchases.open',
         _ => 'module.open',
       };
       ScaffoldMessenger.of(context).showSnackBar(
