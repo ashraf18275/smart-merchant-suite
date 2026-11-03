@@ -494,7 +494,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 7) {
+      if (schemaVersion != 9) {
         throw AppException('إصدار قاعدة البيانات الحالية غير متوقع: $schemaVersion.');
       }
 
@@ -542,7 +542,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final backupVersion = backupVersionRows.isEmpty
           ? 0
           : (backupVersionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (backupVersion != 7) {
+      if (backupVersion != 9) {
         throw AppException('ملف النسخة الاحتياطية لا يحتوي على إصدار المخطط المطلوب.');
       }
       for (final spec in _tables) {
