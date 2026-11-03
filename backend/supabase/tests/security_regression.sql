@@ -73,6 +73,24 @@ begin
     raise exception 'security regression: authenticated can directly insert sales';
   end if;
 
+  if has_table_privilege(current_user, 'public.business_members', 'INSERT')
+     or has_table_privilege(current_user, 'public.business_members', 'UPDATE')
+     or has_table_privilege(current_user, 'public.business_members', 'DELETE') then
+    raise exception 'security regression: client can mutate business memberships outside audited workflows';
+  end if;
+
+  if has_table_privilege(current_user, 'public.member_permissions', 'INSERT')
+     or has_table_privilege(current_user, 'public.member_permissions', 'UPDATE')
+     or has_table_privilege(current_user, 'public.member_permissions', 'DELETE') then
+    raise exception 'security regression: client can mutate permissions outside audited workflows';
+  end if;
+
+  if has_table_privilege(current_user, 'public.audit_events', 'INSERT')
+     or has_table_privilege(current_user, 'public.audit_events', 'UPDATE')
+     or has_table_privilege(current_user, 'public.audit_events', 'DELETE') then
+    raise exception 'security regression: client can mutate audit events';
+  end if;
+
   v_sale_one := public.create_cloud_sale(
     '20000000-0000-0000-0000-000000000001',
     jsonb_build_array(jsonb_build_object(
