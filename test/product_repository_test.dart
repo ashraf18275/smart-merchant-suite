@@ -4,6 +4,7 @@ import 'package:smart_merchant_suite/application/services/product_application_se
 import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
+import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
@@ -667,4 +668,49 @@ void main() {
     );
     expect(await database.query('expenses'), isEmpty);
   });
+  test('prevents changing a product unit after purchase history exists', () async {
+    final catalog = ProductRepository(database);
+    final purchaseStore = PurchaseRepository(database);
+    final newUnitId = await catalog.addUnit(
+      name: 'عبوة',
+      abbreviation: 'عبوة',
+      allowsFraction: false,
+    );
+    final productId = await products.add(const Product(
+      name: 'منتج تم توريده',
+      costMinor: 100,
+      priceMinor: 150,
+    ));
+    final warehouseId = (await WarehouseRepository(database).warehouses()).first.id;
+    final supplierId = await purchaseStore.addSupplier(name: 'مورد تجريبي');
+    await purchaseStore.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(
+        productId: productId,
+        quantity: 2000,
+        unitCostMinor: 120,
+      )],
+      paidMinor: 0,
+    );
+
+    final before = (await products.all()).single;
+    expect(before.stockQuantity, 2000);
+    await expectLater(
+      catalog.update(Product(
+        id: productId,
+        name: before.name,
+        costMinor: before.costMinor,
+        priceMinor: before.priceMinor,
+        stockQuantity: before.stockQuantity,
+        unitId: newUnitId,
+      )),
+      throwsA(isA<AppException>()),
+    );
+    final after = (await products.all()).single;
+    expect(after.unitId, before.unitId);
+    expect(after.stockQuantity, before.stockQuantity);
+    expect(await database.query('purchase_items'), hasLength(1));
+  });
+
 }
