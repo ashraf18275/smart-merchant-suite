@@ -13,6 +13,7 @@ class SalesApplicationService implements SalesService {
     required Map<int, int> quantities,
     required int paidMinor,
     required int warehouseId,
+    int? customerId,
   }) async {
     if (quantities.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل');
     if (quantities.values.any((quantity) => quantity <= 0)) {
@@ -21,7 +22,15 @@ class SalesApplicationService implements SalesService {
     if (paidMinor < 0) {
       throw AppException('المبلغ المدفوع لا يمكن أن يكون سالبًا');
     }
-    return _store.createSale(quantities: quantities, paidMinor: paidMinor, warehouseId: warehouseId);
+    if (customerId != null && customerId <= 0) {
+      throw AppException('العميل المحدد غير صالح');
+    }
+    return _store.createSale(
+      quantities: quantities,
+      paidMinor: paidMinor,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
   }
 
   @override

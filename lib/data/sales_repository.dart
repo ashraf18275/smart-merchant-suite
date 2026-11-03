@@ -9,14 +9,27 @@ class SalesRepository implements SalesStore {
   SalesRepository(this._db);
   final Database _db;
 
-  /// Creates a multi-item invoice, deducts stock and writes movement audit rows
-  /// in one transaction. Keys are product IDs and values are positive integer thousandths.
+  /// Creates a multi-item invoice, updates stock and writes account/audit rows
+  /// atomically. Quantities are positive integer thousandths.
   Future<int> createSale({
     required Map<int, int> quantities,
     required int paidMinor,
     required int warehouseId,
+    int? customerId,
   }) async {
     return _db.transaction((txn) async {
+      if (customerId != null) {
+        final customers = await txn.query(
+          'customers',
+          columns: ['id'],
+          where: 'id = ? AND is_active = 1',
+          whereArgs: [customerId],
+          limit: 1,
+        );
+        if (customers.isEmpty) {
+          throw AppException('العميل المحدد غير موجود أو غير نشط');
+        }
+      }
       final selectedWarehouses = await txn.rawQuery("""
         SELECT w.id FROM warehouses w
         JOIN branches b ON b.id = w.branch_id
@@ -73,8 +86,29 @@ class SalesRepository implements SalesStore {
         'total_minor': total,
         'paid_minor': paidMinor,
         'warehouse_id': warehouseId,
+        'customer_id': customerId,
         'created_at': createdAt,
       });
+      if (customerId != null) {
+        await txn.insert('customer_account_entries', {
+          'customer_id': customerId,
+          'amount_minor': total,
+          'entry_type': 'sale',
+          'reference_id': saleId,
+          'note': 'فاتورة بيع رقم $saleId',
+          'created_at': createdAt,
+        });
+        if (paidMinor > 0) {
+          await txn.insert('customer_account_entries', {
+            'customer_id': customerId,
+            'amount_minor': -paidMinor,
+            'entry_type': 'receipt',
+            'reference_id': saleId,
+            'note': 'تحصيل عند إنشاء فاتورة البيع رقم $saleId',
+            'created_at': createdAt,
+          });
+        }
+      }
       for (final item in items) {
         final productId = item['productId']!;
         final quantity = item['quantity']!;

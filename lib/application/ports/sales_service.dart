@@ -5,6 +5,7 @@ abstract interface class SalesService {
     required Map<int, int> quantities,
     required int paidMinor,
     required int warehouseId,
+    int? customerId,
   });
 
   Future<List<SaleRecord>> all();
