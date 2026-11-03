@@ -71,7 +71,12 @@ class PurchaseRepository {
           throw AppException('لا تكرر الصنف في مستند الشراء نفسه');
         }
         final rows = await txn.rawQuery('''
-          SELECT p.cost_minor, p.stock_quantity,
+          SELECT p.cost_minor,
+                 COALESCE((
+                   SELECT SUM(s.quantity)
+                   FROM product_warehouse_stock s
+                   WHERE s.product_id = p.id
+                 ), 0) AS stock_quantity,
                  COALESCE(u.allows_fraction, 0) AS allows_fraction
           FROM products p LEFT JOIN product_units u ON u.id = p.unit_id
           WHERE p.id = ? AND p.is_active = 1 LIMIT 1
