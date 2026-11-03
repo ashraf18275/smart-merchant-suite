@@ -21,13 +21,13 @@ void main() {
 
   test('lists only active customers alphabetically for sales selection', () async {
     final zed = await accounts.addCustomer(name: 'زيد');
-    final ali = await accounts.addCustomer(name: 'علي');
+    final ahmed = await accounts.addCustomer(name: 'أحمد');
     final inactive = await accounts.addCustomer(name: 'عميل موقوف');
     await db.update('customers', {'is_active': 0}, where: 'id = ?', whereArgs: [inactive]);
 
     final customers = await accounts.customers();
-    expect(customers.map((row) => row['id']), [ali, zed]);
-    expect(customers.map((row) => row['name']), ['علي', 'زيد']);
+    expect(customers.map((row) => row['id']), [ahmed, zed]);
+    expect(customers.map((row) => row['name']), ['أحمد', 'زيد']);
   });
 
   test('records supplier payments and returns a chronological running balance', () async {
