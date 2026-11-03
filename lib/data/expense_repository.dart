@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../application/ports/expense_store.dart';
+import '../core/app_error.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
 
@@ -30,6 +31,9 @@ class ExpenseRepository implements ExpenseStore {
 
   Future<int> add({required String description, required String category, required int amountMinor}) async {
     final d = description.trim(), c = category.trim();
+    if (d.isEmpty) throw const AppException('وصف المصروف مطلوب');
+    if (c.isEmpty) throw const AppException('تصنيف المصروف مطلوب');
+    if (amountMinor <= 0) throw const AppException('قيمة المصروف يجب أن تكون أكبر من صفر');
     return _db.insert('expenses', {
       'description': d, 'category': c, 'amount_minor': amountMinor,
       'created_at': DateTime.now().toUtc().toIso8601String(),
