@@ -273,22 +273,26 @@ class _DataTransferPageState extends State<DataTransferPage> {
       final schemaVersion = versionRows.isEmpty
           ? 0
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
-      if (schemaVersion != 3 && schemaVersion != 4 && schemaVersion != 5 && schemaVersion != 6 && schemaVersion != 7) {
+      if (schemaVersion < 3 || schemaVersion > 9) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 أو 4 أو 5 أو 6).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 9).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion == 7
+      final restoreTables = schemaVersion == 9
           ? _tables
-          : schemaVersion == 6
-              ? _legacyV6Tables
-              : schemaVersion == 5
-              ? _legacyV5Tables
-              : schemaVersion == 4
-              ? _legacyV4Tables
-              : _legacyV3Tables;
+          : schemaVersion == 8
+              ? _legacyV8Tables
+              : schemaVersion == 7
+                  ? _legacyV7Tables
+                  : schemaVersion == 6
+                      ? _legacyV6Tables
+                      : schemaVersion == 5
+                          ? _legacyV5Tables
+                          : schemaVersion == 4
+                              ? _legacyV4Tables
+                              : _legacyV3Tables;
       for (final spec in restoreTables) {
         final tableInfo = await opened.rawQuery('PRAGMA table_info(' + spec.table + ')');
         final available = tableInfo.map((column) => column['name'] as String).toSet();
@@ -340,6 +344,16 @@ class _DataTransferPageState extends State<DataTransferPage> {
         data['inventory_movements'] = data['inventory_movements']!.map((row) => {
           ...row, 'warehouse_id': warehouseId,
         }).toList(growable: false);
+      }
+      if (schemaVersion < 8) {
+        data['suppliers'] = [];
+        data['purchases'] = [];
+        data['purchase_items'] = [];
+      }
+      if (schemaVersion < 9) {
+        data['customers'] = [];
+        data['supplier_account_entries'] = [];
+        data['customer_account_entries'] = [];
       }
       if (schemaVersion < 7) {
         const quantityColumns = <String, List<String>>{
@@ -396,10 +410,15 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (confirmed != true || !mounted) return;
 
       await widget.database.transaction((txn) async {
+        // Remove dependent records before their referenced owners.
         for (final table in [
           'inventory_movements',
           'sale_items',
+          'supplier_account_entries',
+          'customer_account_entries',
+          'purchase_items',
           'sales',
+          'purchases',
           'expenses',
           'product_warehouse_stock',
           'products',
@@ -407,9 +426,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
           'product_units',
           'warehouses',
           'branches',
+          'customers',
+          'suppliers',
         ]) {
           await txn.delete(table);
         }
+        // Rebuild owners before dependent documents and account-ledger rows.
         for (final table in [
           'branches',
           'warehouses',
@@ -417,10 +439,16 @@ class _DataTransferPageState extends State<DataTransferPage> {
           'product_units',
           'products',
           'product_warehouse_stock',
+          'customers',
           'sales',
           'sale_items',
           'expenses',
           'inventory_movements',
+          'suppliers',
+          'purchases',
+          'purchase_items',
+          'supplier_account_entries',
+          'customer_account_entries',
         ]) {
           for (final row in data[table]!) {
             await txn.insert(table, row, conflictAlgorithm: ConflictAlgorithm.abort);
