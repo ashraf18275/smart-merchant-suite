@@ -70,3 +70,6 @@ jobs:
             echo "Applying $migration"
             psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f "$migration"
           done
+
+      - name: Run PostgreSQL security regression tests
+        run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/security_regression.sql
