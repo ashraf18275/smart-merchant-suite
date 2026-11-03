@@ -307,11 +307,22 @@ class _DataTransferPageState extends State<DataTransferPage> {
         data['sales'] = data['sales']!.map((row) => {...row, 'warehouse_id': null}).toList(growable: false);
       }
       if (schemaVersion < 5) {
+        // Legacy v3/v4 backups have no branch or warehouse identifiers.
+        // Reuse a valid destination pair by ID, without assuming the owner has
+        // kept the default branch/warehouse names unchanged.
         final branchRows = await widget.database.rawQuery(
-          "SELECT b.id, b.name, b.address, b.phone, b.is_active, b.created_at, w.id AS warehouse_id, w.name AS warehouse_name, w.is_active AS warehouse_active, w.created_at AS warehouse_created_at FROM branches b JOIN warehouses w ON w.branch_id = b.id WHERE b.name = 'الفرع الرئيسي' AND w.name = 'المخزن الرئيسي' LIMIT 1",
+          'SELECT b.id, b.created_at, w.id AS warehouse_id, '
+          'w.created_at AS warehouse_created_at '
+          'FROM branches b JOIN warehouses w ON w.branch_id = b.id '
+          'ORDER BY b.id ASC, w.id ASC LIMIT 1',
         );
+        // The current schema guarantees at least one unit. Its display name
+        // may have been customized, so resolve a stable existing ID instead.
         final defaultUnitRows = await widget.database.query(
-          'product_units', columns: ['id'], where: 'name = ?', whereArgs: ['قطعة'], limit: 1,
+          'product_units',
+          columns: ['id'],
+          orderBy: 'id ASC',
+          limit: 1,
         );
         if (branchRows.isEmpty || defaultUnitRows.isEmpty) {
           throw AppException('تعذر تجهيز الفرع والمخزن الافتراضيين لاستعادة النسخة القديمة.');
