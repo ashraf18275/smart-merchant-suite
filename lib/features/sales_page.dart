@@ -105,9 +105,9 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
     final quantityControllers = <int, TextEditingController>{
-      for (final p in availableProducts) p.id!: TextEditingController(text: '0'),
+      for (final p in availableProducts) p.id!: TextEditingController(),
     };
-    final paid = TextEditingController(text: '0.00');
+    final paid = TextEditingController();
     final key = GlobalKey<FormState>();
     int? selectedCustomerId;
     final result = await showDialog<Map<String, Object?>?>(
@@ -145,7 +145,10 @@ class _SalesPageState extends State<SalesPage> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: 'الكمية', isDense: true),
                       validator: (v) {
-                        final n = Quantity.parse(v ?? '', allowsFraction: _stockUnit(p.id).allowsFraction);
+                        final value = (v ?? '').trim();
+                        final n = value.isEmpty
+                            ? 0
+                            : Quantity.parse(value, allowsFraction: _stockUnit(p.id).allowsFraction);
                         if (n == null || n < 0) return 'كمية غير صحيحة';
                         if (n > (quantitiesByProduct[p.id] ?? 0)) return 'المتاح ${_quantity(quantitiesByProduct[p.id] ?? 0)}';
                         return null;
@@ -158,7 +161,12 @@ class _SalesPageState extends State<SalesPage> {
                   controller: paid,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'المبلغ المدفوع بالجنيه'),
-                  validator: (v) => v == null || _parseMoney(v) == null ? 'أدخل مبلغًا صحيحًا' : null,
+                  validator: (v) {
+                    final value = (v ?? '').trim();
+                    return value.isEmpty || _parseMoney(value) != null
+                        ? null
+                        : 'أدخل مبلغًا صحيحًا';
+                  },
                 ),
               ]),
             ),
@@ -172,7 +180,10 @@ class _SalesPageState extends State<SalesPage> {
               final quantities = <int, int>{};
               for (final entry in quantityControllers.entries) {
                 final stockItem = _stockUnit(entry.key);
-                final n = Quantity.parse(entry.value.text, allowsFraction: stockItem.allowsFraction)!;
+                final value = entry.value.text.trim();
+                final n = value.isEmpty
+                    ? 0
+                    : Quantity.parse(value, allowsFraction: stockItem.allowsFraction)!;
                 if (n > 0) quantities[entry.key] = n;
               }
               if (quantities.isEmpty) {
@@ -183,7 +194,7 @@ class _SalesPageState extends State<SalesPage> {
               }
               Navigator.pop(ctx, {
                 'quantities': quantities,
-                'paidMinor': _parseMoney(paid.text)!,
+                'paidMinor': _parseMoney(paid.text.trim().isEmpty ? '0' : paid.text.trim())!,
                 'customerId': selectedCustomerId,
               });
             },
