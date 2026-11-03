@@ -129,6 +129,8 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('حفظ الفاتورة واستلام المخزون'));
     await tester.pump();
     expect(find.text('أضف موردًا واختر مخزنًا نشطًا أولًا.'), findsOneWidget);
