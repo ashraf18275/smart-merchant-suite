@@ -58,7 +58,7 @@ const _legacyV4Tables = <_ExportTable>[
   ]),
 ];
 
-const _tables = <_ExportTable>[
+const _legacyV7Tables = <_ExportTable>[
   _ExportTable('الفروع', 'branches', ['id', 'name', 'address', 'phone', 'is_active', 'created_at']),
   _ExportTable('المخازن', 'warehouses', ['id', 'branch_id', 'name', 'is_active', 'created_at']),
   _ExportTable('التصنيفات', 'product_categories', ['id', 'name', 'is_active', 'created_at']),
@@ -80,6 +80,66 @@ const _tables = <_ExportTable>[
   _ExportTable('المصروفات', 'expenses', ['id', 'description', 'category', 'amount_minor', 'created_at']),
   _ExportTable('حركات المخزون', 'inventory_movements', [
     'id', 'product_id', 'warehouse_id', 'quantity_delta', 'reason', 'created_at',
+  ]),
+];
+
+// Version 8 adds supplier and purchase documents to the version 7 layout.
+const _legacyV8Tables = <_ExportTable>[
+  ..._legacyV7Tables,
+  _ExportTable('الموردون', 'suppliers', [
+    'id', 'name', 'phone', 'address', 'is_active', 'created_at',
+  ]),
+  _ExportTable('فواتير المشتريات', 'purchases', [
+    'id', 'supplier_id', 'warehouse_id', 'total_minor', 'paid_minor', 'created_at',
+  ]),
+  _ExportTable('بنود المشتريات', 'purchase_items', [
+    'id', 'purchase_id', 'product_id', 'quantity', 'unit_cost_minor', 'line_total_minor',
+  ]),
+];
+
+// Version 9 adds customer accounts and both append-only account ledgers.
+const _tables = <_ExportTable>[
+  _ExportTable('الفروع', 'branches', ['id', 'name', 'address', 'phone', 'is_active', 'created_at']),
+  _ExportTable('المخازن', 'warehouses', ['id', 'branch_id', 'name', 'is_active', 'created_at']),
+  _ExportTable('التصنيفات', 'product_categories', ['id', 'name', 'is_active', 'created_at']),
+  _ExportTable('وحدات القياس', 'product_units', [
+    'id', 'name', 'abbreviation', 'allows_fraction', 'is_active', 'created_at',
+  ]),
+  _ExportTable('المنتجات', 'products', [
+    'id', 'name', 'sku', 'cost_minor', 'price_minor', 'stock_quantity',
+    'category_id', 'unit_id', 'is_active', 'created_at',
+  ]),
+  _ExportTable('أرصدة المخازن', 'product_warehouse_stock', [
+    'id', 'product_id', 'warehouse_id', 'quantity', 'updated_at',
+  ]),
+  _ExportTable('العملاء', 'customers', [
+    'id', 'name', 'phone', 'address', 'is_active', 'created_at',
+  ]),
+  _ExportTable('الفواتير', 'sales', [
+    'id', 'total_minor', 'paid_minor', 'warehouse_id', 'customer_id', 'created_at',
+  ]),
+  _ExportTable('بنود الفواتير', 'sale_items', [
+    'id', 'sale_id', 'product_id', 'quantity', 'unit_price_minor',
+    'unit_cost_minor', 'line_total_minor',
+  ]),
+  _ExportTable('المصروفات', 'expenses', ['id', 'description', 'category', 'amount_minor', 'created_at']),
+  _ExportTable('حركات المخزون', 'inventory_movements', [
+    'id', 'product_id', 'warehouse_id', 'quantity_delta', 'reason', 'created_at',
+  ]),
+  _ExportTable('الموردون', 'suppliers', [
+    'id', 'name', 'phone', 'address', 'is_active', 'created_at',
+  ]),
+  _ExportTable('فواتير المشتريات', 'purchases', [
+    'id', 'supplier_id', 'warehouse_id', 'total_minor', 'paid_minor', 'created_at',
+  ]),
+  _ExportTable('بنود المشتريات', 'purchase_items', [
+    'id', 'purchase_id', 'product_id', 'quantity', 'unit_cost_minor', 'line_total_minor',
+  ]),
+  _ExportTable('حسابات الموردين', 'supplier_account_entries', [
+    'id', 'supplier_id', 'amount_minor', 'entry_type', 'reference_id', 'note', 'created_at',
+  ]),
+  _ExportTable('حسابات العملاء', 'customer_account_entries', [
+    'id', 'customer_id', 'amount_minor', 'entry_type', 'reference_id', 'note', 'created_at',
   ]),
 ];
 
@@ -109,7 +169,7 @@ const _legacyV5Tables = <_ExportTable>[
 ];
 
 // Version 6 uses the same table layout as v7, but its quantities are whole units.
-const _legacyV6Tables = _tables;
+const _legacyV6Tables = _legacyV7Tables;
 
 class DataTransferPage extends StatefulWidget {
   const DataTransferPage({super.key, required this.database});
