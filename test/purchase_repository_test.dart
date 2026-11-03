@@ -248,4 +248,50 @@ void main() {
     expect(warehouseStock.quantity, 0);
   });
 
+
+  test('uses summed warehouse balances rather than a stale product aggregate for cost', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج إجمالي مخزون غير متطابق',
+      costMinor: 1000,
+      priceMinor: 1500,
+      stockQuantity: 2000,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد اختبار الاتساق');
+    final mainWarehouseId = (await warehouses.warehouses()).single.id;
+    final branchId = await warehouses.addBranch(name: 'فرع اختبار الاتساق');
+    final branchWarehouseId = await warehouses.addWarehouse(
+      branchId: branchId,
+      name: 'مخزن اختبار الاتساق',
+    );
+
+    // Simulate a stale denormalized total. Warehouse balances remain canonical.
+    await db.update(
+      'products',
+      {'stock_quantity': 9000},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+
+    await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: branchWarehouseId,
+      items: [PurchaseLineInput(
+        productId: productId,
+        quantity: 1000,
+        unitCostMinor: 2000,
+      )],
+      paidMinor: 0,
+    );
+
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 3000);
+    expect(product.costMinor, 1333);
+    final mainStock = (await warehouses.stock(warehouseId: mainWarehouseId))
+        .singleWhere((row) => row.productId == productId);
+    final branchStock = (await warehouses.stock(warehouseId: branchWarehouseId))
+        .singleWhere((row) => row.productId == productId);
+    expect(mainStock.quantity, 2000);
+    expect(branchStock.quantity, 1000);
+  });
+
 }
