@@ -340,4 +340,141 @@ void main() {
     expect(branchStock.quantity, 1000);
   });
 
+
+
+  test('rejects duplicate product lines without creating purchase records', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج مكرر', costMinor: 500, priceMinor: 800,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد التكرار');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId,
+        warehouseId: warehouseId,
+        items: [
+          PurchaseLineInput(productId: productId, quantity: 1000, unitCostMinor: 500),
+          PurchaseLineInput(productId: productId, quantity: 2000, unitCostMinor: 600),
+        ],
+        paidMinor: 0,
+      ),
+      throwsA(isA<AppException>()),
+    );
+
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect(await db.query('supplier_account_entries'), isEmpty);
+    expect(await db.query('inventory_movements'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 0);
+  });
+
+  test('rejects inactive supplier, warehouse, and product references', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج موقوف', costMinor: 500, priceMinor: 800,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد موقوف');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    final item = [PurchaseLineInput(
+      productId: productId, quantity: 1000, unitCostMinor: 500,
+    )];
+
+    await db.update('suppliers', {'is_active': 0},
+        where: 'id = ?', whereArgs: [supplierId]);
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId, warehouseId: warehouseId,
+        items: item, paidMinor: 0,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    await db.update('suppliers', {'is_active': 1},
+        where: 'id = ?', whereArgs: [supplierId]);
+
+    await db.update('warehouses', {'is_active': 0},
+        where: 'id = ?', whereArgs: [warehouseId]);
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId, warehouseId: warehouseId,
+        items: item, paidMinor: 0,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    await db.update('warehouses', {'is_active': 1},
+        where: 'id = ?', whereArgs: [warehouseId]);
+
+    await products.setActive(productId: productId, isActive: false);
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId, warehouseId: warehouseId,
+        items: item, paidMinor: 0,
+      ),
+      throwsA(isA<AppException>()),
+    );
+
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect(await db.query('supplier_account_entries'), isEmpty);
+    expect(await db.query('inventory_movements'), isEmpty);
+    expect((await products.all(includeInactive: true)).single.stockQuantity, 0);
+  });
+
+  test('rejects fractional purchase quantity for a whole-unit product', () async {
+    final productId = await products.add(const Product(
+      name: 'منتج بالقطعة', costMinor: 500, priceMinor: 800,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد القطع');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    await expectLater(
+      purchases.createPurchase(
+        supplierId: supplierId,
+        warehouseId: warehouseId,
+        items: [PurchaseLineInput(
+          productId: productId, quantity: 500, unitCostMinor: 1000,
+        )],
+        paidMinor: 0,
+      ),
+      throwsA(isA<AppException>()),
+    );
+
+    expect(await db.query('purchases'), isEmpty);
+    expect(await db.query('purchase_items'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 0);
+  });
+
+  test('accepts fractional purchase quantity for a fraction-enabled unit', () async {
+    final unitId = await products.addUnit(
+      name: 'كيلوجرام كسري',
+      abbreviation: 'كجم',
+      allowsFraction: true,
+    );
+    final productId = await products.add(Product(
+      name: 'منتج بالوزن',
+      costMinor: 1500,
+      priceMinor: 2500,
+      unitId: unitId,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد الوزن');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+
+    final purchaseId = await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(
+        productId: productId, quantity: 500, unitCostMinor: 2000,
+      )],
+      paidMinor: 0,
+    );
+
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 500);
+    expect(product.costMinor, 2000);
+    final purchase = (await db.query('purchases')).single;
+    expect(purchase['id'], purchaseId);
+    expect(purchase['total_minor'], 1000);
+    expect((await db.query('purchase_items')).single['quantity'], 500);
+    expect((await db.query('inventory_movements')).single['quantity_delta'], 500);
+  });
+
 }
