@@ -81,3 +81,4 @@
 - [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md): نموذج البيانات.
 - [docs/ACCEPTANCE_TESTS.md](docs/ACCEPTANCE_TESTS.md): معايير القبول.
 - [docs/ROADMAP.md](docs/ROADMAP.md): مراحل التنفيذ وما تبقى.
+- [docs/CLOUD_SYNC_MODEL.md](docs/CLOUD_SYNC_MODEL.md): نموذج البيانات السحابي وخطة المزامنة Offline-first.
