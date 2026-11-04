@@ -101,6 +101,37 @@ void main() {
       'line_total_minor': 125,
       'line_cost_minor': 63,
     });
+
+    final cancelledSaleId = await database.insert('sales', {
+      'total_minor': 500,
+      'paid_minor': 200,
+      'warehouse_id': warehouse['id'],
+      'customer_id': customerId,
+      'created_at': stamp,
+      'cancelled_at': stamp,
+      'cancellation_reason': 'طلب إلغاء تجريبي',
+    });
+    await database.insert('sale_items', {
+      'sale_id': cancelledSaleId,
+      'product_id': productId,
+      'quantity': 1000,
+      'returned_quantity': 0,
+      'returned_minor': 0,
+      'returned_cost_minor': 0,
+      'unit_price_minor': 500,
+      'unit_cost_minor': 125,
+      'line_total_minor': 500,
+    });
+    await database.insert('sales_cancellations', {
+      'sale_id': cancelledSaleId,
+      'customer_id': customerId,
+      'warehouse_id': warehouse['id'],
+      'total_minor': 500,
+      'paid_minor': 200,
+      'refunded_minor': 200,
+      'reason': 'طلب إلغاء تجريبي',
+      'created_at': stamp,
+    });
     await database.insert('expenses', {
       'description': 'مصروف اختبار',
       'category': 'تشغيل',
