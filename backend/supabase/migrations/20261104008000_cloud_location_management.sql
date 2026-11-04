@@ -209,6 +209,7 @@ as $function$
 declare
   v_current_active boolean;
   v_active_count integer;
+  v_default_warehouse_id uuid;
 begin
   if auth.uid() is null
      or p_business_id is null
@@ -239,12 +240,16 @@ begin
 
   if not p_is_active then
     if exists (
-      select 1 from public.cloud_warehouses w
+      select 1
+      from public.cloud_product_warehouse_stock s
+      join public.cloud_warehouses w
+        on w.id = s.warehouse_id
+       and w.business_id = s.business_id
       where w.business_id = p_business_id
         and w.branch_id = p_branch_id
-        and w.is_active = true
+        and s.quantity_scaled > 0
     ) then
-      raise exception 'deactivate branch warehouses first' using errcode = '23514';
+      raise exception 'branch with stock cannot be deactivated' using errcode = '23514';
     end if;
 
     select count(*) into v_active_count
@@ -253,11 +258,56 @@ begin
     if v_active_count <= 1 then
       raise exception 'business must keep at least one active branch' using errcode = '23514';
     end if;
+
+    insert into public.audit_events (
+      business_id, actor_user_id, action_key, entity_type, entity_id, metadata
+    )
+    select p_business_id, auth.uid(), 'warehouses.deactivate',
+      'cloud_warehouse', w.id::text,
+      jsonb_build_object('branch_id', p_branch_id, 'reason', 'branch_deactivated')
+    from public.cloud_warehouses w
+    where w.business_id = p_business_id
+      and w.branch_id = p_branch_id
+      and w.is_active = true;
+
+    update public.cloud_warehouses
+    set is_active = false
+    where business_id = p_business_id and branch_id = p_branch_id
+      and is_active = true;
+  else
+    select w.id into v_default_warehouse_id
+    from public.cloud_warehouses w
+    where w.business_id = p_business_id and w.branch_id = p_branch_id
+    order by w.created_at, w.id
+    limit 1
+    for update;
+
+    if v_default_warehouse_id is null then
+      raise exception 'branch must contain a warehouse before activation' using errcode = '23514';
+    end if;
   end if;
 
   update public.cloud_branches
   set is_active = p_is_active
   where id = p_branch_id and business_id = p_business_id;
+
+  if p_is_active and not exists (
+    select 1 from public.cloud_warehouses w
+    where w.business_id = p_business_id
+      and w.branch_id = p_branch_id
+      and w.is_active = true
+  ) then
+    update public.cloud_warehouses
+    set is_active = true
+    where id = v_default_warehouse_id and business_id = p_business_id;
+    insert into public.audit_events (
+      business_id, actor_user_id, action_key, entity_type, entity_id, metadata
+    ) values (
+      p_business_id, auth.uid(), 'warehouses.activate', 'cloud_warehouse',
+      v_default_warehouse_id::text,
+      jsonb_build_object('branch_id', p_branch_id, 'reason', 'branch_activated')
+    );
+  end if;
 
   insert into public.audit_events (
     business_id, actor_user_id, action_key, entity_type, entity_id, metadata
