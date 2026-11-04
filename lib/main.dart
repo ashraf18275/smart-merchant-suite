@@ -5,6 +5,7 @@ import 'application/services/product_application_service.dart';
 import 'application/services/sales_application_service.dart';
 import 'core/app_error.dart';
 import 'data/account_repository.dart';
+import 'data/cashbook_repository.dart';
 import 'data/expense_repository.dart';
 import 'data/local_database.dart';
 import 'data/product_repository.dart';
@@ -12,6 +13,7 @@ import 'data/purchase_repository.dart';
 import 'data/sales_repository.dart';
 import 'data/warehouse_repository.dart';
 import 'features/accounts_page.dart';
+import 'features/cashbook_page.dart';
 import 'features/branch_warehouse_page.dart';
 import 'features/data_transfer_page.dart';
 import 'features/expenses_page.dart';
@@ -80,6 +82,7 @@ class HomeDashboard extends StatelessWidget {
     (icon: Icons.backup_outlined, title: 'النسخ الاحتياطي وتصدير البيانات', subtitle: 'حفظ نسخة محلية وتصدير ملفات CSV'),
     (icon: Icons.warehouse_outlined, title: 'الفروع والمخازن', subtitle: 'إدارة الأرصدة والتحويلات والتسويات'),
     (icon: Icons.account_balance_outlined, title: 'حسابات العملاء والموردين', subtitle: 'كشوف الحساب والتحصيل والسداد'),
+    (icon: Icons.account_balance_wallet_outlined, title: 'الصندوق وسجل النشاط', subtitle: 'المقبوضات والمدفوعات وسجل العمليات'),
   ];
 
   Future<void> _openModule(BuildContext context, int index) async {
@@ -114,6 +117,7 @@ class HomeDashboard extends StatelessWidget {
               accounts: AccountRepository(database),
               purchases: PurchaseRepository(database),
             ),
+          7 => CashbookPage(repository: CashbookRepository(database)),
           _ => const SizedBox.shrink(),
         };
 
@@ -131,6 +135,7 @@ class HomeDashboard extends StatelessWidget {
         4 => 'تعذر فتح أدوات تصدير البيانات.',
         5 => 'تعذر فتح إدارة الفروع والمخازن.',
         6 => 'تعذر فتح حسابات العملاء والموردين.',
+        7 => 'تعذر فتح الصندوق وسجل النشاط.',
         _ => 'تعذر فتح القسم المطلوب.',
       };
       final operation = switch (index) {
@@ -141,6 +146,7 @@ class HomeDashboard extends StatelessWidget {
         4 => 'data_transfer.open',
         5 => 'warehouse.open',
         6 => 'accounts.open',
+        7 => 'cashbook.open',
         _ => 'module.open',
       };
       ScaffoldMessenger.of(context).showSnackBar(
