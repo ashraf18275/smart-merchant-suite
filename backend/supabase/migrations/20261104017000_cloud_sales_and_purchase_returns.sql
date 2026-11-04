@@ -1,5 +1,11 @@
 -- Tenant-scoped sales/purchase returns with stock reversal, account credits and tender refunds.
 -- Returns are append-only and every operation is idempotent.
+
+-- Composite unique indexes allow every return line to enforce same-tenant source references.
+create unique index if not exists cloud_sale_items_id_business_unique
+  on public.cloud_sale_items(id, business_id);
+create unique index if not exists cloud_purchase_items_id_business_unique
+  on public.cloud_purchase_items(id, business_id);
 create table if not exists public.cloud_sale_returns (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
@@ -412,25 +418,17 @@ begin
     );
   end loop;
 
-  if v_sale.customer_id is not null then
+  if v_sale.customer_id is not null
+     and (-v_total_minor + p_refunded_minor) <> 0 then
     insert into public.cloud_customer_account_entries (
       business_id, customer_id, amount_minor, entry_type, reference_type,
       reference_id, operation_id, note, actor_user_id, created_at
     ) values (
-      p_business_id, v_sale.customer_id, -v_total_minor, 'return', 'sale_return',
-      v_return_id, p_operation_id, 'تخفيض حساب العميل بمرتجع مبيعات',
+      p_business_id, v_sale.customer_id, -v_total_minor + p_refunded_minor,
+      'return', 'sale_return', v_return_id, p_operation_id,
+      'صافي تخفيض حساب العميل بعد رد المبلغ النقدي/الإلكتروني',
       auth.uid(), v_stamp
     );
-    if p_refunded_minor > 0 then
-      insert into public.cloud_customer_account_entries (
-        business_id, customer_id, amount_minor, entry_type, reference_type,
-        reference_id, operation_id, note, actor_user_id, created_at
-      ) values (
-        p_business_id, v_sale.customer_id, p_refunded_minor, 'refund', 'sale_return_refund',
-        v_return_id, p_operation_id, 'رد مبلغ للعميل عن مرتجع مبيعات',
-        auth.uid(), v_stamp
-      );
-    end if;
   end if;
 
   if p_refunded_minor > 0 then
@@ -696,25 +694,19 @@ begin
     );
   end loop;
 
-  insert into public.cloud_supplier_account_entries (
-    business_id, supplier_id, amount_minor, entry_type, reference_type,
-    reference_id, operation_id, note, actor_user_id, created_at
-  ) values (
-    p_business_id, v_purchase.supplier_id, -v_total_minor, 'return', 'purchase_return',
-    v_return_id, p_operation_id, 'تخفيض مستحقات المورد بمرتجع مشتريات',
-    auth.uid(), v_stamp
-  );
-
-  if p_refunded_minor > 0 then
+  if (-v_total_minor + p_refunded_minor) <> 0 then
     insert into public.cloud_supplier_account_entries (
       business_id, supplier_id, amount_minor, entry_type, reference_type,
       reference_id, operation_id, note, actor_user_id, created_at
     ) values (
-      p_business_id, v_purchase.supplier_id, p_refunded_minor, 'refund', 'purchase_return_refund',
-      v_return_id, p_operation_id, 'استرداد مبلغ من المورد عن مرتجع مشتريات',
+      p_business_id, v_purchase.supplier_id, -v_total_minor + p_refunded_minor,
+      'return', 'purchase_return', v_return_id, p_operation_id,
+      'صافي تخفيض مستحقات المورد بعد استرداد المبلغ',
       auth.uid(), v_stamp
     );
+  end if;
 
+  if p_refunded_minor > 0 then
     insert into public.cloud_purchase_return_refunds (
       business_id, return_id, purchase_id, amount_minor, payment_method,
       cash_session_id, operation_id, request_hash, actor_user_id, created_at
