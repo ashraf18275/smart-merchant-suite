@@ -126,10 +126,7 @@ jobs:
   build-windows:
     name: Build Windows (only after Flutter CI passes)
     needs: analyze-and-test
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      startsWith(github.ref, 'refs/heads/feature/') ||
-      (github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/'))
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Check out branch
