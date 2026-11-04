@@ -148,13 +148,33 @@ begin
     raise exception 'business not found' using errcode = 'P0002';
   end if;
 
-  select w.branch_id, w.is_active
-  into v_branch_id, v_current_active
+  select w.branch_id
+  into v_branch_id
+  from public.cloud_warehouses w
+  where w.id = p_warehouse_id and w.business_id = p_business_id;
+  if not found then
+    raise exception 'warehouse not found in this business' using errcode = 'P0002';
+  end if;
+
+  perform 1 from public.cloud_branches b
+  where b.id = v_branch_id and b.business_id = p_business_id
+  for update;
+  if not found then
+    raise exception 'warehouse branch not found in this business' using errcode = 'P0002';
+  end if;
+
+  select w.is_active
+  into v_current_active
   from public.cloud_warehouses w
   where w.id = p_warehouse_id and w.business_id = p_business_id
   for update;
-  if not found then
-    raise exception 'warehouse not found in this business' using errcode = 'P0002';
+
+  if p_is_active and not exists (
+    select 1 from public.cloud_branches b
+    where b.id = v_branch_id and b.business_id = p_business_id
+      and b.is_active = true
+  ) then
+    raise exception 'cannot activate a warehouse under an inactive branch' using errcode = '23514';
   end if;
 
   if v_current_active = p_is_active then
