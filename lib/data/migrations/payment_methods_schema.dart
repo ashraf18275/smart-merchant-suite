@@ -25,6 +25,11 @@ Future<void> createPaymentMethodsSchema(Database db) async {
     CREATE INDEX IF NOT EXISTS idx_payment_records_source
     ON payment_records(source_type, source_id, direction)
   ''');
+  await db.execute('''
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_records_idempotent
+    ON payment_records(source_type, source_id, direction, payment_method)
+    WHERE source_id IS NOT NULL
+  ''');
 
   await db.execute('''
     INSERT INTO payment_records (
