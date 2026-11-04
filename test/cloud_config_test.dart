@@ -5,7 +5,7 @@ void main() {
   group('CloudConfig', () {
     test('requires both a valid endpoint and public client key', () {
       expect(
-        const CloudConfig(url: '', anonKey: '').isConfigured,
+        const CloudConfig(url: '', publishableKey: '').isConfigured,
         isFalse,
       );
       expect(
