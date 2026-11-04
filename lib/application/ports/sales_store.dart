@@ -1,5 +1,6 @@
 import '../../domain/sale_record.dart';
 import '../../domain/sale_return_line.dart';
+import '../../domain/payment_method.dart';
 
 abstract interface class SalesStore {
   /// Quantity values are positive integer thousandths, keyed by product ID.
@@ -8,6 +9,7 @@ abstract interface class SalesStore {
     required int paidMinor,
     required int warehouseId,
     int? customerId,
+    String paymentMethod = PaymentMethod.cash,
   });
 
   Future<List<SaleRecord>> all();
