@@ -64,7 +64,7 @@
 - فواتير البيع وحركات المخزون تحمل branch_id وwarehouse_id، وتمنع المفاتيح الأجنبية المركبة ربط السجل بفرع أو نشاط غير مالكه.
 - RPCs البيع والتسوية تقبل مخزنًا محددًا وتحدث رصيد المخزن وإجمالي المنتج في المعاملة نفسها. يوجد wrapper للتوافق مع الاستدعاءات القديمة ويستخدم المخزن الافتراضي.
 - غير ممثل بعد أو غير مكتمل: التصنيفات والوحدات، العملاء ودفاترهم، الموردون والمشتريات ودفاترهم، الدفعات المستقلة، المرتجعات وورديات الصندوق.
-- الكمية السحابية ما زالت حاليًا بوحدة القطعة الكاملة؛ SQLite يستخدم integer scaled thousandths. يجب توحيدها إلى 1000 = وحدة كاملة قبل مزامنة أي كمية.
+- الكميات المحلية والسحابية أصبحت integer scaled thousandths بعد هجرة `20261104006000_cloud_quantity_thousandths.sql`: 1000 = وحدة كاملة. أعمدة cloud_products.stock_quantity وcloud_inventory_movements.quantity_delta وcloud_product_warehouse_stock.quantity_scaled وcloud_sale_items.quantity_scaled تحمل القيم scaled. RPCs الحديثة تستقبل القيم scaled، مع wrappers توافقية تحول whole units القديمة.
 - المعرفات المحلية SQLite أعداد صحيحة، بينما المعرفات السحابية UUID. لا يجوز افتراض تطابقها أو إرسال local id بوصفه remote id؛ نحتاج خريطة ربط ثابتة أو معرفات UUID محلية مستقرة.
 - لا توجد بعد مزامنة فعلية أو Outbox أو تكامل Supabase داخل Flutter.
 
