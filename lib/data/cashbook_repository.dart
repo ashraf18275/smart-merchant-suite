@@ -12,7 +12,7 @@ class CashbookRepository {
         s.opening_balance_minor
           + COALESCE(SUM(CASE WHEN c.direction = 'in' THEN c.amount_minor
                               WHEN c.direction = 'out' THEN -c.amount_minor
-                              ELSE 0 END), 0) AS expected_balance_minor
+                              ELSE 0 END), 0) AS live_expected_balance_minor
       FROM cash_sessions s
       LEFT JOIN cash_transactions c ON c.cash_session_id = s.id
       WHERE s.status = 'open'
