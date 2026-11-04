@@ -28,8 +28,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: flutter-quality-gate-${{ github.ref }}
-  cancel-in-progress: true
+  # Release builds run in their own group and must survive later ordinary CI pushes.
+  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[build-release]') && format('flutter-release-build-{0}', github.ref) || format('flutter-quality-gate-{0}', github.ref) }}
+  cancel-in-progress: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[build-release]')) }}
 
 permissions:
   contents: read
