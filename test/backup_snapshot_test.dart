@@ -53,6 +53,12 @@ void main() {
         'quantity': 2000,
         'updated_at': stamp,
       });
+      final cashSessionId = await source.insert('cash_sessions', {
+        'opened_at': stamp,
+        'opening_balance_minor': 3000,
+        'opening_note': 'وردية تجريبية',
+        'status': 'open',
+      });
       final saleId = await source.insert('sales', {
         'total_minor': 400,
         'paid_minor': 200,
@@ -118,6 +124,16 @@ void main() {
         'source_type': 'sale',
         'source_id': saleId,
         'note': 'تحويل تجريبي',
+        'created_at': stamp,
+      });
+      await source.insert('cash_transactions', {
+        'direction': 'in',
+        'category': 'sale_receipt',
+        'amount_minor': 200,
+        'source_type': 'sale',
+        'source_id': saleId,
+        'cash_session_id': cashSessionId,
+        'note': 'تحصيل نقدي تجريبي',
         'created_at': stamp,
       });
 
