@@ -334,6 +334,44 @@ class PurchaseRepository {
     });
   }
 
+  /// Lists original purchase invoices that still have returnable quantities.
+  Future<List<Map<String, Object?>>> supplierReturnablePurchases() =>
+      _db.rawQuery('''
+        SELECT pu.id, pu.created_at, pu.total_minor, s.name AS supplier_name,
+               w.name AS warehouse_name
+        FROM purchases pu
+        JOIN suppliers s ON s.id = pu.supplier_id
+        JOIN warehouses w ON w.id = pu.warehouse_id
+        WHERE EXISTS (
+          SELECT 1 FROM purchase_items pi
+          WHERE pi.purchase_id = pu.id
+            AND pi.quantity > COALESCE(pi.returned_quantity, 0)
+        )
+        ORDER BY pu.id DESC
+      ''');
+
+  /// Lists returnable lines and current stock in the original purchase warehouse.
+  Future<List<Map<String, Object?>>> supplierReturnableItems(int purchaseId) =>
+      _db.rawQuery('''
+        SELECT pi.id AS purchase_item_id, pi.product_id, p.name AS product_name,
+               pi.quantity, COALESCE(pi.returned_quantity, 0) AS returned_quantity,
+               pi.unit_cost_minor, COALESCE(pws.quantity, 0) AS available_quantity,
+               COALESCE(pu.allows_fraction, 0) AS allows_fraction,
+               COALESCE(pu.abbreviation, 'وحدة') AS unit_name
+        FROM purchase_items pi
+        JOIN products p ON p.id = pi.product_id
+        LEFT JOIN product_units pu ON pu.id = p.unit_id
+        LEFT JOIN product_warehouse_stock pws
+          ON pws.product_id = pi.product_id
+         AND pws.warehouse_id = (
+           SELECT warehouse_id FROM purchases WHERE id = ?
+         )
+        WHERE pi.purchase_id = ?
+          AND pi.quantity > COALESCE(pi.returned_quantity, 0)
+          AND p.is_active = 1
+        ORDER BY pi.id ASC
+      ''', [purchaseId, purchaseId]);
+
   String? _optional(String? value) {
     final v = value?.trim();
     return v == null || v.isEmpty ? null : v;
