@@ -54,6 +54,29 @@ void main() {
     expect(customers.map((row) => row['name']), ['أحمد', 'زيد']);
   });
 
+  test('creates supplier opening payable or supplier credit without cash movement', () async {
+    final payableSupplier = await purchases.addSupplier(
+      name: 'مورد مستحق',
+      openingBalanceMinor: 22000,
+    );
+    final creditSupplier = await purchases.addSupplier(
+      name: 'مورد له رصيد',
+      openingBalanceMinor: -4500,
+    );
+    expect(await accounts.supplierBalance(payableSupplier), 22000);
+    expect(await accounts.supplierBalance(creditSupplier), -4500);
+    final entries = await db.query('supplier_account_entries',
+      orderBy: 'id ASC');
+    expect(entries.map((row) => row['amount_minor']), [22000, -4500]);
+    expect(entries.every((row) => row['entry_type'] == 'adjustment'), isTrue);
+    expect(entries.every((row) => row['note'] == 'رصيد افتتاحي عند إنشاء الحساب'), isTrue);
+    expect(await db.query('cash_transactions'), isEmpty);
+    expect(await db.query('payment_records'), isEmpty);
+    final events = await db.query('audit_events',
+      where: "action = 'supplier_created'");
+    expect(events, hasLength(2));
+  });
+
   test('records supplier payments and returns a chronological running balance', () async {
     final supplierId = await purchases.addSupplier(name: 'مورد');
     await db.insert('supplier_account_entries', {
