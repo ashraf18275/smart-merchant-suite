@@ -198,18 +198,41 @@ class SyncOutboxRepository {
     String? remoteEntityId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    await _db.update(
-      'sync_outbox',
-      {
-        'status': 'synced',
-        'remote_entity_id': remoteEntityId,
-        'last_error': null,
-        'synced_at': now,
-        'updated_at': now,
-      },
-      where: 'event_id = ? AND status = ?',
-      whereArgs: [eventId, 'processing'],
-    );
+    await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'sync_outbox',
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Sync event not found: $eventId');
+      final event = SyncOutboxEvent.fromRow(rows.single);
+      if (event.status != 'processing') {
+        throw StateError('Only a claimed event can be marked synced');
+      }
+      if (remoteEntityId != null && event.businessId != null) {
+        await _writeEntityMapping(
+          txn,
+          businessId: event.businessId!,
+          entityType: event.entityType,
+          localEntityId: event.localEntityId,
+          remoteEntityId: remoteEntityId,
+          now: now,
+        );
+      }
+      await txn.update(
+        'sync_outbox',
+        {
+          'status': 'synced',
+          'remote_entity_id': remoteEntityId,
+          'last_error': null,
+          'synced_at': now,
+          'updated_at': now,
+        },
+        where: 'event_id = ? AND status = ?',
+        whereArgs: [eventId, 'processing'],
+      );
+    });
   }
 
   Future<void> markFailed(String eventId, Object error) async {
@@ -278,49 +301,65 @@ class SyncOutboxRepository {
     required String remoteEntityId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    await _db.transaction((txn) async {
-      final localRows = await txn.query(
+    await _db.transaction((txn) => _writeEntityMapping(
+          txn,
+          businessId: businessId,
+          entityType: entityType,
+          localEntityId: localEntityId,
+          remoteEntityId: remoteEntityId,
+          now: now,
+        ));
+  }
+
+  Future<void> _writeEntityMapping(
+    DatabaseExecutor txn, {
+    required String businessId,
+    required String entityType,
+    required String localEntityId,
+    required String remoteEntityId,
+    required String now,
+  }) async {
+    final localRows = await txn.query(
+      'sync_entity_map',
+      columns: ['remote_entity_id'],
+      where: 'business_id = ? AND entity_type = ? AND local_entity_id = ?',
+      whereArgs: [businessId, entityType, localEntityId],
+      limit: 1,
+    );
+    if (localRows.isNotEmpty &&
+        localRows.single['remote_entity_id'] != remoteEntityId) {
+      throw StateError('Local entity is already mapped to another cloud id');
+    }
+
+    final remoteRows = await txn.query(
+      'sync_entity_map',
+      columns: ['local_entity_id'],
+      where: 'business_id = ? AND entity_type = ? AND remote_entity_id = ?',
+      whereArgs: [businessId, entityType, remoteEntityId],
+      limit: 1,
+    );
+    if (remoteRows.isNotEmpty &&
+        remoteRows.single['local_entity_id'] != localEntityId) {
+      throw StateError('Cloud entity is already mapped to another local id');
+    }
+
+    if (localRows.isEmpty) {
+      await txn.insert('sync_entity_map', {
+        'business_id': businessId,
+        'entity_type': entityType,
+        'local_entity_id': localEntityId,
+        'remote_entity_id': remoteEntityId,
+        'created_at': now,
+        'updated_at': now,
+      });
+    } else {
+      await txn.update(
         'sync_entity_map',
-        columns: ['remote_entity_id'],
+        {'updated_at': now},
         where: 'business_id = ? AND entity_type = ? AND local_entity_id = ?',
         whereArgs: [businessId, entityType, localEntityId],
-        limit: 1,
       );
-      if (localRows.isNotEmpty &&
-          localRows.single['remote_entity_id'] != remoteEntityId) {
-        throw StateError('Local entity is already mapped to another cloud id');
-      }
-
-      final remoteRows = await txn.query(
-        'sync_entity_map',
-        columns: ['local_entity_id'],
-        where: 'business_id = ? AND entity_type = ? AND remote_entity_id = ?',
-        whereArgs: [businessId, entityType, remoteEntityId],
-        limit: 1,
-      );
-      if (remoteRows.isNotEmpty &&
-          remoteRows.single['local_entity_id'] != localEntityId) {
-        throw StateError('Cloud entity is already mapped to another local id');
-      }
-
-      if (localRows.isEmpty) {
-        await txn.insert('sync_entity_map', {
-          'business_id': businessId,
-          'entity_type': entityType,
-          'local_entity_id': localEntityId,
-          'remote_entity_id': remoteEntityId,
-          'created_at': now,
-          'updated_at': now,
-        });
-      } else {
-        await txn.update(
-          'sync_entity_map',
-          {'updated_at': now},
-          where: 'business_id = ? AND entity_type = ? AND local_entity_id = ?',
-          whereArgs: [businessId, entityType, localEntityId],
-        );
-      }
-    });
+    }
   }
 
   Future<String?> remoteIdFor({
