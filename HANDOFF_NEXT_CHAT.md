@@ -527,3 +527,20 @@ Workflow: `.github/workflows/flutter-ci.yml`
 - تم تنزيل الأرشيفين وفكهما وفحص الملفات. نجحت `sha256sum -c SHA256SUMS.txt` لكل ملفات APK ولحزمة Windows، كما تأكد وجود `smart_merchant_suite.exe` وDLLs المطلوبة داخل حزمة Windows.
 - Android artifact صالح لمدة 14 يومًا من وقت رفعه، وWindows artifact لمدة 30 يومًا. احتفظ بنسخ الملفات خارج GitHub Actions إذا أردت استخدامها بعد انتهاء الاحتفاظ.
 - ملاحظة: Android ملفات Debug وليست إصدارًا موقّعًا للتوزيع التجاري. Windows حزمة Release. هذه نسخ رجوع وليست إعلان اكتمال المشروع.
+
+
+### تحديث إضافي — إدارة المستخدمين والصلاحيات داخل التطبيق (4 نوفمبر 2026)
+
+- أضيفت `lib/cloud/cloud_member_repository.dart` و`lib/features/cloud_members_page.dart`.
+- شاشة الحساب السحابي تعرض الأنشطة؛ الضغط على النشاط يفتح إدارة المستخدمين والصلاحيات.
+- إنشاء حساب الموظف يتم عبر Edge Function `create-member` باستخدام اسم مستخدم وكلمة مرور، دون دعوات بريد.
+- الصلاحيات تُختار واحدة واحدة من كتالوج `AppPermission`؛ المدير المفوض لا يستطيع منح غير الصلاحيات التي يحملها بنفسه.
+- تحديث الصلاحيات عبر RPC `replace_member_permissions`، والتفعيل/التعطيل عبر RPC `set_business_member_active` مع تدقيق.
+- لا يمكن تعطيل المالك أو المستخدم الحالي، ولا تعطيل مستخدم لديه وردية صندوق مفتوحة.
+- سياسة RLS تسمح لمدير المستخدمين ذي `users.view` بقراءة صلاحيات أعضاء النشاط، بينما المستخدم العادي يرى صلاحياته فقط.
+
+**التحقق:**
+- Flutter CI run #616: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41919236546 — Analyze success و163 اختبارًا ناجحًا.
+- Supabase/PostgreSQL run #114: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41919630572 — migrations/security regression/legacy quantity/Deno checks: success.
+- فشل اختبار وسيط بسبب توقع غير صحيح لعدد صلاحيات العضو العادي؛ تم تصحيح التوقع ليتحقق من ظهور صلاحياته الثلاث فقط، ثم نجح التشغيل #114.
+- النسخ الاحتياطية Android/Windows الموثقة أعلاه مبنية من commit `46b4684ce5449a032f89da514b9121d26bc1c464` قبل إضافة شاشة إدارة المستخدمين، وهي نقطة رجوع ثابتة.
