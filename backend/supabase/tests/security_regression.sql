@@ -16,6 +16,23 @@ insert into public.businesses (id, name, owner_user_id) values
   ('20000000-0000-0000-0000-000000000002', 'Security Test Business B', '10000000-0000-0000-0000-000000000002')
 on conflict (id) do nothing;
 
+insert into public.cloud_branches (id, business_id, name)
+values (
+  '22000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000001',
+  'Second test branch'
+)
+on conflict (id) do nothing;
+
+insert into public.cloud_warehouses (id, business_id, branch_id, name)
+values (
+  '23000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000001',
+  '22000000-0000-0000-0000-000000000001',
+  'Second test warehouse'
+)
+on conflict (id) do nothing;
+
 -- One least-privilege active member and one inactive member in business A.
 insert into public.business_members (
   id, business_id, user_id, display_name, is_owner, is_active
@@ -61,6 +78,17 @@ insert into public.cloud_products (
    '20000000-0000-0000-0000-000000000002',
    'Test product B', 'SEC-B', 70, 140, 20, '10000000-0000-0000-0000-000000000002')
 on conflict (id) do nothing;
+
+insert into public.cloud_product_warehouse_stock (
+  business_id, branch_id, warehouse_id, product_id, quantity
+) values (
+  '20000000-0000-0000-0000-000000000001',
+  '22000000-0000-0000-0000-000000000001',
+  '23000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  0
+)
+on conflict (business_id, warehouse_id, product_id) do nothing;
 
 insert into public.cloud_expenses (
   id, business_id, description, category, amount_minor, created_by
@@ -252,6 +280,48 @@ begin
 
   if v_stock <> 11 then
     raise exception 'idempotency failed: expected stock 11 after one adjustment and retry, got %', v_stock;
+  end if;
+
+  -- A second warehouse has an independent balance; sales there must not
+  -- consume the default warehouse's stock.
+  perform public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    '22000000-0000-0000-0000-000000000001',
+    '23000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    5,
+    'opening balance second warehouse',
+    '50000000-0000-0000-0000-000000000020'
+  );
+
+  perform public.create_cloud_sale(
+    '20000000-0000-0000-0000-000000000001',
+    '22000000-0000-0000-0000-000000000001',
+    '23000000-0000-0000-0000-000000000001',
+    jsonb_build_array(jsonb_build_object(
+      'product_id', '30000000-0000-0000-0000-000000000001',
+      'quantity', 2
+    )),
+    200,
+    '50000000-0000-0000-0000-000000000021'
+  );
+
+  select quantity into v_stock
+  from public.cloud_product_warehouse_stock
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and warehouse_id = '23000000-0000-0000-0000-000000000001'
+    and product_id = '30000000-0000-0000-0000-000000000001';
+
+  if v_stock <> 3 then
+    raise exception 'warehouse stock failed: expected 3 in second warehouse, got %', v_stock;
+  end if;
+
+  select stock_quantity into v_stock
+  from public.cloud_products
+  where id = '30000000-0000-0000-0000-000000000001';
+
+  if v_stock <> 14 then
+    raise exception 'aggregate stock failed: expected 14 after warehouse operations, got %', v_stock;
   end if;
 
   select count(*) into v_count from public.cloud_sales
