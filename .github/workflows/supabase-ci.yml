@@ -73,3 +73,28 @@ jobs:
 
       - name: Run PostgreSQL security regression tests
         run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/security_regression.sql
+
+      - name: Verify legacy quantity migration
+        run: |
+          createdb -h localhost -U postgres smart_merchant_legacy_test
+          psql -h localhost -U postgres -d smart_merchant_legacy_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (id uuid PRIMARY KEY);
+          CREATE FUNCTION auth.uid() RETURNS uuid
+          LANGUAGE sql STABLE
+          AS $
+            SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+          $;
+          SQL
+
+          for migration in backend/supabase/migrations/*.sql; do
+            if [[ "$migration" == *20261104006000_cloud_quantity_thousandths.sql ]]; then
+              break
+            fi
+            echo "Applying legacy prerequisite $migration"
+            psql -h localhost -U postgres -d smart_merchant_legacy_test -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+          psql -h localhost -U postgres -d smart_merchant_legacy_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/quantity_scale_legacy_fixture.sql
+          psql -h localhost -U postgres -d smart_merchant_legacy_test -v ON_ERROR_STOP=1 -f backend/supabase/migrations/20261104006000_cloud_quantity_thousandths.sql
+          psql -h localhost -U postgres -d smart_merchant_legacy_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/quantity_scale_legacy_assertions.sql
