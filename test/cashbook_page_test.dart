@@ -29,10 +29,10 @@ void main() {
 
     expect(find.text('لا توجد وردية صندوق مفتوحة.'), findsOneWidget);
     await tester.tap(find.text('فتح وردية وتسجيل الرصيد الافتتاحي'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     await tester.enterText(find.byType(TextFormField).first, '50.00');
     await tester.tap(find.text('فتح الوردية'));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(find.text('وردية مفتوحة'), findsOneWidget);
     expect(find.text('الرصيد الافتتاحي: 50.00 ج.م'), findsOneWidget);
@@ -53,14 +53,14 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: CashbookPage(repository: repository),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(find.text('الرصيد المتوقع حاليًا: 125.00 ج.م'), findsOneWidget);
     await tester.tap(find.text('عد النقدية وإقفال الوردية'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     await tester.enterText(find.byType(TextFormField).first, '120.00');
     await tester.tap(find.text('تأكيد الإقفال'));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     final history = await repository.sessionHistory();
     expect(history, hasLength(1));
