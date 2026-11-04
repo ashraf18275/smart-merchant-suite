@@ -118,6 +118,39 @@ declare
   v_owner_change_rejected boolean := false;
   v_other_business_adjustment_rejected boolean := false;
 begin
+  -- Business ownership is immutable to clients; business names remain editable.
+  if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
+    raise exception 'security regression: authenticated can transfer business ownership';
+  end if;
+  if not has_column_privilege(current_user, 'public.businesses', 'name', 'UPDATE') then
+    raise exception 'security regression: authenticated owner cannot rename a business';
+  end if;
+  if has_table_privilege(current_user, 'public.businesses', 'DELETE') then
+    raise exception 'security regression: authenticated can delete a business and cascade its data';
+  end if;
+
+  begin
+    update public.businesses
+    set owner_user_id = '10000000-0000-0000-0000-000000000002'
+    where id = '20000000-0000-0000-0000-000000000001';
+    raise exception 'security regression: business ownership transfer unexpectedly succeeded';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  update public.businesses
+  set name = 'Security Test Business A - renamed'
+  where id = '20000000-0000-0000-0000-000000000001';
+
+  if not exists (
+    select 1 from public.businesses
+    where id = '20000000-0000-0000-0000-000000000001'
+      and owner_user_id = '10000000-0000-0000-0000-000000000001'
+      and name = 'Security Test Business A - renamed'
+  ) then
+    raise exception 'security regression: owner rename failed or ownership changed';
+  end if;
+
   select count(*) into v_count from public.cloud_products;
   if v_count <> 1 then
     raise exception 'tenant isolation failed: owner A can see % products, expected 1', v_count;
