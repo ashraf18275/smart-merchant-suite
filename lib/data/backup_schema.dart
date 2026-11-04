@@ -87,5 +87,7 @@ abstract final class BackupSchema {
     'customer_return_items',
     'supplier_account_entries',
     'customer_account_entries',
+    'audit_events',
+    'cash_transactions',
   ];
 }
