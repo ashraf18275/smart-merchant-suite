@@ -205,6 +205,33 @@ void main() {
     expect(await accounts.customerBalance(customerId), 1000);
   });
 
+  test('records card refund for customer return without cash drawer outflow', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل رد بطاقة');
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
+    final saleItemId = (await db.query('sale_items')).single['id']! as int;
+    final returnId = await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 1500,
+      reason: 'رد على البطاقة',
+      refundMethod: PaymentMethod.card,
+    );
+
+    final refund = (await db.query('payment_records',
+      where: "source_type = 'customer_return' AND source_id = ?",
+      whereArgs: [returnId])).single;
+    expect(refund['payment_method'], 'card');
+    expect(refund['direction'], 'out');
+    expect(refund['amount_minor'], 1500);
+    expect(await db.query('cash_transactions',
+      where: "category = 'customer_return_refund'"), isEmpty);
+  });
+
   test('rejects customer return quantities above the remaining sold quantity', () async {
     final saleId = await sales.createSale(
       quantities: {productId: 1000},
@@ -469,6 +496,29 @@ void main() {
     expect((await products.all()).single.stockQuantity, 5000);
     expect(await db.query('inventory_movements',
       where: 'reason LIKE ?', whereArgs: ['إلغاء فاتورة بيع%']), hasLength(1));
+  });
+
+  test('records bank transfer refund for cash sale cancellation outside the drawer', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+    );
+    final cancellationId = await sales.cancelSale(
+      saleId: saleId,
+      refundedMinor: 1000,
+      reason: 'رد التحويل',
+      refundMethod: PaymentMethod.bankTransfer,
+    );
+
+    final refund = (await db.query('payment_records',
+      where: "source_type = 'sale_cancellation' AND source_id = ?",
+      whereArgs: [cancellationId])).single;
+    expect(refund['payment_method'], 'bank_transfer');
+    expect(refund['direction'], 'out');
+    expect(refund['amount_minor'], 1000);
+    expect(await db.query('cash_transactions',
+      where: "category = 'sale_cancellation_refund'"), isEmpty);
   });
 
   test('rejects cancellation after a customer return to prevent double stock and ledger reversal', () async {
