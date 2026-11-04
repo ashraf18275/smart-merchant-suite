@@ -48,14 +48,17 @@ class SalesApplicationService implements SalesService {
     required int saleId,
     required int refundedMinor,
     required String reason,
+    String refundMethod = PaymentMethod.cash,
   }) {
     if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
     if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
     if (reason.trim().isEmpty) throw AppException('سبب الإلغاء مطلوب');
+    if (!PaymentMethod.isValid(refundMethod)) throw AppException('طريقة رد المبلغ غير مدعومة');
     return _store.cancelSale(
       saleId: saleId,
       refundedMinor: refundedMinor,
       reason: reason,
+      refundMethod: refundMethod,
     );
   }
 
@@ -74,6 +77,7 @@ class SalesApplicationService implements SalesService {
     required List<SaleReturnLineInput> items,
     required int refundedMinor,
     required String reason,
+    String refundMethod = PaymentMethod.cash,
   }) {
     if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
     if (items.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل للمرتجع');
@@ -82,11 +86,13 @@ class SalesApplicationService implements SalesService {
     }
     if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
     if (reason.trim().isEmpty) throw AppException('سبب المرتجع مطلوب');
+    if (!PaymentMethod.isValid(refundMethod)) throw AppException('طريقة رد المبلغ غير مدعومة');
     return _store.createCustomerReturn(
       saleId: saleId,
       items: items,
       refundedMinor: refundedMinor,
       reason: reason,
+      refundMethod: refundMethod,
     );
   }
 }
