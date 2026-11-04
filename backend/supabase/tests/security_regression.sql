@@ -79,17 +79,6 @@ insert into public.cloud_products (
    'Test product B', 'SEC-B', 70, 140, 20, '10000000-0000-0000-0000-000000000002')
 on conflict (id) do nothing;
 
-insert into public.cloud_product_warehouse_stock (
-  business_id, branch_id, warehouse_id, product_id, quantity
-) values (
-  '20000000-0000-0000-0000-000000000001',
-  '22000000-0000-0000-0000-000000000001',
-  '23000000-0000-0000-0000-000000000001',
-  '30000000-0000-0000-0000-000000000001',
-  0
-)
-on conflict (business_id, warehouse_id, product_id) do nothing;
-
 insert into public.cloud_expenses (
   id, business_id, description, category, amount_minor, created_by
 ) values
@@ -146,8 +135,8 @@ begin
   end if;
 
   select count(*) into v_count from public.cloud_product_warehouse_stock;
-  if v_count <> 2 then
-    raise exception 'warehouse stock isolation failed: owner A can see % stock rows, expected 2', v_count;
+  if v_count <> 1 then
+    raise exception 'warehouse stock isolation failed: owner A can see % stock rows, expected 1 before second-warehouse initialization', v_count;
   end if;
 
   if has_table_privilege(current_user, 'public.cloud_product_warehouse_stock', 'UPDATE')
