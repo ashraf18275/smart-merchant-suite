@@ -7,6 +7,7 @@ import '../data/purchase_repository.dart';
 import '../data/warehouse_repository.dart';
 import '../domain/product.dart';
 import '../domain/warehouse.dart';
+import '../domain/payment_method.dart';
 
 class PurchasesPage extends StatefulWidget {
   const PurchasesPage({
@@ -41,6 +42,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
   List<Warehouse> _warehouses = [];
   int? _supplierId;
   int? _warehouseId;
+  String _paymentMethod = PaymentMethod.cash;
   final _paid = TextEditingController();
   final List<_PurchaseLineDraft> _lines = [_PurchaseLineDraft()];
   bool _loading = true;
@@ -188,6 +190,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
         warehouseId: _warehouseId!,
         items: prepared,
         paidMinor: paid,
+        paymentMethod: _paymentMethod,
       );
       for (final line in _lines) {
         line.dispose();
@@ -370,6 +373,16 @@ class _PurchasesPageState extends State<PurchasesPage> {
                     )),
                   for (var i = 0; i < _lines.length; i++)
                     _lineCard(_lines[i], i),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: _paymentMethod,
+                    decoration: const InputDecoration(labelText: 'طريقة سداد المبلغ المدفوع'),
+                    items: PaymentMethod.labels.entries.map((entry) =>
+                      DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                    onChanged: _saving ? null : (value) {
+                      if (value != null) setState(() => _paymentMethod = value);
+                    },
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _paid,
