@@ -71,6 +71,12 @@ insert into public.member_permissions (
    'accounts.view', true),
   ('20000000-0000-0000-0000-000000000001',
    '21000000-0000-0000-0000-000000000006',
+   'users.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
+   'users.create', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
    'users.edit', true),
   ('20000000-0000-0000-0000-000000000001',
    '21000000-0000-0000-0000-000000000006',
@@ -129,6 +135,9 @@ declare
   v_delegated_escalation_rejected boolean := false;
   v_owner_change_rejected boolean := false;
   v_owner_login_insert_rejected boolean := false;
+  v_member_active boolean;
+  v_member_deactivation_rejected boolean := false;
+  v_permission_visibility_count integer;
   v_other_business_adjustment_rejected boolean := false;
   v_created_branch uuid;
   v_created_default_warehouse uuid;
@@ -1758,7 +1767,69 @@ begin
   if not v_owner_login_insert_rejected then
     raise exception 'username onboarding security regression: non-owner insert was not rejected';
   end if;
+  -- User managers may inspect all permission assignments; ordinary members see only their own.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006', true);
+  select count(*) into v_permission_visibility_count
+  from public.member_permissions
+  where business_id = '20000000-0000-0000-0000-000000000001';
+  if v_permission_visibility_count < 6 then
+    raise exception 'user manager cannot inspect member permissions: saw % rows', v_permission_visibility_count;
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  select count(*) into v_permission_visibility_count
+  from public.member_permissions
+  where business_id = '20000000-0000-0000-0000-000000000001';
+  if v_permission_visibility_count <> 1 then
+    raise exception 'least-privilege member sees % permission rows, expected only its own 1', v_permission_visibility_count;
+  end if;
+
+  -- Delegated managers cannot deactivate users without the dedicated capability.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006', true);
+  begin
+    perform public.set_business_member_active(
+      '20000000-0000-0000-0000-000000000001',
+      '21000000-0000-0000-0000-000000000004',
+      false
+    );
+    raise exception 'member management regression: delegated manager deactivated a user without users.deactivate';
+  exception when insufficient_privilege then
+    v_member_deactivation_rejected := true;
+  end;
+  if not v_member_deactivation_rejected then
+    raise exception 'member management regression: unauthorized deactivation was not rejected';
+  end if;
+
+  -- Owner can reactivate then deactivate an ordinary account, with an audit event.
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+  perform public.set_business_member_active(
+    '20000000-0000-0000-0000-000000000001',
+    '21000000-0000-0000-0000-000000000004',
+    true
+  );
+  select is_active into v_member_active
+  from public.business_members where id = '21000000-0000-0000-0000-000000000004';
+  if not v_member_active then
+    raise exception 'member management regression: owner activation failed';
+  end if;
+  perform public.set_business_member_active(
+    '20000000-0000-0000-0000-000000000001',
+    '21000000-0000-0000-0000-000000000004',
+    false
+  );
+  select is_active into v_member_active
+  from public.business_members where id = '21000000-0000-0000-0000-000000000004';
+  if v_member_active then
+    raise exception 'member management regression: owner deactivation failed';
+  end if;
+  if not exists (
+    select 1 from public.audit_events
+    where business_id = '20000000-0000-0000-0000-000000000001'
+      and action_key = 'users.deactivate'
+      and entity_id = '21000000-0000-0000-0000-000000000004'
+  ) then
+    raise exception 'member management regression: deactivation audit event missing';
+  end if;
 
   begin
     perform public.replace_member_permissions(
