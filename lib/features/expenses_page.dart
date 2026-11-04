@@ -4,6 +4,7 @@ import '../application/ports/expense_service.dart';
 import '../core/app_error.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
+import '../domain/payment_method.dart';
 
 class ExpensesPage extends StatefulWidget {
   const ExpensesPage({super.key, required this.repository});
@@ -97,6 +98,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
     final desc = TextEditingController(), amount = TextEditingController();
     final form = GlobalKey<FormState>();
     String category = categories.first;
+    String paymentMethod = PaymentMethod.cash;
     final result = await showDialog<Map<String, Object?>?>(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, update) => AlertDialog(
@@ -107,6 +109,12 @@ class _ExpensesPageState extends State<ExpensesPage> {
           DropdownButtonFormField<String>(initialValue: category, decoration: const InputDecoration(labelText: 'التصنيف'),
             items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
             onChanged: (v) { if (v != null) update(() => category = v); }),
+          DropdownButtonFormField<String>(
+            initialValue: paymentMethod,
+            decoration: const InputDecoration(labelText: 'طريقة دفع المصروف'),
+            items: PaymentMethod.labels.entries.map((entry) =>
+              DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+            onChanged: (value) { if (value != null) update(() => paymentMethod = value); }),
           TextFormField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(labelText: 'القيمة بالجنيه *'),
             validator: (v) { final n = v == null ? null : _parse(v); return n == null || n <= 0 ? 'أدخل قيمة أكبر من صفر' : null; }),
@@ -115,6 +123,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           FilledButton(onPressed: () { if (form.currentState!.validate()) Navigator.pop(ctx, {
             'description': desc.text.trim(), 'category': category, 'amount': _parse(amount.text)!,
+            'paymentMethod': paymentMethod,
           }); }, child: const Text('حفظ المصروف')),
         ],
       )),
@@ -123,7 +132,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
     desc.dispose(); amount.dispose();
     if (result == null) return;
     try {
-      await _repo.add(description: result['description']! as String, category: result['category']! as String, amountMinor: result['amount']! as int);
+      await _repo.add(description: result['description']! as String, category: result['category']! as String, amountMinor: result['amount']! as int, paymentMethod: result['paymentMethod']! as String);
       await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المصروف')));
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر حفظ المصروف.', operation: 'expenses.create')))); }
