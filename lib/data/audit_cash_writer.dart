@@ -1,5 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../domain/payment_method.dart';
+
 /// Append-only operational history. Call inside the business transaction.
 Future<void> writeAuditEvent(
   DatabaseExecutor executor, {
@@ -16,7 +18,7 @@ Future<void> writeAuditEvent(
     'entity_id': entityId,
     'amount_minor': amountMinor,
     'details': details,
-    'created_at': createdAt ?? DateTime.now().toUtc().toIso8601String(),
+    'created_at': stamp,
   });
 }
 
@@ -30,11 +32,27 @@ Future<void> writeCashMovement(
   int? sourceId,
   String? note,
   String? createdAt,
+  String paymentMethod = PaymentMethod.cash,
 }) async {
   if (amountMinor <= 0) return;
   if (direction != 'in' && direction != 'out') {
     throw ArgumentError.value(direction, 'direction');
   }
+  if (!PaymentMethod.isValid(paymentMethod)) {
+    throw ArgumentError.value(paymentMethod, 'paymentMethod');
+  }
+  final stamp = createdAt ?? DateTime.now().toUtc().toIso8601String();
+  await executor.insert('payment_records', {
+    'direction': direction,
+    'payment_method': paymentMethod,
+    'amount_minor': amountMinor,
+    'source_type': sourceType,
+    'source_id': sourceId,
+    'note': note,
+    'created_at': stamp,
+  });
+  // Only physical cash belongs in the cash drawer journal.
+  if (paymentMethod != PaymentMethod.cash) return;
   await executor.insert('cash_transactions', {
     'direction': direction,
     'category': category,
