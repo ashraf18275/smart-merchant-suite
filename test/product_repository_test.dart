@@ -4,6 +4,7 @@ import 'package:smart_merchant_suite/application/services/product_application_se
 import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
+import 'package:smart_merchant_suite/data/account_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
@@ -323,9 +324,11 @@ void main() {
       stockQuantity: 5000,
     ));
     final sales = SalesApplicationService(SalesRepository(database));
+    final customerId = await AccountRepository(database).addCustomer(name: 'عميل بيع تجريبي');
     final saleId = await sales.createSale(
       quantities: {id: 2000},
       paidMinor: 1000,
+      customerId: customerId,
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
 
@@ -533,10 +536,12 @@ void main() {
     ));
 
     final sales = SalesApplicationService(SalesRepository(database));
+    final customerId = await AccountRepository(database).addCustomer(name: 'عميل فاتورة متعددة');
     final id = await sales.createSale(
       quantities: {charger: 2000, headset: 1000},
       paidMinor: 3000,
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
+      customerId: customerId,
     );
 
     expect((await products.all()).firstWhere((p) => p.id == charger).stockQuantity, 3000);
