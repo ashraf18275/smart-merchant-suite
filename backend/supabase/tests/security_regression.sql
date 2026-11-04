@@ -681,15 +681,15 @@ begin
     array['products.view', 'customers.view', 'accounts.view']
   );
 
-  select count(*) into v_count
-  from public.member_permissions
-  where business_id = '20000000-0000-0000-0000-000000000001'
-    and member_id = '21000000-0000-0000-0000-000000000003'
-    and permission_key in ('customers.view', 'accounts.view')
-    and allowed = true;
-  if v_count <> 2 then
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  if not public.has_business_permission(
+    '20000000-0000-0000-0000-000000000001', 'customers.view'
+  ) or not public.has_business_permission(
+    '20000000-0000-0000-0000-000000000001', 'accounts.view'
+  ) then
     raise exception 'permission catalogue regression: expanded customer/account permissions were not persisted';
   end if;
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 
   select count(*) into v_count_audit
   from public.audit_events
