@@ -38,6 +38,22 @@ class SalesApplicationService implements SalesService {
   Future<List<SaleRecord>> all() => _store.all();
 
   @override
+  Future<int> cancelSale({
+    required int saleId,
+    required int refundedMinor,
+    required String reason,
+  }) {
+    if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
+    if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
+    if (reason.trim().isEmpty) throw AppException('سبب الإلغاء مطلوب');
+    return _store.cancelSale(
+      saleId: saleId,
+      refundedMinor: refundedMinor,
+      reason: reason,
+    );
+  }
+
+  @override
   Future<List<Map<String, Object?>>> returnableSales() => _store.returnableSales();
 
   @override
