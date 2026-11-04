@@ -43,6 +43,11 @@ void main() {
     final statement = await accounts.supplierStatement(supplierId);
     expect(statement.map((row) => row['running_balance_minor']), [10000, 7500]);
     expect(statement.last['amount_minor'], -2500);
+    final cash = (await db.query('cash_transactions')).single;
+    expect(cash['direction'], 'out');
+    expect(cash['category'], 'supplier_payment');
+    expect(cash['amount_minor'], 2500);
+    expect((await db.query('audit_events')).single['action'], 'supplier_payment_recorded');
   });
 
   test('records customer receipts and rejects overpayment and non-positive values', () async {
@@ -55,6 +60,11 @@ void main() {
     });
     await accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 1500);
     expect(await accounts.customerBalance(customerId), 2500);
+    final cash = (await db.query('cash_transactions')).single;
+    expect(cash['direction'], 'in');
+    expect(cash['category'], 'customer_receipt');
+    expect(cash['amount_minor'], 1500);
+    expect((await db.query('audit_events')).single['action'], 'customer_receipt_recorded');
     await expectLater(
       accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 2501),
       throwsA(isA<AppException>()),
