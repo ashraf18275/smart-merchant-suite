@@ -1,4 +1,5 @@
 name: Flutter CI and Gated Builds
+# Keep a private, tested Android/Windows rollback baseline for the active feature branch.
 
 on:
   push:
