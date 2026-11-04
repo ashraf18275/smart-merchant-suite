@@ -7,6 +7,8 @@ class SaleRecord {
     required this.itemCount,
     this.warehouseName,
     this.branchName,
+    this.cancelledAt,
+    this.cancellationReason,
   });
 
   final int id;
@@ -16,6 +18,9 @@ class SaleRecord {
   final int itemCount;
   final String? warehouseName;
   final String? branchName;
+  final DateTime? cancelledAt;
+  final String? cancellationReason;
+  bool get isCancelled => cancelledAt != null;
 
   int get remainingMinor => totalMinor - paidMinor;
 }
