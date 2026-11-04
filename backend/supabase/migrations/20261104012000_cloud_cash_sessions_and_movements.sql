@@ -336,9 +336,17 @@ begin
   if v_session.status = 'closed' then
     if v_session.close_operation_id = p_operation_id
        and v_session.close_request_hash = v_hash then
+      select
+        coalesce(sum(m.amount_minor) filter (where m.direction = 'in'), 0),
+        coalesce(sum(m.amount_minor) filter (where m.direction = 'out'), 0)
+      into v_incoming, v_outgoing
+      from public.cloud_cash_movements m
+      where m.business_id = p_business_id and m.cash_session_id = p_cash_session_id;
       return jsonb_build_object(
         'session_id', v_session.id,
         'opening_balance_minor', v_session.opening_balance_minor,
+        'incoming_minor', v_incoming,
+        'outgoing_minor', v_outgoing,
         'expected_balance_minor', v_session.expected_balance_minor,
         'counted_balance_minor', v_session.counted_balance_minor,
         'difference_minor', v_session.difference_minor,
