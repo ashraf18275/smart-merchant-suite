@@ -141,6 +141,11 @@ declare
   v_customer_payment_id uuid;
   v_customer_payment_retry uuid;
   v_supplier_payment_id uuid;
+  v_account_cash_session_id uuid;
+  v_customer_cash_payment_id uuid;
+  v_customer_cash_payment_retry uuid;
+  v_supplier_cash_payment_id uuid;
+  v_account_cash_close jsonb;
   v_customer_balance bigint;
   v_supplier_balance bigint;
   v_receipt_payload_rejected boolean := false;
@@ -1004,10 +1009,41 @@ begin
   if not v_receipt_payload_rejected then
     raise exception 'customer receipt idempotency failed: mismatched payload not rejected';
   end if;
+
+  v_account_cash_session_id := public.open_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    'account-register',
+    500,
+    'رصيد افتتاحي لاختبار تحصيل وسداد الحسابات',
+    '550e8400-e29b-41d4-a716-446655440053'
+  );
+  v_customer_cash_payment_id := public.record_cloud_customer_receipt(
+    '20000000-0000-0000-0000-000000000001', v_customer_id, 200,
+    'cash', 'تحصيل نقدي من العميل', '550e8400-e29b-41d4-a716-446655440054',
+    v_account_cash_session_id
+  );
+  v_customer_cash_payment_retry := public.record_cloud_customer_receipt(
+    '20000000-0000-0000-0000-000000000001', v_customer_id, 200,
+    'cash', 'تحصيل نقدي من العميل', '550e8400-e29b-41d4-a716-446655440054',
+    v_account_cash_session_id
+  );
+  if v_customer_cash_payment_id is distinct from v_customer_cash_payment_retry then
+    raise exception 'cash customer receipt idempotency failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_cash_movements
+    where cash_session_id = v_account_cash_session_id
+      and direction = 'in' and category = 'customer_receipt'
+      and amount_minor = 200 and source_id = v_customer_cash_payment_id
+  ) then
+    raise exception 'cash customer receipt was not posted to the register';
+  end if;
+
   begin
     perform public.record_cloud_customer_receipt(
       '20000000-0000-0000-0000-000000000001', v_customer_id, 1600,
-      'cash', 'تحصيل أكبر من الرصيد', '550e8400-e29b-41d4-a716-446655440035'
+      'card', 'تحصيل أكبر من الرصيد', '550e8400-e29b-41d4-a716-446655440035'
     );
     raise exception 'customer balance regression: overpayment was accepted';
   exception when check_violation then
@@ -1036,10 +1072,48 @@ begin
   if v_count <> 1 then
     raise exception 'supplier payment record failed';
   end if;
+  v_supplier_cash_payment_id := public.record_cloud_supplier_payment(
+    '20000000-0000-0000-0000-000000000001', v_supplier_id, 500,
+    'cash', 'سداد نقدي للمورد', '550e8400-e29b-41d4-a716-446655440055',
+    v_account_cash_session_id
+  );
+  if not exists (
+    select 1 from public.cloud_cash_movements
+    where cash_session_id = v_account_cash_session_id
+      and direction = 'out' and category = 'supplier_payment'
+      and amount_minor = 500 and source_id = v_supplier_cash_payment_id
+  ) then
+    raise exception 'cash supplier payment was not posted to the register';
+  end if;
+  select coalesce(sum(amount_minor), 0) into v_supplier_balance
+  from public.cloud_supplier_account_entries
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and supplier_id = v_supplier_id;
+  if v_supplier_balance <> 2000 then
+    raise exception 'supplier cash payment balance failed: expected 2000, got %', v_supplier_balance;
+  end if;
+  select coalesce(sum(amount_minor), 0) into v_customer_balance
+  from public.cloud_customer_account_entries
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and customer_id = v_customer_id;
+  if v_customer_balance <> 1300 then
+    raise exception 'customer cash receipt balance failed: expected 1300, got %', v_customer_balance;
+  end if;
+  v_account_cash_close := public.close_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_account_cash_session_id,
+    200,
+    'إقفال وردية تحصيل وسداد الحسابات',
+    '550e8400-e29b-41d4-a716-446655440056'
+  );
+  if (v_account_cash_close->>'expected_balance_minor')::bigint <> 200
+     or (v_account_cash_close->>'difference_minor')::bigint <> 0 then
+    raise exception 'account cash session calculation failed: expected 200, got %', v_account_cash_close;
+  end if;
   begin
     perform public.record_cloud_supplier_payment(
       '20000000-0000-0000-0000-000000000001', v_supplier_id, 3000,
-      'cash', 'سداد أكبر من الرصيد', '550e8400-e29b-41d4-a716-446655440037'
+      'bank_transfer', 'سداد أكبر من الرصيد', '550e8400-e29b-41d4-a716-446655440037'
     );
     raise exception 'supplier balance regression: overpayment was accepted';
   exception when check_violation then
