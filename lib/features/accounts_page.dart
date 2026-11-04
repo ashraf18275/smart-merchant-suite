@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_error.dart';
 import '../data/account_repository.dart';
 import '../data/purchase_repository.dart';
+import '../domain/payment_method.dart';
 
 /// Local customer and supplier ledgers. Balances are always derived from
 /// signed ledger entries; this screen never edits a balance directly.
