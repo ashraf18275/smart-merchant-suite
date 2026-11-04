@@ -40,6 +40,32 @@ where not exists (
   where w.business_id = b.business_id and w.branch_id = b.id
 );
 
+-- New businesses created after this migration also receive a default location.
+create or replace function public.create_default_cloud_location()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_branch_id uuid;
+begin
+  insert into public.cloud_branches (business_id, name)
+  values (new.id, 'الفرع الرئيسي')
+  returning id into v_branch_id;
+
+  insert into public.cloud_warehouses (business_id, branch_id, name)
+  values (new.id, v_branch_id, 'المخزن الرئيسي');
+
+  return new;
+end;
+$;
+
+drop trigger if exists businesses_create_default_cloud_location on public.businesses;
+create trigger businesses_create_default_cloud_location
+  after insert on public.businesses
+  for each row execute function public.create_default_cloud_location();
+
 alter table public.cloud_products
   add column if not exists default_branch_id uuid,
   add column if not exists default_warehouse_id uuid;
