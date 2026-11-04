@@ -9,7 +9,7 @@ create unique index if not exists cloud_purchase_items_id_business_unique
 
 -- PostgreSQL foreign keys require an explicit unique constraint (not merely
 -- a same-named pre-existing standalone index) for the referenced column pair.
-do $
+do $block$
 begin
   if not exists (
     select 1 from pg_constraint
@@ -28,7 +28,7 @@ begin
       add constraint cloud_purchase_items_id_business_key unique (id, business_id);
   end if;
 end;
-$;
+$block$;;
 create table if not exists public.cloud_sale_returns (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
