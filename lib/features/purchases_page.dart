@@ -510,6 +510,8 @@ class _SupplierReturnDialog extends StatefulWidget {
 
 class _SupplierReturnDialogState extends State<_SupplierReturnDialog> {
   final _reason = TextEditingController();
+  final _refundAmount = TextEditingController(text: '0.00');
+  String _refundMethod = PaymentMethod.cash;
   List<Map<String, Object?>> _invoices = [];
   List<_SupplierReturnLineDraft> _lines = [];
   int? _purchaseId;
@@ -526,6 +528,7 @@ class _SupplierReturnDialogState extends State<_SupplierReturnDialog> {
   @override
   void dispose() {
     _reason.dispose();
+    _refundAmount.dispose();
     for (final line in _lines) {
       line.dispose();
     }
@@ -579,6 +582,204 @@ class _SupplierReturnDialogState extends State<_SupplierReturnDialog> {
 
   String _money(int value) =>
       '${value ~/ 100}.${(value % 100).toString().padLeft(2, '0')} ج.م';
+
+  int? _parseMoney(String value) {
+    final match = RegExp(r'^(\\d+)(?:[.,](\\d{1,2}))?
+    final purchaseId = _purchaseId;
+    if (purchaseId == null || _saving) return;
+    if (_reason.text.trim().isEmpty) {
+      setState(() => _error = 'اكتب سبب المرتجع أولًا.');
+      return;
+    }
+    final items = <SupplierReturnLineInput>[];
+    var returnTotalMinor = 0;
+    for (final line in _lines) {
+      final data = line.data;
+      final text = line.quantity.text.trim();
+      if (text.isEmpty) continue;
+      final quantity = Quantity.parse(
+        text,
+        allowsFraction: data['allows_fraction'] == 1,
+      );
+      final remaining = (data['quantity']! as num).toInt() -
+          (data['returned_quantity']! as num).toInt();
+      final available = (data['available_quantity']! as num).toInt();
+      if (quantity == null || quantity <= 0) {
+        setState(() => _error = 'أدخل كمية صحيحة للصنف ${data['product_name']}.');
+        return;
+      }
+      if (quantity > remaining) {
+        setState(() => _error = 'كمية ${data['product_name']} تتجاوز المتبقي من الفاتورة.');
+        return;
+      }
+      if (quantity > available) {
+        setState(() => _error = 'المخزون الحالي من ${data['product_name']} لا يكفي للمرتجع.');
+        return;
+      }
+      items.add(SupplierReturnLineInput(
+        purchaseItemId: data['purchase_item_id']! as int,
+        quantity: quantity,
+      ));
+      returnTotalMinor += Quantity.lineTotalMinor(
+        unitPriceMinor: (data['unit_cost_minor']! as num).toInt(),
+        quantityScaled: quantity,
+      );
+    }
+    if (items.isEmpty) {
+      setState(() => _error = 'أدخل كمية مرتجعة لصنف واحد على الأقل.');
+      return;
+    }
+    final refundedMinor = _parseMoney(_refundAmount.text);
+    if (refundedMinor == null) {
+      setState(() => _error = 'أدخل مبلغ الاسترداد بصيغة صحيحة.');
+      return;
+    }
+    if (refundedMinor > returnTotalMinor) {
+      setState(() => _error = 'المبلغ المسترد لا يمكن أن يتجاوز قيمة المرتجع: ${_money(returnTotalMinor)}');
+      return;
+    }
+
+    setState(() { _saving = true; _error = null; });
+    try {
+      final id = await widget.repository.createSupplierReturn(
+        purchaseId: purchaseId,
+        items: items,
+        reason: _reason.text,
+        refundedMinor: refundedMinor,
+        refundMethod: _refundMethod,
+      );
+      if (mounted) Navigator.pop(context, id);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = appErrorMessage(error,
+          fallback: 'تعذر حفظ مرتجع المورد.',
+          operation: 'supplierReturns.create');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('إنشاء مرتجع مورد'),
+    content: SizedBox(
+      width: 520,
+      child: _loading
+          ? const SizedBox(height: 120,
+              child: Center(child: CircularProgressIndicator()))
+          : _error != null && _invoices.isEmpty
+              ? Text(_error!)
+              : _invoices.isEmpty
+                  ? const Text('لا توجد فواتير بها كميات متبقية قابلة للمرتجع.')
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DropdownButtonFormField<int>(
+                          initialValue: _purchaseId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'فاتورة الشراء الأصلية'),
+                          items: [
+                            for (final invoice in _invoices)
+                              DropdownMenuItem(
+                                value: invoice['id']! as int,
+                                child: Text(
+                                  'فاتورة #${invoice['id']} — ${invoice['supplier_name']} — ${_money((invoice['total_minor']! as num).toInt())}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: _saving ? null : (value) {
+                            if (value == null) return;
+                            setState(() => _purchaseId = value);
+                            _loadLines(value);
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        if (_error != null)
+                          Align(alignment: Alignment.centerRight,
+                            child: Text(_error!,
+                              style: TextStyle(color: Theme.of(context).colorScheme.error))),
+                        Flexible(
+                          child: _lines.isEmpty
+                              ? const Center(child: Text('لا توجد أصناف متاحة للمرتجع في هذه الفاتورة.'))
+                              : ListView(
+                                  shrinkWrap: true,
+                                  children: [
+                                    for (final line in _lines)
+                                      Card(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              Text(line.data['product_name']! as String,
+                                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                                              Text(
+                                                'المتبقي من الفاتورة: ${Quantity.format((line.data['quantity']! as num).toInt() - (line.data['returned_quantity']! as num).toInt())} ${line.data['unit_name']} • المتاح بالمخزن: ${Quantity.format((line.data['available_quantity']! as num).toInt())}',
+                                                style: Theme.of(context).textTheme.bodySmall,
+                                              ),
+                                              Text('تكلفة الوحدة: ${_money((line.data['unit_cost_minor']! as num).toInt())}',
+                                                style: Theme.of(context).textTheme.bodySmall),
+                                              TextField(
+                                                controller: line.quantity,
+                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                decoration: InputDecoration(
+                                                  labelText: 'الكمية المرتجعة (${line.data['unit_name']})',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                        ),
+                        TextField(
+                          controller: _reason,
+                          decoration: const InputDecoration(
+                            labelText: 'سبب المرتجع *',
+                            hintText: 'مثال: بضاعة تالفة أو غير مطابقة',
+                          ),
+                        ),
+                        TextField(
+                          controller: _refundAmount,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'المبلغ الذي أعاده المورد فعليًا (جنيه)',
+                            helperText: 'اتركه صفرًا إذا سيُخصم من رصيد المورد فقط',
+                          ),
+                        ),
+                        DropdownButtonFormField<String>(
+                          initialValue: _refundMethod,
+                          decoration: const InputDecoration(labelText: 'طريقة استرداد المبلغ'),
+                          items: PaymentMethod.labels.entries.map((entry) =>
+                            DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                          onChanged: _saving ? null : (value) {
+                            if (value != null) setState(() => _refundMethod = value);
+                          },
+                        ),
+                      ],
+                    ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: _saving ? null : () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(
+        onPressed: _loading || _saving || _invoices.isEmpty ? null : _save,
+        child: Text(_saving ? 'جارٍ الحفظ...' : 'حفظ المرتجع'),
+      ),
+    ],
+  );
+}
+).firstMatch(value.trim());
+    if (match == null) return null;
+    final whole = int.tryParse(match.group(1)!);
+    if (whole == null || whole > 999999999) return null;
+    return whole * 100 + int.parse((match.group(2) ?? '').padRight(2, '0'));
+  }
 
   Future<void> _save() async {
     final purchaseId = _purchaseId;
