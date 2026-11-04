@@ -66,7 +66,189 @@ class _CashbookPageState extends State<CashbookPage>
       '${value ~/ 100}.${(value % 100).toString().padLeft(2, '0')}';
 
   int? _parseMoney(String value) {
-    final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?
+    final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?$').firstMatch(value.trim());
+    if (match == null) return null;
+    final whole = int.tryParse(match.group(1)!);
+    if (whole == null || whole > 999999999) return null;
+    return whole * 100 + int.parse((match.group(2) ?? '').padRight(2, '0'));
+  }
+
+  Future<void> _openSession() async {
+    final opening = TextEditingController(text: '0.00');
+    final note = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<Map<String, Object?>?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('فتح وردية الصندوق'),
+        content: Form(
+          key: formKey,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextFormField(
+              controller: opening,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'الرصيد الافتتاحي الفعلي بالجنيه'),
+              validator: (value) => _parseMoney(value ?? '') == null
+                  ? 'أدخل رصيدًا صحيحًا'
+                  : null,
+            ),
+            TextField(
+              controller: note,
+              decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(dialogContext, {
+                  'amount': _parseMoney(opening.text)!,
+                  'note': note.text,
+                });
+              }
+            },
+            child: const Text('فتح الوردية'),
+          ),
+        ],
+      ),
+    );
+    opening.dispose();
+    note.dispose();
+    if (result == null) return;
+    try {
+      await widget.repository.openSession(
+        openingBalanceMinor: result['amount']! as int,
+        note: result['note']! as String,
+      );
+      if (!mounted) return;
+      setState(() => _data = _load());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر فتح الوردية: ${error}')),
+      );
+    }
+  }
+
+  Future<void> _closeSession(Map<String, Object?> session) async {
+    final expected = (session['expected_balance_minor'] as num).toInt();
+    final counted = TextEditingController(
+      text: _moneyInput(expected < 0 ? 0 : expected),
+    );
+    final note = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<Map<String, Object?>?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('إقفال وردية الصندوق'),
+        content: Form(
+          key: formKey,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('الرصيد المتوقع: ${_money(expected)}'),
+            TextFormField(
+              controller: counted,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'النقدية الفعلية بعد العد بالجنيه'),
+              validator: (value) => _parseMoney(value ?? '') == null
+                  ? 'أدخل مبلغًا صحيحًا غير سالب'
+                  : null,
+            ),
+            TextField(
+              controller: note,
+              decoration: const InputDecoration(labelText: 'ملاحظة الإقفال (اختياري)'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(dialogContext, {
+                  'amount': _parseMoney(counted.text)!,
+                  'note': note.text,
+                });
+              }
+            },
+            child: const Text('تأكيد الإقفال'),
+          ),
+        ],
+      ),
+    );
+    counted.dispose();
+    note.dispose();
+    if (result == null) return;
+    try {
+      final closing = await widget.repository.closeSession(
+        countedBalanceMinor: result['amount']! as int,
+        note: result['note']! as String,
+      );
+      if (!mounted) return;
+      setState(() => _data = _load());
+      final difference = closing['difference']!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(
+          difference == 0
+              ? 'تم إقفال الوردية دون عجز أو زيادة.'
+              : 'تم إقفال الوردية. ${difference > 0 ? 'زيادة' : 'عجز'}: ${_money(difference.abs())}',
+        )),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر إقفال الوردية: ${error}')),
+      );
+    }
+  }
+
+  Widget _sessionCard(_CashbookData data) {
+    final session = data.currentSession;
+    if (session == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('لا توجد وردية صندوق مفتوحة.'),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _openSession,
+              icon: const Icon(Icons.lock_open),
+              label: const Text('فتح وردية وتسجيل الرصيد الافتتاحي'),
+            ),
+          ]),
+        ),
+      );
+    }
+    final expected = (session['expected_balance_minor'] as num).toInt();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('وردية مفتوحة', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text('بدأت: ${_date(session['opened_at'])}'),
+          Text('الرصيد الافتتاحي: ${_money(session['opening_balance_minor']! as int)}'),
+          Text('الرصيد المتوقع حاليًا: ${_money(expected)}'),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () => _closeSession(session),
+            icon: const Icon(Icons.lock),
+            label: const Text('عد النقدية وإقفال الوردية'),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  String _cashLabel(String category) => switch (category) {
     'sale_receipt' => 'تحصيل مبيعات',
     'purchase_payment' => 'سداد مشتريات',
     'expense' => 'مصروف',
