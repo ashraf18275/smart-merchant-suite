@@ -14,7 +14,7 @@
 
 هذه النتائج تثبت نجاح التحليل والاختبارات والبناء داخل GitHub Actions فقط؛ لا تثبت التشغيل على أجهزة فعلية أو الجاهزية التجارية.
 
-أحدث تحقق Flutter في التشغيل `41751141214`: Analyze بلا مشاكل و102 اختبار ناجح. بناء Windows release نجح وأُرفق artifact باسم `smart-merchant-suite-windows-x64` في التشغيل نفسه. بناء Android debug متعدد المعماريات ما زال جاريًا. رابط التشغيل والملفات: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41751141214
+أحدث تحقق Flutter في التشغيل `41751141214`: Analyze بلا مشاكل و102 اختبار ناجح. بناء Windows release وAndroid debug split-per-ABI نجحا، ورُفعت artifacts باسم `smart-merchant-suite-windows-x64` و`smart-merchant-suite-android-debug-apks` مع ملفات SHA-256 ومعلومات البناء. رابط التشغيل والتحميل: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41751141214
 
 ## الوظائف المحلية الموجودة
 
