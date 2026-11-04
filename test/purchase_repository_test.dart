@@ -689,7 +689,7 @@ void main() {
     expect(refund['amount_minor'], 400);
     final ledger = await db.query('supplier_account_entries', orderBy: 'id ASC');
     expect(ledger.map((row) => row['amount_minor']), [2000, -2000, -1000, 400]);
-    expect(await purchases.supplierBalance(supplierId), -600);
+    expect(await AccountRepository(db).supplierBalance(supplierId), -600);
     expect(await db.query('cash_transactions',
       where: "category = 'supplier_return_refund'"), isEmpty);
   });
