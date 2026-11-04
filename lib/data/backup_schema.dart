@@ -5,6 +5,7 @@ abstract final class BackupSchema {
   static bool supports(int version) => version >= 3 && version <= currentVersion;
   static bool hasPurchaseData(int version) => version >= 8;
   static bool hasAccountData(int version) => version >= 9;
+  static bool hasSupplierReturnData(int version) => version >= 10;
 
   /// Every business-data table that a current backup must preserve.
   static const currentTableNames = <String>{
@@ -26,8 +27,6 @@ abstract final class BackupSchema {
     'supplier_return_items',
     'supplier_account_entries',
     'customer_account_entries',
-    'supplier_returns',
-    'supplier_return_items',
   };
 
   /// Delete child rows before parent rows while foreign keys are enabled.
@@ -68,6 +67,8 @@ abstract final class BackupSchema {
     'suppliers',
     'purchases',
     'purchase_items',
+    'supplier_returns',
+    'supplier_return_items',
     'supplier_account_entries',
     'customer_account_entries',
   ];
