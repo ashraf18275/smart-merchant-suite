@@ -720,7 +720,7 @@ begin
     '50000000-0000-0000-0000-000000000020'
   );
 
-  perform public.create_cloud_sale(
+  perform public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
     '22000000-0000-0000-0000-000000000001',
     '23000000-0000-0000-0000-000000000001',
@@ -729,6 +729,9 @@ begin
       'quantity_scaled', 2000
     )),
     200,
+    null,
+    'card',
+    null,
     '50000000-0000-0000-0000-000000000021'
   );
 
@@ -752,7 +755,7 @@ begin
     '50000000-0000-0000-0000-000000000022'
   );
 
-  v_fractional_sale_one := public.create_cloud_sale(
+  v_fractional_sale_one := public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
     '22000000-0000-0000-0000-000000000001',
     '23000000-0000-0000-0000-000000000001',
@@ -761,10 +764,13 @@ begin
       'quantity_scaled', 1250
     )),
     125,
+    null,
+    'card',
+    null,
     '50000000-0000-0000-0000-000000000023'
   );
 
-  v_fractional_sale_two := public.create_cloud_sale(
+  v_fractional_sale_two := public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
     '22000000-0000-0000-0000-000000000001',
     '23000000-0000-0000-0000-000000000001',
@@ -773,6 +779,9 @@ begin
       'quantity_scaled', 1250
     )),
     125,
+    null,
+    'card',
+    null,
     '50000000-0000-0000-0000-000000000023'
   );
 
