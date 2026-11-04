@@ -117,6 +117,11 @@ declare
   v_delegated_escalation_rejected boolean := false;
   v_owner_change_rejected boolean := false;
   v_other_business_adjustment_rejected boolean := false;
+  v_created_branch uuid;
+  v_created_default_warehouse uuid;
+  v_created_second_warehouse uuid;
+  v_location_operation uuid;
+  v_location_rejected boolean := false;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -174,6 +179,192 @@ begin
   select count(*) into v_count from public.cloud_product_warehouse_stock;
   if v_count <> 1 then
     raise exception 'warehouse stock isolation failed: owner A can see % stock rows, expected 1 before second-warehouse initialization', v_count;
+  end if;
+
+  -- Location changes must be performed through audited, tenant-scoped RPCs.
+  v_created_branch := public.create_cloud_branch(
+    '20000000-0000-0000-0000-000000000001',
+    'Managed branch',
+    'Test address',
+    '01000000000'
+  );
+  select w.id into v_created_default_warehouse
+  from public.cloud_warehouses w
+  where w.business_id = '20000000-0000-0000-0000-000000000001'
+    and w.branch_id = v_created_branch
+    and w.name = 'المخزن الرئيسي';
+
+  if v_created_default_warehouse is null then
+    raise exception 'location management failed: new branch did not receive its default warehouse';
+  end if;
+
+  v_created_second_warehouse := public.create_cloud_warehouse(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    'Second managed warehouse'
+  );
+
+  if (select count(*) from public.cloud_warehouses
+      where business_id = '20000000-0000-0000-0000-000000000001'
+        and branch_id = v_created_branch and is_active = true) <> 2 then
+    raise exception 'location management failed: expected two active warehouses';
+  end if;
+
+  -- A warehouse with stock cannot be deactivated.
+  v_location_operation := public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    v_created_second_warehouse,
+    '30000000-0000-0000-0000-000000000001',
+    1000,
+    'location deactivation guard',
+    '50000000-0000-0000-0000-000000000011'
+  );
+  begin
+    perform public.set_cloud_warehouse_active(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_second_warehouse,
+      false
+    );
+    raise exception 'location security regression: warehouse with stock was deactivated';
+  exception when check_violation then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: stock warehouse deactivation was not rejected';
+  end if;
+
+  perform public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    v_created_second_warehouse,
+    '30000000-0000-0000-0000-000000000001',
+    -1000,
+    'reverse location deactivation guard',
+    '50000000-0000-0000-0000-000000000012'
+  );
+
+  -- A live branch cannot be left with zero active warehouses.
+  perform public.set_cloud_warehouse_active(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_default_warehouse,
+    false
+  );
+  v_location_rejected := false;
+  begin
+    perform public.set_cloud_warehouse_active(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_second_warehouse,
+      false
+    );
+    raise exception 'location security regression: last active warehouse was deactivated';
+  exception when check_violation then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: last active warehouse deactivation was not rejected';
+  end if;
+  perform public.set_cloud_warehouse_active(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_default_warehouse,
+    true
+  );
+
+  -- Branch deactivation is atomic: all empty warehouses are disabled together.
+  v_location_rejected := false;
+  perform public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    v_created_second_warehouse,
+    '30000000-0000-0000-0000-000000000001',
+    1000,
+    'branch stock deactivation guard',
+    '50000000-0000-0000-0000-000000000013'
+  );
+  begin
+    perform public.set_cloud_branch_active(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_branch,
+      false
+    );
+    raise exception 'location security regression: branch with stock was deactivated';
+  exception when check_violation then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: branch stock deactivation was not rejected';
+  end if;
+  perform public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    v_created_second_warehouse,
+    '30000000-0000-0000-0000-000000000001',
+    -1000,
+    'clear branch stock before deactivation',
+    '50000000-0000-0000-0000-000000000014'
+  );
+  perform public.set_cloud_branch_active(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    false
+  );
+  if exists (
+    select 1 from public.cloud_warehouses
+    where business_id = '20000000-0000-0000-0000-000000000001'
+      and branch_id = v_created_branch and is_active = true
+  ) or exists (
+    select 1 from public.cloud_branches
+    where id = v_created_branch and is_active = true
+  ) then
+    raise exception 'location management failed: branch deactivation was not atomic';
+  end if;
+  perform public.set_cloud_branch_active(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    true
+  );
+  if not exists (
+    select 1 from public.cloud_warehouses
+    where business_id = '20000000-0000-0000-0000-000000000001'
+      and branch_id = v_created_branch and is_active = true
+  ) then
+    raise exception 'location management failed: branch reactivation did not restore an active warehouse';
+  end if;
+
+  -- Members without settings.edit cannot create or change locations.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  v_location_rejected := false;
+  begin
+    perform public.create_cloud_branch(
+      '20000000-0000-0000-0000-000000000001',
+      'Unauthorized branch',
+      null,
+      null
+    );
+    raise exception 'location security regression: read-only member created a branch';
+  exception when insufficient_privilege then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: branch creation without settings.edit was not rejected';
+  end if;
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+
+  -- A caller cannot create locations in another business by supplying its UUID.
+  v_location_rejected := false;
+  begin
+    perform public.create_cloud_branch(
+      '20000000-0000-0000-0000-000000000002',
+      'Cross-tenant branch',
+      null,
+      null
+    );
+    raise exception 'location security regression: cross-tenant branch creation succeeded';
+  exception when insufficient_privilege then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: cross-tenant branch creation was not rejected';
   end if;
 
   if has_table_privilege(current_user, 'public.cloud_product_warehouse_stock', 'UPDATE')
