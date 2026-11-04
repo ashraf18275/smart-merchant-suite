@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
+import 'audit_cash_writer.dart';
 
 /// Account balances are derived from immutable signed ledger entries.
 /// Positive = customer owes the shop / shop owes supplier.
@@ -77,13 +78,33 @@ class AccountRepository {
       );
       final balance = (rows.single['balance'] as num).toInt();
       if (amountMinor > balance) throw AppException('$balanceLabel أقل من قيمة الدفعة');
-      return txn.insert(table, {
+      final createdAt = _now();
+      final entryId = await txn.insert(table, {
         ownerColumn: ownerId,
         'amount_minor': -amountMinor,
         'entry_type': entryType,
         'note': _optional(note),
-        'created_at': _now(),
+        'created_at': createdAt,
       });
+      final isSupplier = ownerColumn == 'supplier_id';
+      await writeAuditEvent(txn,
+        action: isSupplier ? 'supplier_payment_recorded' : 'customer_receipt_recorded',
+        entityType: isSupplier ? 'supplier' : 'customer',
+        entityId: ownerId,
+        amountMinor: amountMinor,
+        details: note?.trim(),
+        createdAt: createdAt,
+      );
+      await writeCashMovement(txn,
+        direction: isSupplier ? 'out' : 'in',
+        category: isSupplier ? 'supplier_payment' : 'customer_receipt',
+        amountMinor: amountMinor,
+        sourceType: isSupplier ? 'supplier_payment' : 'customer_receipt',
+        sourceId: entryId,
+        note: note?.trim(),
+        createdAt: createdAt,
+      );
+      return entryId;
     });
   }
 
