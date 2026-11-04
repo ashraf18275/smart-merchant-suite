@@ -148,7 +148,7 @@ void main() {
     final active = await cashbook.currentSession();
     expect(active!['id'], sessionId);
     expect(active['opening_balance_minor'], 10000);
-    expect(active['expected_balance_minor'], 13000);
+    expect(active['live_expected_balance_minor'], 13000);
     final result = await cashbook.closeSession(
       countedBalanceMinor: 12800,
       note: 'عجز 2 جنيه بعد العد',
