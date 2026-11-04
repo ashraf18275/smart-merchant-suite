@@ -43,3 +43,20 @@ The business owner always retains administrative access. Delegated users may cre
 
 ## Current status
 The first two SQL migrations have been added on the feature branch. They establish businesses, members, per-member permissions, audit-event storage, tenant-scoped cloud tables for products, stock movements, sales, sale items, and expenses, plus initial RLS policies and transactional RPCs for stock adjustments and multi-item sales. Sale writes use an operation ID to prevent duplicate invoices on retry and lock product rows before checking stock. They include the server-side account-creation endpoint and username mapping helper, but the Flutter login screen is not yet connected to Supabase, initial owner setup is not yet implemented, existing SQLite records are not migrated, and end-to-end multi-device synchronization is not enabled. SQL must be applied to a disposable/test Supabase project, reviewed, and exercised with concurrency/security tests before production use.
+
+
+## Expanded granular permission catalogue — 4 November 2026
+
+The initial permission list has been expanded to cover the retail modules that already exist locally and the modules planned for cloud synchronization. Stable keys now include:
+
+- Customers: `customers.view`, `customers.create`, `customers.edit`.
+- Suppliers: `suppliers.view`, `suppliers.create`, `suppliers.edit`.
+- Purchases: `purchases.view`, `purchases.create`, `purchases.return`.
+- Account ledgers: `accounts.view`, `accounts.customer.receipt`, `accounts.supplier.payment`, `accounts.adjust`.
+- Cashbook: `cashbook.view`, `cashbook.session.open`, `cashbook.session.close`, `cashbook.adjust`.
+- Branches and warehouses: `branches.view`, `branches.manage`, `warehouses.view`, `warehouses.manage`.
+- Inventory transfer: `inventory.transfer`.
+- Sales discount approval: `sales.discount`.
+- Data import: `data.import`.
+
+These keys are now aligned across the Dart permission catalogue, the member-creation Edge Function, the database constraint, and the audited `replace_member_permissions` RPC. Existing grants are preserved by the migration. The permission checklist UI and enforcement at every local/cloud operation are still pending; the presence of a key in the catalogue does not mean the corresponding feature is already secured end-to-end.
