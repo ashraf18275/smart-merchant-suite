@@ -86,6 +86,7 @@ create policy cloud_purchases_select_authorized on public.cloud_purchases
   for select to authenticated
   using (
     public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
     or public.has_business_permission(business_id, 'accounts.view')
     or public.has_business_permission(business_id, 'reports.view')
   );
@@ -104,6 +105,7 @@ create policy cloud_purchase_payments_select_authorized on public.cloud_purchase
   for select to authenticated
   using (
     public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
     or public.has_business_permission(business_id, 'accounts.view')
     or public.has_business_permission(business_id, 'cashbook.view')
   );
@@ -121,6 +123,49 @@ revoke all on public.cloud_purchases, public.cloud_purchase_items, public.cloud_
   from anon, authenticated;
 grant select on public.cloud_purchases, public.cloud_purchase_items, public.cloud_purchase_payments
   to authenticated;
+
+-- Purchase operators need read access to the catalogue and destination stock they operate on.
+drop policy if exists cloud_products_purchases_select_authorized on public.cloud_products;
+create policy cloud_products_purchases_select_authorized on public.cloud_products
+  for select to authenticated
+  using (
+    public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
+  );
+
+drop policy if exists cloud_branches_purchases_select_authorized on public.cloud_branches;
+create policy cloud_branches_purchases_select_authorized on public.cloud_branches
+  for select to authenticated
+  using (
+    public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
+  );
+
+drop policy if exists cloud_warehouses_purchases_select_authorized on public.cloud_warehouses;
+create policy cloud_warehouses_purchases_select_authorized on public.cloud_warehouses
+  for select to authenticated
+  using (
+    public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
+  );
+
+drop policy if exists cloud_stock_purchases_select_authorized on public.cloud_product_warehouse_stock;
+create policy cloud_stock_purchases_select_authorized on public.cloud_product_warehouse_stock
+  for select to authenticated
+  using (
+    public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
+  );
+
+drop policy if exists cloud_supplier_entries_purchases_select_authorized
+  on public.cloud_supplier_account_entries;
+create policy cloud_supplier_entries_purchases_select_authorized
+  on public.cloud_supplier_account_entries
+  for select to authenticated
+  using (
+    public.has_business_permission(business_id, 'purchases.view')
+    or public.has_business_permission(business_id, 'purchases.create')
+  );
 
 create or replace function public.create_cloud_purchase_with_account(
   p_business_id uuid,
