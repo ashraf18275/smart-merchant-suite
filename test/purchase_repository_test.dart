@@ -6,6 +6,7 @@ import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
+import 'package:smart_merchant_suite/domain/payment_method.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -44,6 +45,27 @@ void main() {
     final audit = (await db.query('audit_events')).single;
     expect(audit['action'], 'purchase_created');
     expect(audit['entity_id'], purchaseId);
+  });
+
+  test('records bank transfer settlement without cash drawer outflow', () async {
+    final productId = await products.add(const Product(
+      name: 'صنف تحويل', costMinor: 500, priceMinor: 900,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد التحويل');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    final purchaseId = await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(productId: productId, quantity: 1000, unitCostMinor: 1000)],
+      paidMinor: 400,
+      paymentMethod: PaymentMethod.bankTransfer,
+    );
+    final payment = (await db.query('payment_records')).single;
+    expect(payment['source_type'], 'purchase');
+    expect(payment['source_id'], purchaseId);
+    expect(payment['payment_method'], 'bank_transfer');
+    expect(payment['direction'], 'out');
+    expect(await db.query('cash_transactions'), isEmpty);
   });
 
   test('receives purchase atomically and updates moving weighted average cost', () async {
