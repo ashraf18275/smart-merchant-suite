@@ -74,9 +74,29 @@ void main() {
       'sale_id': saleId,
       'product_id': productId,
       'quantity': 2000,
+      'returned_quantity': 500,
+      'returned_minor': 125,
       'unit_price_minor': 250,
       'unit_cost_minor': 125,
       'line_total_minor': 500,
+    });
+
+    final customerReturnId = await database.insert('customer_returns', {
+      'sale_id': saleId,
+      'customer_id': customerId,
+      'warehouse_id': warehouse['id'],
+      'total_minor': 125,
+      'refunded_minor': 50,
+      'reason': 'جزء مرتجع',
+      'created_at': stamp,
+    });
+    await database.insert('customer_return_items', {
+      'customer_return_id': customerReturnId,
+      'sale_item_id': (await database.query('sale_items')).single['id'],
+      'product_id': productId,
+      'quantity': 500,
+      'unit_price_minor': 250,
+      'line_total_minor': 125,
     });
     await database.insert('expenses', {
       'description': 'مصروف اختبار',
@@ -128,6 +148,23 @@ void main() {
       'entry_type': 'purchase',
       'reference_id': purchaseId,
       'note': 'رصيد مستحق',
+      'created_at': stamp,
+    });
+
+    await database.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': -125,
+      'entry_type': 'return',
+      'reference_id': customerReturnId,
+      'note': 'قيمة المرتجع',
+      'created_at': stamp,
+    });
+    await database.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': 50,
+      'entry_type': 'refund',
+      'reference_id': customerReturnId,
+      'note': 'استرداد نقدي',
       'created_at': stamp,
     });
     await database.insert('customer_account_entries', {
@@ -260,6 +297,8 @@ void main() {
     version8['customers'] = [];
     version8['supplier_account_entries'] = [];
     version8['customer_account_entries'] = [];
+    version8['customer_returns'] = [];
+    version8['customer_return_items'] = [];
     version8['supplier_returns'] = [];
     version8['supplier_return_items'] = [];
     version8['sales'] = version8['sales']!.map((row) {
@@ -291,6 +330,8 @@ void main() {
     version7['purchases'] = [];
     version7['purchase_items'] = [];
     version7['supplier_account_entries'] = [];
+    version7['customer_returns'] = [];
+    version7['customer_return_items'] = [];
     version7['supplier_returns'] = [];
     version7['supplier_return_items'] = [];
 
