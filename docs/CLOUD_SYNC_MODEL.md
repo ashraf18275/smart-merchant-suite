@@ -41,14 +41,14 @@
 | inventory_movements | cloud_inventory_movements | موجود جزئيًا؛ أصبح يحمل branch/warehouse، لكن دقة الكمية ما زالت whole units |
 | sales | cloud_sales | أساس موجود؛ أصبح يحمل branch/warehouse، لكن customer/status/دفعات مستقلة غير مكتملة |
 | sale_items | cloud_sale_items | موجود؛ وحدة الكمية غير متوافقة بعد |
-| customers | cloud_customers | غير موجود |
-| customer_account_entries | cloud_customer_account_entries | غير موجود |
-| suppliers | cloud_suppliers | غير موجود |
+| customers | cloud_customers | إنشاء وبيانات أساسية ورصيد افتتاحي؛ تعديل/تعطيل وربط البيع لم يكتمل |
+| customer_account_entries | cloud_customer_account_entries | رصيد افتتاحي وتحصيلات؛ ربط البيع والمرتجعات غير مكتمل |
+| suppliers | cloud_suppliers | إنشاء وبيانات أساسية ورصيد افتتاحي؛ تعديل/تعطيل غير مكتمل |
 | purchases | cloud_purchases | غير موجود |
 | purchase_items | cloud_purchase_items | غير موجود |
-| supplier_account_entries | cloud_supplier_account_entries | غير موجود |
+| supplier_account_entries | cloud_supplier_account_entries | رصيد افتتاحي وسداد؛ ربط المشتريات والمرتجعات غير مكتمل |
 | expenses | cloud_expenses | أساس موجود؛ يحتاج نطاق الفرع وربط التدقيق |
-| Payments مستقلة | cloud_sale_payments / cloud_account_payments | غير موجودة |
+| Payments مستقلة | cloud_customer_payments / cloud_supplier_payments | تحصيل العميل وسداد المورد موجودان؛ دفعات الفواتير غير مكتملة |
 | Returns | cloud_sales_returns / cloud_purchase_returns | غير موجودة |
 | Cash shifts | cloud_cash_shifts / cloud_cash_movements | غير موجودة |
 
@@ -222,3 +222,20 @@
 - اختبار ترحيل قاعدة سحابية قديمة وقاعدة محلية قديمة مع حفظ البيانات.
 - اختبار استعادة النسخة المحلية بعد مزامنة جزئية.
 - كل تعارض يظهر للمستخدم أو يحل وفق قاعدة معلنة وقابلة للتدقيق.
+
+
+## تحديث التنفيذ — دفاتر العملاء والموردين السحابية (4 نوفمبر 2026)
+
+أضيفت هجرة `20261104010000_cloud_customer_supplier_ledgers.sql`، وتشمل:
+
+- `cloud_customers` و`cloud_suppliers` مع نطاق `business_id` ومعرف عملية وبصمة طلب.
+- `cloud_customer_account_entries` و`cloud_supplier_account_entries` كسجلات مالية append-only، بأرصدة موقعة لا تُكتب كأرقام نهائية قابلة للتعديل.
+- `cloud_customer_payments` و`cloud_supplier_payments` لتمييز التحصيل والسداد عن قيود الحساب، مع وسيلة الدفع: cash/card/bank_transfer/wallet.
+- RPCs لإنشاء عميل/مورد مع رصيد افتتاحي، وتسجيل تحصيل العميل وسداد المورد.
+- صلاحيات منفصلة لإنشاء العميل/المورد، وضبط الرصيد الافتتاحي، وتحصيل العميل، وسداد المورد.
+- تحقق من الرصيد قبل التحصيل/السداد، وقفل سجل الحساب أثناء العملية، وidempotency ببصمة الحمولة، وسجل تدقيق لكل عملية.
+- لا يسمح للعميل بكتابة القيود أو الدفعات مباشرة؛ القراءة فقط حسب RLS والصلاحية.
+- لا ينشأ cash movement سحابي بعد؛ وجود payment record لا يعني أن دفتر وردية الصندوق السحابي مكتمل.
+- لم تُربط هذه الجداول بعد بـ RPCs المبيعات والمشتريات والمرتجعات، ولم تُربط بتطبيق Flutter أو Outbox.
+
+**اختبارات القبول التي أضيفت:** إنشاء حسابات في نشاطين وعزلها، رصيد افتتاحي، تحصيل/سداد، وسيلة الدفع، إعادة الإرسال بنفس العملية دون تكرار، رفض الحمولة المختلفة لنفس المعرف، رفض التحصيل/السداد دون صلاحية، ورفض تجاوز الرصيد.
