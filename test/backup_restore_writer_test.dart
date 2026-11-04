@@ -354,10 +354,9 @@ void main() {
     expect(await database.query('purchase_items'), hasLength(1));
     expect(await database.query('customers'), isEmpty);
     expect(await database.query('customer_account_entries'), isEmpty);
-    expect(
-      (await database.query('sales')).single['customer_id'],
-      isNull,
-    );
+    final restoredSales = await database.query('sales');
+    expect(restoredSales, hasLength(2));
+    expect(restoredSales.every((row) => row['customer_id'] == null), isTrue);
     expect(
       (await database.query('purchases')).single['supplier_id'],
       ids['supplier_id'],
