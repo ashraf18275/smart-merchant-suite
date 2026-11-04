@@ -109,7 +109,7 @@ create or replace function public.adjust_cloud_inventory(
   p_branch_id uuid,
   p_warehouse_id uuid,
   p_product_id uuid,
-  p_quantity_delta_scaled bigint,
+  p_quantity_delta bigint,
   p_reason text,
   p_operation_id uuid
 )
@@ -125,7 +125,7 @@ declare
 begin
   if p_business_id is null or p_branch_id is null or p_warehouse_id is null
      or p_product_id is null or p_operation_id is null
-     or p_quantity_delta_scaled is null or p_quantity_delta_scaled = 0
+     or p_quantity_delta is null or p_quantity_delta = 0
      or length(trim(coalesce(p_reason, ''))) = 0 then
     raise exception 'invalid inventory adjustment' using errcode = '22023';
   end if;
@@ -142,7 +142,7 @@ begin
 
   v_request_hash := encode(public.digest(jsonb_build_object(
     'branch_id', p_branch_id, 'warehouse_id', p_warehouse_id,
-    'product_id', p_product_id, 'quantity_delta_scaled', p_quantity_delta_scaled,
+    'product_id', p_product_id, 'quantity_delta_scaled', p_quantity_delta,
     'reason', trim(p_reason)
   )::text, 'sha256'), 'hex');
 
@@ -176,19 +176,19 @@ begin
   ) on conflict (business_id, warehouse_id, product_id) do nothing;
 
   update public.cloud_product_warehouse_stock
-  set quantity_scaled = quantity_scaled + p_quantity_delta_scaled,
+  set quantity_scaled = quantity_scaled + p_quantity_delta,
       updated_at = now()
   where business_id = p_business_id and branch_id = p_branch_id
     and warehouse_id = p_warehouse_id and product_id = p_product_id
-    and quantity_scaled + p_quantity_delta_scaled >= 0;
+    and quantity_scaled + p_quantity_delta >= 0;
   if not found then
     raise exception 'warehouse stock unavailable or insufficient' using errcode = '23514';
   end if;
 
   update public.cloud_products
-  set stock_quantity = stock_quantity + p_quantity_delta_scaled, updated_at = now()
+  set stock_quantity = stock_quantity + p_quantity_delta, updated_at = now()
   where id = p_product_id and business_id = p_business_id
-    and stock_quantity + p_quantity_delta_scaled >= 0;
+    and stock_quantity + p_quantity_delta >= 0;
   if not found then
     raise exception 'aggregate stock update failed' using errcode = '23514';
   end if;
@@ -197,7 +197,7 @@ begin
     business_id, branch_id, warehouse_id, product_id, quantity_delta,
     reason, operation_id, actor_user_id, request_hash
   ) values (
-    p_business_id, p_branch_id, p_warehouse_id, p_product_id, p_quantity_delta_scaled,
+    p_business_id, p_branch_id, p_warehouse_id, p_product_id, p_quantity_delta,
     trim(p_reason), p_operation_id, auth.uid(), v_request_hash
   ) returning id into v_movement_id;
   return v_movement_id;
