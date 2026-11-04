@@ -7,6 +7,7 @@ import '../core/app_error.dart';
 import '../data/account_repository.dart';
 import '../domain/product.dart';
 import '../domain/sale_record.dart';
+import '../domain/payment_method.dart';
 import '../domain/sale_return_line.dart';
 import '../domain/warehouse.dart';
 import '../domain/warehouse_stock.dart';
@@ -111,6 +112,7 @@ class _SalesPageState extends State<SalesPage> {
     final paid = TextEditingController();
     final key = GlobalKey<FormState>();
     int? selectedCustomerId;
+    String selectedPaymentMethod = PaymentMethod.cash;
     final result = await showDialog<Map<String, Object?>?>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -157,6 +159,15 @@ class _SalesPageState extends State<SalesPage> {
                     )),
                   ]),
                 )),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedPaymentMethod,
+                  decoration: const InputDecoration(labelText: 'طريقة تحصيل المبلغ المدفوع'),
+                  items: PaymentMethod.labels.entries.map((entry) =>
+                    DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                  onChanged: (value) {
+                    if (value != null) selectedPaymentMethod = value;
+                  },
+                ),
                 const Divider(),
                 TextFormField(
                   controller: paid,
@@ -197,6 +208,7 @@ class _SalesPageState extends State<SalesPage> {
                 'quantities': quantities,
                 'paidMinor': _parseMoney(paid.text.trim().isEmpty ? '0' : paid.text.trim())!,
                 'customerId': selectedCustomerId,
+                'paymentMethod': selectedPaymentMethod,
               });
             },
             child: const Text('حفظ الفاتورة'),
@@ -213,6 +225,7 @@ class _SalesPageState extends State<SalesPage> {
         paidMinor: result['paidMinor']! as int,
         warehouseId: _selectedWarehouseId!,
         customerId: result['customerId'] as int?,
+        paymentMethod: result['paymentMethod']! as String,
       );
       await _load();
       if (mounted) {
