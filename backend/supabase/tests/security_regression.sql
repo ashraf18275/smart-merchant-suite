@@ -103,7 +103,10 @@ on conflict (id) do nothing;
 grant usage on schema public to authenticated;
 grant select on public.businesses, public.business_members, public.cloud_products, public.cloud_inventory_movements,
   public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events,
-  public.cloud_branches, public.cloud_warehouses, public.cloud_product_warehouse_stock to authenticated;
+  public.cloud_branches, public.cloud_warehouses, public.cloud_product_warehouse_stock,
+  public.cloud_customers, public.cloud_suppliers,
+  public.cloud_customer_account_entries, public.cloud_supplier_account_entries,
+  public.cloud_customer_payments, public.cloud_supplier_payments to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
@@ -132,6 +135,20 @@ declare
   v_delegated_branch uuid;
   v_location_operation uuid;
   v_location_rejected boolean := false;
+  v_customer_id uuid;
+  v_supplier_id uuid;
+  v_customer_id_retry uuid;
+  v_customer_payment_id uuid;
+  v_customer_payment_retry uuid;
+  v_supplier_payment_id uuid;
+  v_customer_balance bigint;
+  v_supplier_balance bigint;
+  v_receipt_payload_rejected boolean := false;
+  v_customer_overpayment_rejected boolean := false;
+  v_supplier_overpayment_rejected boolean := false;
+  v_unauthorized_receipt_rejected boolean := false;
+  v_unauthorized_supplier_payment_rejected boolean := false;
+  v_customer_b_id uuid;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -757,6 +774,165 @@ begin
 
   if not v_delegated_escalation_rejected then
     raise exception 'delegation regression: privilege escalation was not rejected';
+  end if;
+
+  -- Customer/supplier cloud ledgers are append-only and their payment RPCs are idempotent.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+
+  v_customer_id := public.create_cloud_customer(
+    '20000000-0000-0000-0000-000000000001',
+    'عميل سحابي اختبار', '01000000000', null, 2500,
+    '50000000-0000-0000-0000-000000000030'
+  );
+  v_customer_id_retry := public.create_cloud_customer(
+    '20000000-0000-0000-0000-000000000001',
+    'عميل سحابي اختبار', '01000000000', null, 2500,
+    '50000000-0000-0000-0000-000000000030'
+  );
+  if v_customer_id is distinct from v_customer_id_retry then
+    raise exception 'customer idempotency failed: retry returned a different customer id';
+  end if;
+
+  begin
+    perform public.create_cloud_customer(
+      '20000000-0000-0000-0000-000000000001',
+      'اسم مختلف', '01000000000', null, 2500,
+      '50000000-0000-0000-0000-000000000030'
+    );
+    raise exception 'customer idempotency failed: reused key accepted a different payload';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  v_supplier_id := public.create_cloud_supplier(
+    '20000000-0000-0000-0000-000000000001',
+    'مورد سحابي اختبار', null, null, 4000,
+    '50000000-0000-0000-0000-000000000031'
+  );
+
+  -- A viewer may read account data but cannot post receipts or supplier payments.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  begin
+    perform public.record_cloud_customer_receipt(
+      '20000000-0000-0000-0000-000000000001', v_customer_id, 500,
+      'cash', 'تحصيل غير مصرح', '50000000-0000-0000-0000-000000000032'
+    );
+    raise exception 'account permission regression: viewer recorded a customer receipt';
+  exception when insufficient_privilege then
+    v_unauthorized_receipt_rejected := true;
+  end;
+  begin
+    perform public.record_cloud_supplier_payment(
+      '20000000-0000-0000-0000-000000000001', v_supplier_id, 500,
+      'cash', 'سداد غير مصرح', '50000000-0000-0000-0000-000000000033'
+    );
+    raise exception 'account permission regression: viewer recorded a supplier payment';
+  exception when insufficient_privilege then
+    v_unauthorized_supplier_payment_rejected := true;
+  end;
+  if not v_unauthorized_receipt_rejected or not v_unauthorized_supplier_payment_rejected then
+    raise exception 'account permission regression: account viewer received a write capability';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+  v_customer_payment_id := public.record_cloud_customer_receipt(
+    '20000000-0000-0000-0000-000000000001', v_customer_id, 1000,
+    'card', 'تحصيل بطاقة', '50000000-0000-0000-0000-000000000034'
+  );
+  v_customer_payment_retry := public.record_cloud_customer_receipt(
+    '20000000-0000-0000-0000-000000000001', v_customer_id, 1000,
+    'card', 'تحصيل بطاقة', '50000000-0000-0000-0000-000000000034'
+  );
+  if v_customer_payment_id is distinct from v_customer_payment_retry then
+    raise exception 'customer receipt idempotency failed';
+  end if;
+  select coalesce(sum(amount_minor), 0) into v_customer_balance
+  from public.cloud_customer_account_entries
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and customer_id = v_customer_id;
+  if v_customer_balance <> 1500 then
+    raise exception 'customer ledger balance failed: expected 1500, got %', v_customer_balance;
+  end if;
+  select count(*) into v_count
+  from public.cloud_customer_payments
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and operation_id = '50000000-0000-0000-0000-000000000034';
+  if v_count <> 1 then
+    raise exception 'customer receipt idempotency failed: expected one payment row, got %', v_count;
+  end if;
+  begin
+    perform public.record_cloud_customer_receipt(
+      '20000000-0000-0000-0000-000000000001', v_customer_id, 1200,
+      'card', 'تحصيل مختلف', '50000000-0000-0000-0000-000000000034'
+    );
+    raise exception 'customer receipt idempotency failed: mismatched payload accepted';
+  exception when invalid_parameter_value then
+    v_receipt_payload_rejected := true;
+  end;
+  if not v_receipt_payload_rejected then
+    raise exception 'customer receipt idempotency failed: mismatched payload not rejected';
+  end if;
+  begin
+    perform public.record_cloud_customer_receipt(
+      '20000000-0000-0000-0000-000000000001', v_customer_id, 1600,
+      'cash', 'تحصيل أكبر من الرصيد', '50000000-0000-0000-000000000035'
+    );
+    raise exception 'customer balance regression: overpayment was accepted';
+  exception when check_violation then
+    v_customer_overpayment_rejected := true;
+  end;
+  if not v_customer_overpayment_rejected then
+    raise exception 'customer balance regression: overpayment was not rejected';
+  end if;
+
+  v_supplier_payment_id := public.record_cloud_supplier_payment(
+    '20000000-0000-0000-0000-000000000001', v_supplier_id, 1500,
+    'bank_transfer', 'سداد تحويل', '50000000-0000-0000-0000-000000000036'
+  );
+  select coalesce(sum(amount_minor), 0) into v_supplier_balance
+  from public.cloud_supplier_account_entries
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and supplier_id = v_supplier_id;
+  if v_supplier_balance <> 2500 then
+    raise exception 'supplier ledger balance failed: expected 2500, got %', v_supplier_balance;
+  end if;
+  select count(*) into v_count
+  from public.cloud_supplier_payments
+  where id = v_supplier_payment_id
+    and payment_method = 'bank_transfer'
+    and amount_minor = 1500;
+  if v_count <> 1 then
+    raise exception 'supplier payment record failed';
+  end if;
+  begin
+    perform public.record_cloud_supplier_payment(
+      '20000000-0000-0000-0000-000000000001', v_supplier_id, 3000,
+      'cash', 'سداد أكبر من الرصيد', '50000000-0000-0000-0000-000000000037'
+    );
+    raise exception 'supplier balance regression: overpayment was accepted';
+  exception when check_violation then
+    v_supplier_overpayment_rejected := true;
+  end;
+  if not v_supplier_overpayment_rejected then
+    raise exception 'supplier balance regression: overpayment was not rejected';
+  end if;
+
+  -- Customer records are tenant-isolated even when another business has its own customer.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+  v_customer_b_id := public.create_cloud_customer(
+    '20000000-0000-0000-0000-000000000002',
+    'عميل النشاط الثاني', null, null, 0,
+    '50000000-0000-0000-0000-000000000038'
+  );
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  select count(*) into v_count from public.cloud_customers;
+  if v_count <> 1 then
+    raise exception 'customer tenant isolation failed: member sees % customers, expected 1', v_count;
+  end if;
+  if has_table_privilege(current_user, 'public.cloud_customer_account_entries', 'INSERT')
+     or has_table_privilege(current_user, 'public.cloud_supplier_account_entries', 'UPDATE')
+     or has_table_privilege(current_user, 'public.cloud_customer_payments', 'DELETE') then
+    raise exception 'security regression: authenticated can directly mutate account ledgers or payments';
   end if;
 
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
