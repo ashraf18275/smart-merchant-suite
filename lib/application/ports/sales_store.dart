@@ -12,6 +12,12 @@ abstract interface class SalesStore {
 
   Future<List<SaleRecord>> all();
 
+  Future<int> cancelSale({
+    required int saleId,
+    required int refundedMinor,
+    required String reason,
+  });
+
   Future<List<Map<String, Object?>>> returnableSales();
   Future<List<Map<String, Object?>>> returnableSaleItems(int saleId);
   Future<int> createCustomerReturn({
