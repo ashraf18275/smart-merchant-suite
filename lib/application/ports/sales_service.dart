@@ -1,4 +1,5 @@
 import '../../domain/sale_record.dart';
+import '../../domain/sale_return_line.dart';
 
 abstract interface class SalesService {
   Future<int> createSale({
@@ -9,4 +10,13 @@ abstract interface class SalesService {
   });
 
   Future<List<SaleRecord>> all();
+
+  Future<List<Map<String, Object?>>> returnableSales();
+  Future<List<Map<String, Object?>>> returnableSaleItems(int saleId);
+  Future<int> createCustomerReturn({
+    required int saleId,
+    required List<SaleReturnLineInput> items,
+    required int refundedMinor,
+    required String reason,
+  });
 }
