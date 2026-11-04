@@ -1272,7 +1272,7 @@ begin
       jsonb_build_array(jsonb_build_object(
         'sale_item_id', v_sale_item_id, 'quantity_scaled', 1000
       )),
-      50,
+      49,
       'card',
       null,
       '550e8400-e29b-41d4-a716-446655440060'
@@ -1355,7 +1355,7 @@ begin
       jsonb_build_array(jsonb_build_object(
         'purchase_item_id', v_purchase_item_id, 'quantity_scaled', 250
       )),
-      50,
+      49,
       'bank_transfer',
       null,
       '550e8400-e29b-41d4-a716-446655440061'
