@@ -136,7 +136,7 @@ class _CashbookPageState extends State<CashbookPage>
   }
 
   Future<void> _closeSession(Map<String, Object?> session) async {
-    final expected = (session['expected_balance_minor'] as num).toInt();
+    final expected = (session['live_expected_balance_minor'] as num).toInt();
     final counted = TextEditingController(
       text: _moneyInput(expected < 0 ? 0 : expected),
     );
