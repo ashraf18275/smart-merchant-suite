@@ -9,6 +9,21 @@ void main() {
       expect(AppPermission.values.every((permission) => permission.label.isNotEmpty), isTrue);
     });
 
+    test('includes granular retail operation capabilities', () {
+      final keys = AppPermission.values.map((permission) => permission.key).toSet();
+      expect(keys, containsAll({
+        'customers.view', 'customers.create', 'customers.edit',
+        'suppliers.view', 'suppliers.create', 'suppliers.edit',
+        'purchases.view', 'purchases.create', 'purchases.return',
+        'accounts.view', 'accounts.customer.receipt',
+        'accounts.supplier.payment', 'accounts.adjust',
+        'cashbook.view', 'cashbook.session.open', 'cashbook.session.close',
+        'cashbook.adjust', 'branches.view', 'branches.manage',
+        'warehouses.view', 'warehouses.manage', 'inventory.transfer',
+        'sales.discount', 'data.import',
+      }));
+    });
+
     test('round-trips every stable key', () {
       for (final permission in AppPermission.values) {
         expect(AppPermission.fromKey(permission.key), permission);
