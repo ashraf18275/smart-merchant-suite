@@ -136,18 +136,18 @@ begin
   end if;
 
   select count(*) into v_count from public.cloud_branches;
-  if v_count <> 1 then
-    raise exception 'branch isolation failed: owner A can see % branches, expected 1', v_count;
+  if v_count <> 2 then
+    raise exception 'branch isolation failed: owner A can see % branches, expected 2', v_count;
   end if;
 
   select count(*) into v_count from public.cloud_warehouses;
-  if v_count <> 1 then
-    raise exception 'warehouse isolation failed: owner A can see % warehouses, expected 1', v_count;
+  if v_count <> 2 then
+    raise exception 'warehouse isolation failed: owner A can see % warehouses, expected 2', v_count;
   end if;
 
   select count(*) into v_count from public.cloud_product_warehouse_stock;
-  if v_count <> 1 then
-    raise exception 'warehouse stock isolation failed: owner A can see % stock rows, expected 1', v_count;
+  if v_count <> 2 then
+    raise exception 'warehouse stock isolation failed: owner A can see % stock rows, expected 2', v_count;
   end if;
 
   if has_table_privilege(current_user, 'public.cloud_product_warehouse_stock', 'UPDATE')
