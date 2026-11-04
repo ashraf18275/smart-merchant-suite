@@ -111,6 +111,15 @@ void main() {
         'note': 'فاتورة بيع',
         'created_at': stamp,
       });
+      await source.insert('payment_records', {
+        'direction': 'in',
+        'payment_method': 'bank_transfer',
+        'amount_minor': 200,
+        'source_type': 'sale',
+        'source_id': saleId,
+        'note': 'تحويل تجريبي',
+        'created_at': stamp,
+      });
 
       // The source is intentionally left in WAL mode with committed writes.
       await createSqliteBackupSnapshot(source, snapshotPath);
