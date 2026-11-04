@@ -589,8 +589,7 @@ class _SalesPageState extends State<SalesPage> {
                                   leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
                                   title: Text('فاتورة رقم ${sale.id}'),
                                   subtitle: Text(
-                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\nالمصدر: ${sale.branchName ?? 'غير محدد'} — ${sale.warehouseName ?? 'فاتورة قديمة'}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}'
-                                    ${sale.isCancelled ? '\nملغاة: ${sale.cancellationReason ?? 'بدون سبب مسجل'}' : ''},
+                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\\nالمصدر: ${sale.branchName ?? 'غير محدد'} — ${sale.warehouseName ?? 'فاتورة قديمة'}\\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}${sale.isCancelled ? '\\nملغاة: ${sale.cancellationReason ?? 'بدون سبب مسجل'}' : ''}',
                                   ),
                                   isThreeLine: true,
                                   trailing: SizedBox(
