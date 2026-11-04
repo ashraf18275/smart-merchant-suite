@@ -103,6 +103,100 @@ void main() {
     expect(await cashbook.movements(), isEmpty);
   });
 
+  test('opens and closes a cash session with a reconciled physical count', () async {
+    final sessionId = await cashbook.openSession(
+      openingBalanceMinor: 10000,
+      note: 'فكة بداية الوردية',
+    );
+    await expectLater(
+      cashbook.openSession(openingBalanceMinor: 5000),
+      throwsStateError,
+    );
+
+    final stamp = DateTime.utc(2026, 11, 4).toIso8601String();
+    await db.transaction((txn) async {
+      await writeCashMovement(
+        txn,
+        direction: 'in',
+        category: 'sale_receipt',
+        amountMinor: 5000,
+        sourceType: 'sale',
+        sourceId: 20,
+        createdAt: stamp,
+      );
+      await writeCashMovement(
+        txn,
+        direction: 'out',
+        category: 'expense',
+        amountMinor: 2000,
+        sourceType: 'expense',
+        sourceId: 20,
+        createdAt: stamp,
+      );
+      await writeCashMovement(
+        txn,
+        direction: 'in',
+        category: 'sale_receipt',
+        amountMinor: 7000,
+        sourceType: 'sale',
+        sourceId: 21,
+        paymentMethod: PaymentMethod.card,
+        createdAt: stamp,
+      );
+    });
+
+    final active = await cashbook.currentSession();
+    expect(active!['id'], sessionId);
+    expect(active['opening_balance_minor'], 10000);
+    expect(active['expected_balance_minor'], 13000);
+    final result = await cashbook.closeSession(
+      countedBalanceMinor: 12800,
+      note: 'عجز 2 جنيه بعد العد',
+    );
+    expect(result, {
+      'session_id': sessionId,
+      'opening_balance': 10000,
+      'incoming': 5000,
+      'outgoing': 2000,
+      'expected': 13000,
+      'counted': 12800,
+      'difference': -200,
+    });
+    expect(await cashbook.currentSession(), isNull);
+    final history = await cashbook.sessionHistory();
+    expect(history, hasLength(1));
+    expect(history.single['status'], 'closed');
+    expect(history.single['difference_minor'], -200);
+    final sessionMovements = await db.query(
+      'cash_transactions',
+      where: 'cash_session_id = ?',
+      whereArgs: [sessionId],
+    );
+    expect(sessionMovements, hasLength(2));
+    expect(await cashbook.totals(), {
+      'incoming': 5000,
+      'outgoing': 2000,
+      'balance': 3000,
+    });
+  });
+
+  test('rejects closing a missing session and negative physical counts', () async {
+    await expectLater(
+      cashbook.closeSession(countedBalanceMinor: 0),
+      throwsStateError,
+    );
+    await expectLater(
+      cashbook.openSession(openingBalanceMinor: -1),
+      throwsArgumentError,
+    );
+    await cashbook.openSession(openingBalanceMinor: 0);
+    await expectLater(
+      cashbook.closeSession(countedBalanceMinor: -1),
+      throwsArgumentError,
+    );
+    expect(await cashbook.currentSession(), isNotNull);
+  });
+
   test('lists latest cash movements and audit events first', () async {
     final older = DateTime.utc(2026, 11, 1).toIso8601String();
     final newer = DateTime.utc(2026, 11, 4).toIso8601String();
