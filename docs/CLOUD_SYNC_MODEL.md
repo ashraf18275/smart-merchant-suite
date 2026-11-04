@@ -60,9 +60,10 @@
 - الأموال أعداد صحيحة بوحدات العملة الصغرى، ولا تستخدم floating point.
 
 ### الوضع السحابي الحالي
-- `cloud_products.stock_quantity` و`cloud_inventory_movements.quantity_delta` من نوع bigint، لكنهما نشآ قبل اكتمال توحيد دلالة وحدة الكمية.
-- `cloud_sale_items.quantity` كان integer بوحدة القطعة الكاملة.
-- لذلك لا يجوز إرسال كمية محلية مثل 1250 إلى عقد API قديم يفهم 1250 قطعة.
+- `cloud_products.stock_quantity` و`cloud_inventory_movements.quantity_delta` و`cloud_product_warehouse_stock.quantity` من نوع bigint لكنها حاليًا بوحدة القطعة الكاملة.
+- `cloud_sale_items.quantity` أصبح bigint، لكنه ما زال يمثل وحدات كاملة في عقود RPC الحالية.
+- عمليات البيع والتسوية أصبحت واعية بالمخزن وتحدث رصيد المخزن والإجمالي، لكنها لم تتحول بعد إلى وحدة الألف.
+- لذلك لا يجوز إرسال كمية محلية مثل 1250 إلى عقد API الحالي لأنه سيفهمها 1250 قطعة.
 
 ### قرار المزامنة
 - اعتماد أسماء واضحة مثل `quantity_scaled` و`quantity_delta_scaled` في العقود الجديدة.
@@ -71,12 +72,23 @@
 - عدم تغيير بيانات إنتاجية أو تشغيل هجرة تحويل على مشروع حي دون خطة نسخ احتياطي وموافقة منفصلة.
 - تحديث RPCs بحيث تستقبل الكميات بوحدة الألف وتتحقق من overflow والكمية الموجبة وحدود المخزون.
 
+### حالة التنفيذ في 4 نوفمبر 2026
+
+- تم إنشاء الجداول السحابية للفروع والمخازن وأرصدة كل مخزن.
+- trigger ينشئ فرعًا ومخزنًا افتراضيين لكل نشاط جديد، كما تم ترحيل الأنشطة الموجودة وقت الهجرة.
+- كل منتج جديد يرتبط بمخزنه الافتراضي ويبدأ برصيد مستقل.
+- البيع والتسوية يستخدمان RPCs تقبل branch_id وwarehouse_id، وتحدث رصيد المخزن وإجمالي المنتج في معاملة واحدة.
+- اختبارات PostgreSQL أثبتت عزل النشاطين واستقلال مخزن ثانٍ عن المخزن الافتراضي.
+- تحقق CI الناجح: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41749862427
+- لم تنفذ بعد واجهة إدارة الفروع والمخازن أو مزامنة Flutter.
+
 ## 5. نموذج الفروع والمخازن المقترح
 
 ### الكيانات
 - `cloud_branches`: `id`, `business_id`, `name`, `is_active`, بيانات الاتصال.
 - `cloud_warehouses`: `id`, `business_id`, `branch_id`, `name`, `is_active`.
-- `cloud_product_warehouse_stock`: `business_id`, `branch_id`, `warehouse_id`, `product_id`, `quantity_scaled`, `updated_at`.
+- المنفذ حاليًا: `cloud_product_warehouse_stock` بأعمدة `business_id`, `branch_id`, `warehouse_id`, `product_id`, `quantity`, `updated_at`؛ `quantity` ما زالت whole units.
+- الهدف بعد هجرة الدقة: استبدال `quantity` بـ `quantity_scaled` بوحدة الألف، وعدم تفعيل مزامنة الكميات قبل ذلك.
 - `cloud_inventory_movements`: إضافة `branch_id` و`warehouse_id` و`movement_type` ومرجع المستند والفاعل.
 
 ### قواعد النزاهة
