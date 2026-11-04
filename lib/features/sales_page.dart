@@ -251,8 +251,8 @@ class _SalesPageState extends State<SalesPage> {
     var selectedSaleId = invoices.first['id']! as int;
     var lines = await _sales.returnableSaleItems(selectedSaleId);
     final quantities = <int, String>{};
-    final refunded = TextEditingController(text: '0');
-    final reason = TextEditingController();
+    var refundedText = '0';
+    var reasonText = '';
     final result = await showDialog<Map<String, Object?>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -269,6 +269,7 @@ class _SalesPageState extends State<SalesPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<int>(
+                      isExpanded: true,
                       initialValue: selectedSaleId,
                       decoration: const InputDecoration(labelText: 'فاتورة البيع الأصلية'),
                       items: [
@@ -332,14 +333,14 @@ class _SalesPageState extends State<SalesPage> {
                     }),
                     const Divider(),
                     TextField(
-                      controller: refunded,
+                      onChanged: (value) => refundedText = value,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'المبلغ المسترد نقدًا (جنيه)',
                       ),
                     ),
                     TextField(
-                      controller: reason,
+                      onChanged: (value) => reasonText = value,
                       decoration: const InputDecoration(labelText: 'سبب المرتجع *'),
                     ),
                   ],
@@ -353,7 +354,7 @@ class _SalesPageState extends State<SalesPage> {
               ),
               FilledButton(
                 onPressed: () {
-                  if (reason.text.trim().isEmpty) {
+                  if (reasonText.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('سبب المرتجع مطلوب')),
                     );
@@ -388,7 +389,7 @@ class _SalesPageState extends State<SalesPage> {
                     return;
                   }
                   final refundValue = _parseMoney(
-                    refunded.text.trim().isEmpty ? '0' : refunded.text.trim(),
+                    refundedText.trim().isEmpty ? '0' : refundedText.trim(),
                   );
                   if (refundValue == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -400,7 +401,7 @@ class _SalesPageState extends State<SalesPage> {
                     'saleId': selectedSaleId,
                     'items': returnItems,
                     'refundedMinor': refundValue,
-                    'reason': reason.text.trim(),
+                    'reason': reasonText.trim(),
                   });
                 },
                 child: const Text('حفظ المرتجع'),
@@ -410,8 +411,6 @@ class _SalesPageState extends State<SalesPage> {
         },
       ),
     );
-    refunded.dispose();
-    reason.dispose();
     if (result == null) return;
 
     try {
