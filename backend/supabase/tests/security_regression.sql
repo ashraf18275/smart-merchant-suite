@@ -149,6 +149,7 @@ declare
   v_unauthorized_receipt_rejected boolean := false;
   v_unauthorized_supplier_payment_rejected boolean := false;
   v_customer_b_id uuid;
+  v_credit_without_customer_rejected boolean := false;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -489,28 +490,81 @@ begin
     raise exception 'security regression: client can mutate audit events';
   end if;
 
-  v_sale_one := public.create_cloud_sale(
+  v_customer_id := public.create_cloud_customer(
+    '20000000-0000-0000-0000-000000000001',
+    'عميل فاتورة سحابية', null, null, 0,
+    '50000000-0000-0000-0000-000000000040'
+  );
+
+  v_sale_one := public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
     jsonb_build_array(jsonb_build_object(
       'product_id', '30000000-0000-0000-0000-000000000001',
       'quantity', 2
     )),
     100,
+    v_customer_id,
+    'cash',
     '50000000-0000-0000-0000-000000000001'
   );
 
-  v_sale_two := public.create_cloud_sale(
+  v_sale_two := public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
     jsonb_build_array(jsonb_build_object(
       'product_id', '30000000-0000-0000-0000-000000000001',
       'quantity', 2
     )),
     100,
+    v_customer_id,
+    'cash',
     '50000000-0000-0000-0000-000000000001'
   );
 
   if v_sale_one is distinct from v_sale_two then
     raise exception 'idempotency failed: retry returned a different sale id';
+  end if;
+
+  if not exists (
+    select 1 from public.cloud_sales
+    where id = v_sale_one and customer_id = v_customer_id
+      and total_minor = 200 and paid_minor = 100
+  ) then
+    raise exception 'sale customer linkage failed';
+  end if;
+  select coalesce(sum(amount_minor), 0) into v_customer_balance
+  from public.cloud_customer_account_entries
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and customer_id = v_customer_id
+    and reference_type = 'sale' and reference_id = v_sale_one;
+  if v_customer_balance <> 100 then
+    raise exception 'sale receivable failed: expected 100, got %', v_customer_balance;
+  end if;
+  if not exists (
+    select 1 from public.cloud_sale_payments
+    where business_id = '20000000-0000-0000-0000-000000000001'
+      and sale_id = v_sale_one and amount_minor = 100 and payment_method = 'cash'
+  ) then
+    raise exception 'sale payment record failed';
+  end if;
+
+  begin
+    perform public.create_cloud_sale_with_account(
+      '20000000-0000-0000-0000-000000000001',
+      jsonb_build_array(jsonb_build_object(
+        'product_id', '30000000-0000-0000-0000-000000000001',
+        'quantity', 1
+      )),
+      0,
+      null,
+      'cash',
+      '550e8400-e29b-41d4-a716-446655440039'
+    );
+    raise exception 'credit sale regression: unpaid sale without customer was accepted';
+  exception when check_violation then
+    v_credit_without_customer_rejected := true;
+  end;
+  if not v_credit_without_customer_rejected then
+    raise exception 'credit sale regression: unpaid sale without customer was not rejected';
   end if;
 
   select stock_quantity into v_stock
@@ -522,13 +576,15 @@ begin
   end if;
 
   begin
-    perform public.create_cloud_sale(
+    perform public.create_cloud_sale_with_account(
       '20000000-0000-0000-0000-000000000001',
       jsonb_build_array(jsonb_build_object(
         'product_id', '30000000-0000-0000-0000-000000000001',
         'quantity', 1
       )),
       100,
+      v_customer_id,
+      'cash',
       '50000000-0000-0000-0000-000000000001'
     );
     raise exception 'idempotency failed: reused sale key accepted a different payload';
