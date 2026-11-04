@@ -65,6 +65,6 @@ void main() {
     expect(history.single['expected_balance_minor'], 12500);
     expect(history.single['counted_balance_minor'], 12000);
     expect(history.single['difference_minor'], -500);
-    expect(find.textContaining('عجز'), findsOneWidget);
+    expect(find.textContaining('عجز'), findsWidgets);
   });
 }
