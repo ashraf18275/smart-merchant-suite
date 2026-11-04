@@ -12,8 +12,13 @@ void main() {
 
   setUpAll(sqfliteFfiInit);
 
-  Future<void> settle(WidgetTester tester) =>
-      tester.pumpAndSettle(timeout: const Duration(seconds: 3));
+  Future<void> settle(WidgetTester tester) async {
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 3),
+    );
+  }
   setUp(() async {
     db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(db);
