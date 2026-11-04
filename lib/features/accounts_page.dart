@@ -63,7 +63,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
   }
 
   int? _parseMoney(String value) {
-    final match = RegExp(r'^(\\d+)(?:[.,](\\d{1,2}))?$').firstMatch(value.trim());
+    final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?$').firstMatch(value.trim());
     if (match == null) return null;
     final whole = int.tryParse(match.group(1)!);
     if (whole == null || whole > 999999999) return null;
