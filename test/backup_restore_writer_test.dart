@@ -297,6 +297,12 @@ void main() {
     version8['customers'] = [];
     version8['supplier_account_entries'] = [];
     version8['customer_account_entries'] = [];
+    version8['sale_items'] = version8['sale_items']!.map((row) => {
+      ...row, 'returned_quantity': 0, 'returned_minor': 0,
+    }).toList();
+    version8['purchase_items'] = version8['purchase_items']!.map((row) => {
+      ...row, 'returned_quantity': 0,
+    }).toList();
     version8['customer_returns'] = [];
     version8['customer_return_items'] = [];
     version8['supplier_returns'] = [];
@@ -330,6 +336,9 @@ void main() {
     version7['purchases'] = [];
     version7['purchase_items'] = [];
     version7['supplier_account_entries'] = [];
+    version7['sale_items'] = version7['sale_items']!.map((row) => {
+      ...row, 'returned_quantity': 0, 'returned_minor': 0,
+    }).toList();
     version7['customer_returns'] = [];
     version7['customer_return_items'] = [];
     version7['supplier_returns'] = [];
