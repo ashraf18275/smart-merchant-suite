@@ -80,7 +80,15 @@ void main() {
         entityType: 'expense',
         localEntityId: '9',
       ),
-      isNull,
+      'remote-expense-id',
+    );
+    expect(
+      await outbox.localIdFor(
+        businessId: 'business-uuid',
+        entityType: 'expense',
+        remoteEntityId: 'remote-expense-id',
+      ),
+      '9',
     );
   });
 
