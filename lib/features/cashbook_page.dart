@@ -130,7 +130,7 @@ class _CashbookPageState extends State<CashbookPage>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر فتح الوردية: ${error}')),
+        const SnackBar(content: Text('تعذر فتح الوردية. قد تكون هناك وردية مفتوحة بالفعل.')),
       );
     }
   }
@@ -204,7 +204,7 @@ class _CashbookPageState extends State<CashbookPage>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إقفال الوردية: ${error}')),
+        const SnackBar(content: Text('تعذر إقفال الوردية. راجع حالة الصندوق وحاول مرة أخرى.')),
       );
     }
   }
@@ -268,6 +268,8 @@ class _CashbookPageState extends State<CashbookPage>
     'expense_recorded' => 'تسجيل مصروف',
     'customer_receipt_recorded' => 'تسجيل تحصيل عميل',
     'supplier_payment_recorded' => 'تسجيل سداد مورد',
+    'cash_session_opened' => 'فتح وردية صندوق',
+    'cash_session_closed' => 'إقفال وردية صندوق',
     _ => action,
   };
 
@@ -318,7 +320,8 @@ class _CashbookPageState extends State<CashbookPage>
             padding: EdgeInsets.all(12),
             child: Text(
               'يعرض الصندوق الحركات النقدية المسجلة من تاريخ تحديث النظام. '
-              'العمليات الأقدم محفوظة في فواتيرها وكشوفها، ولم تُحوّل تلقائيًا إلى نقدية حتى لا نفترض وسيلة دفع غير موثقة.',
+              'العمليات الأقدم محفوظة في فواتيرها وكشوفها، ولم تُحوّل تلقائيًا إلى نقدية حتى لا نفترض وسيلة دفع غير موثقة. '
+              'تُحتسب حركة الوردية فقط للعمليات النقدية التي تمت أثناء فتحها.',
             ),
           ),
         ),
