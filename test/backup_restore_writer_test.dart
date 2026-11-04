@@ -33,6 +33,12 @@ void main() {
     final warehouse = (await database.query('warehouses')).single;
     final unit = (await database.query('product_units')).single;
 
+    final cashSessionId = await database.insert('cash_sessions', {
+      'opened_at': stamp,
+      'opening_balance_minor': 5000,
+      'opening_note': 'وردية النسخ الاحتياطي',
+      'status': 'open',
+    });
     final supplierId = await database.insert('suppliers', {
       'name': 'مورد الاختبار',
       'phone': '01000000000',
@@ -147,6 +153,7 @@ void main() {
       'amount_minor': 200,
       'source_type': 'sale',
       'source_id': saleId,
+      'cash_session_id': cashSessionId,
       'note': 'تحصيل تجريبي',
       'created_at': stamp,
     });
