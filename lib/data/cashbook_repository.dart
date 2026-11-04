@@ -23,7 +23,7 @@ class CashbookRepository {
   Future<List<Map<String, Object?>>> movements({int limit = 250}) =>
       _db.query('cash_transactions',
         orderBy: 'created_at DESC, id DESC',
-        limit: limit.clamp(1, 1000));
+        limit: limit < 1 ? 1 : (limit > 1000 ? 1000 : limit));
 
   Future<List<Map<String, Object?>>> auditEvents({int limit = 250}) =>
       _db.query('audit_events',
