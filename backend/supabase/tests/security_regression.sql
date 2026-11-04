@@ -973,6 +973,189 @@ begin
     raise exception 'supplier balance regression: overpayment was not rejected';
   end if;
 
+  -- Cash sessions are branch/register scoped, append-only and idempotent.
+  v_cash_session_id := public.open_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    'register-01',
+    1000,
+    'رصيد افتتاحي للصندوق',
+    '550e8400-e29b-41d4-a716-446655440040'
+  );
+  v_cash_session_retry := public.open_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    'register-01',
+    1000,
+    'رصيد افتتاحي للصندوق',
+    '550e8400-e29b-41d4-a716-446655440040'
+  );
+  if v_cash_session_id is distinct from v_cash_session_retry then
+    raise exception 'cash session idempotency failed: retry returned a different session';
+  end if;
+
+  begin
+    perform public.open_cloud_cash_session(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_branch,
+      'register-01',
+      1000,
+      'محاولة وردية ثانية',
+      '550e8400-e29b-41d4-a716-446655440041'
+    );
+    raise exception 'cash session regression: two open sessions exist for one register';
+  exception when unique_violation then
+    v_cash_open_rejected := true;
+  end;
+  if not v_cash_open_rejected then
+    raise exception 'cash session regression: duplicate open register session was not rejected';
+  end if;
+
+  v_cash_movement_id := public.record_cloud_cash_movement(
+    '20000000-0000-0000-0000-000000000001',
+    v_cash_session_id,
+    'in',
+    'other_income',
+    500,
+    'إيراد نقدي إضافي',
+    '550e8400-e29b-41d4-a716-446655440042'
+  );
+  v_cash_movement_retry := public.record_cloud_cash_movement(
+    '20000000-0000-0000-0000-000000000001',
+    v_cash_session_id,
+    'in',
+    'other_income',
+    500,
+    'إيراد نقدي إضافي',
+    '550e8400-e29b-41d4-a716-446655440042'
+  );
+  if v_cash_movement_id is distinct from v_cash_movement_retry then
+    raise exception 'cash movement idempotency failed';
+  end if;
+
+  perform public.record_cloud_cash_movement(
+    '20000000-0000-0000-0000-000000000001',
+    v_cash_session_id,
+    'out',
+    'cash_expense',
+    200,
+    'مصروف نقدي',
+    '550e8400-e29b-41d4-a716-446655440043'
+  );
+
+  begin
+    perform public.record_cloud_cash_movement(
+      '20000000-0000-0000-0000-000000000001',
+      v_cash_session_id,
+      'in',
+      'other_income',
+      501,
+      'حمولة مختلفة',
+      '550e8400-e29b-41d4-a716-446655440042'
+    );
+    raise exception 'cash movement idempotency failed: mismatched payload accepted';
+  exception when invalid_parameter_value then
+    v_cash_movement_payload_rejected := true;
+  end;
+  if not v_cash_movement_payload_rejected then
+    raise exception 'cash movement idempotency failed: mismatched payload was not rejected';
+  end if;
+
+  -- An open cash session prevents branch deactivation, even when stock is zero.
+  begin
+    perform public.set_cloud_branch_active(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_branch,
+      false
+    );
+    raise exception 'cash session regression: branch with an open session was deactivated';
+  exception when check_violation then
+    v_cash_branch_deactivation_rejected := true;
+  end;
+  if not v_cash_branch_deactivation_rejected then
+    raise exception 'cash session regression: open-session branch deactivation was not rejected';
+  end if;
+
+  v_cash_close_summary := public.close_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_cash_session_id,
+    1200,
+    'عد فعلي أقل من المتوقع بمائة',
+    '550e8400-e29b-41d4-a716-446655440044'
+  );
+  if (v_cash_close_summary->>'expected_balance_minor')::bigint <> 1300
+     or (v_cash_close_summary->>'difference_minor')::bigint <> -100 then
+    raise exception 'cash session calculation failed: expected 1300 and difference -100, got %',
+      v_cash_close_summary;
+  end if;
+  v_cash_close_retry := public.close_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_cash_session_id,
+    1200,
+    'عد فعلي أقل من المتوقع بمائة',
+    '550e8400-e29b-41d4-a716-446655440044'
+  );
+  if v_cash_close_summary is distinct from v_cash_close_retry then
+    raise exception 'cash session close idempotency failed';
+  end if;
+
+  begin
+    perform public.record_cloud_cash_movement(
+      '20000000-0000-0000-0000-000000000001',
+      v_cash_session_id,
+      'in',
+      'other_income',
+      100,
+      'حركة بعد الإغلاق',
+      '550e8400-e29b-41d4-a716-446655440045'
+    );
+    raise exception 'cash session regression: movement was recorded after close';
+  exception when check_violation then
+    v_cash_closed_movement_rejected := true;
+  end;
+  if not v_cash_closed_movement_rejected then
+    raise exception 'cash session regression: movement after close was not rejected';
+  end if;
+
+  -- After the session is closed, the now-empty branch can be deactivated safely.
+  perform public.set_cloud_branch_active(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    false
+  );
+  perform public.set_cloud_branch_active(
+    '20000000-0000-0000-0000-000000000001',
+    v_created_branch,
+    true
+  );
+
+  -- Cash session creation is a separate capability from viewing customer accounts.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  begin
+    perform public.open_cloud_cash_session(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_branch,
+      'unauthorized-register',
+      0,
+      null,
+      '550e8400-e29b-41d4-a716-446655440046'
+    );
+    raise exception 'cash session permission regression: account viewer opened a cash session';
+  exception when insufficient_privilege then
+    v_unauthorized_cash_open_rejected := true;
+  end;
+  if not v_unauthorized_cash_open_rejected then
+    raise exception 'cash session permission regression: unauthorized open was not rejected';
+  end if;
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+
+  if has_table_privilege(current_user, 'public.cloud_cash_sessions', 'INSERT')
+     or has_table_privilege(current_user, 'public.cloud_cash_sessions', 'UPDATE')
+     or has_table_privilege(current_user, 'public.cloud_cash_movements', 'INSERT')
+     or has_table_privilege(current_user, 'public.cloud_cash_movements', 'DELETE') then
+    raise exception 'security regression: authenticated can directly mutate cloud cashbook records';
+  end if;
+
   -- Customer records are tenant-isolated even when another business has its own customer.
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
   v_customer_b_id := public.create_cloud_customer(
