@@ -65,6 +65,12 @@ insert into public.member_permissions (
    'products.view', true),
   ('20000000-0000-0000-0000-000000000001',
    '21000000-0000-0000-0000-000000000006',
+   'customers.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
+   'accounts.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
    'users.edit', true)
 on conflict (member_id, permission_key) do nothing;
 
@@ -644,8 +650,18 @@ begin
   perform public.replace_member_permissions(
     '20000000-0000-0000-0000-000000000001',
     '21000000-0000-0000-0000-000000000003',
-    array['products.view']
+    array['products.view', 'customers.view', 'accounts.view']
   );
+
+  select count(*) into v_count
+  from public.member_permissions
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and member_id = '21000000-0000-0000-0000-000000000003'
+    and permission_key in ('customers.view', 'accounts.view')
+    and allowed = true;
+  if v_count <> 2 then
+    raise exception 'permission catalogue regression: expanded customer/account permissions were not persisted';
+  end if;
 
   select count(*) into v_count_audit
   from public.audit_events
@@ -662,7 +678,7 @@ begin
   perform public.replace_member_permissions(
     '20000000-0000-0000-0000-000000000001',
     '21000000-0000-0000-0000-000000000003',
-    array['products.view']
+    array['products.view', 'customers.view', 'accounts.view']
   );
 
   begin
