@@ -15,4 +15,4 @@ create policy login_names_insert_owner_self on public.member_login_names
     )
   );
 
-grant insert on public.member_login_names to authenticated;
+grant select, insert on public.member_login_names to authenticated;
