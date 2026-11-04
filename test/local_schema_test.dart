@@ -23,7 +23,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -230,6 +230,25 @@ void main() {
     await createFractionalQuantitiesSchema(database);
     expect((await database.query('products')).single['stock_quantity'], 6000);
     expect(await database.query('expenses'), isEmpty);
+  });
+
+  test('audit and cash migration is idempotent and creates indexed append-only journals', () async {
+    await createLocalSchema(database);
+    await createAuditCashSchema(database);
+    await createAuditCashSchema(database);
+
+    final audit = await database.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_audit_events_created'",
+    );
+    final cash = await database.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_cash_transactions_created'",
+    );
+    expect(audit, hasLength(1));
+    expect(cash, hasLength(1));
+    expect(await database.query('audit_events'), isEmpty);
+    expect(await database.query('cash_transactions'), isEmpty);
+    expect(await database.query('schema_migrations',
+      where: 'version = ?', whereArgs: [13]), hasLength(1));
   });
 
   test('sale cancellation migration preserves customer ledger and allows reversal entries', () async {
