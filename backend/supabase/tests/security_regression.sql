@@ -76,7 +76,7 @@ on conflict (id) do nothing;
 -- The minimal PostgreSQL CI database emulates Supabase's public-schema read grants.
 grant usage on schema public to authenticated;
 grant select on public.businesses, public.business_members, public.cloud_products, public.cloud_inventory_movements,
-  public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events to authenticated;
+  public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events,\n  public.cloud_branches, public.cloud_warehouses, public.cloud_product_warehouse_stock to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
@@ -105,6 +105,27 @@ begin
   select count(*) into v_count from public.cloud_expenses;
   if v_count <> 1 then
     raise exception 'tenant isolation failed: owner A can see % expenses, expected 1', v_count;
+  end if;
+
+  select count(*) into v_count from public.cloud_branches;
+  if v_count <> 1 then
+    raise exception 'branch isolation failed: owner A can see % branches, expected 1', v_count;
+  end if;
+
+  select count(*) into v_count from public.cloud_warehouses;
+  if v_count <> 1 then
+    raise exception 'warehouse isolation failed: owner A can see % warehouses, expected 1', v_count;
+  end if;
+
+  select count(*) into v_count from public.cloud_product_warehouse_stock;
+  if v_count <> 1 then
+    raise exception 'warehouse stock isolation failed: owner A can see % stock rows, expected 1', v_count;
+  end if;
+
+  if has_table_privilege(current_user, 'public.cloud_product_warehouse_stock', 'UPDATE')
+     or has_table_privilege(current_user, 'public.cloud_product_warehouse_stock', 'INSERT')
+     or has_table_privilege(current_user, 'public.cloud_product_warehouse_stock', 'DELETE') then
+    raise exception 'security regression: authenticated can directly mutate warehouse stock';
   end if;
 
   if has_table_privilege(current_user, 'public.cloud_expenses', 'DELETE') then
