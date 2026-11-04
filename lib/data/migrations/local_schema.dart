@@ -48,6 +48,7 @@ Future<void> createLocalSchema(Database db) async {
   await createSupplierReturnsSchema(db);
   await createCustomerReturnsSchema(db);
   await createSalesCancellationSchema(db);
+  await createAuditCashSchema(db);
 }
 
 
@@ -690,6 +691,52 @@ Future<void> createSalesCancellationSchema(Database db) async {
 
   await db.insert('schema_migrations', {
     'version': 12,
+    'applied_at': DateTime.now().toUtc().toIso8601String(),
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+}
+
+
+/// Adds an append-only activity trail and cash movement journal.
+Future<void> createAuditCashSchema(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS audit_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL CHECK (length(trim(action)) > 0),
+      entity_type TEXT NOT NULL CHECK (length(trim(entity_type)) > 0),
+      entity_id INTEGER,
+      amount_minor INTEGER,
+      details TEXT,
+      actor_label TEXT NOT NULL DEFAULT 'النظام المحلي',
+      created_at TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_audit_events_created
+    ON audit_events(created_at DESC, id DESC)
+  ''');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_audit_events_entity
+    ON audit_events(entity_type, entity_id, id DESC)
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS cash_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+      category TEXT NOT NULL CHECK (length(trim(category)) > 0),
+      amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+      source_type TEXT NOT NULL CHECK (length(trim(source_type)) > 0),
+      source_id INTEGER,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(source_type, source_id, category)
+    )
+  ''');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_cash_transactions_created
+    ON cash_transactions(created_at DESC, id DESC)
+  ''');
+  await db.insert('schema_migrations', {
+    'version': 13,
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   }, conflictAlgorithm: ConflictAlgorithm.ignore);
 }
