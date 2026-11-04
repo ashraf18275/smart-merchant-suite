@@ -21,6 +21,7 @@ void main() {
     expect(find.text('المصروفات والأرباح'), findsOneWidget);
     expect(find.text('النسخ الاحتياطي وتصدير البيانات'), findsOneWidget);
     expect(find.text('الفروع والمخازن'), findsOneWidget);
+    expect(find.text('حسابات العملاء والموردين'), findsOneWidget);
     expect(find.textContaining('قيد التطوير'), findsNothing);
   });
 }
