@@ -169,7 +169,7 @@ void main() {
 
     await tester.tap(find.text('إنشاء مرتجع مورد'));
     await pumpDatabaseResult(tester);
-    expect(find.text('إنشاء مرتجع مورد'), findsOneWidget);
+    expect(find.text('إنشاء مرتجع مورد'), findsNWidgets(2));
     expect(find.textContaining('مورد اختبار الواجهة'), findsOneWidget);
     expect(find.text('صنف مرتجع من الواجهة'), findsOneWidget);
 
