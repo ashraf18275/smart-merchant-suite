@@ -4,6 +4,7 @@ import '../application/ports/sales_store.dart';
 import '../core/app_error.dart';
 import '../domain/sale_record.dart';
 import '../core/quantity.dart';
+import '../domain/sale_return_line.dart';
 
 class SalesRepository implements SalesStore {
   SalesRepository(this._db);
@@ -148,6 +149,187 @@ class SalesRepository implements SalesStore {
         });
       }
       return saleId;
+    });
+  }
+
+
+  Future<List<Map<String, Object?>>> returnableSales() => _db.rawQuery('''
+    SELECT s.id, s.customer_id, s.total_minor, s.created_at,
+           c.name AS customer_name, w.name AS warehouse_name,
+           COUNT(i.id) AS item_count
+    FROM sales s
+    LEFT JOIN customers c ON c.id = s.customer_id
+    JOIN warehouses w ON w.id = s.warehouse_id
+    JOIN sale_items i ON i.sale_id = s.id
+    WHERE i.quantity > COALESCE(i.returned_quantity, 0)
+    GROUP BY s.id, c.name, w.name
+    ORDER BY s.id DESC
+  ''');
+
+  Future<List<Map<String, Object?>>> returnableSaleItems(int saleId) =>
+      _db.rawQuery('''
+        SELECT i.id AS sale_item_id, i.product_id, p.name AS product_name,
+               i.quantity, COALESCE(i.returned_quantity, 0) AS returned_quantity,
+               i.quantity - COALESCE(i.returned_quantity, 0) AS remaining_quantity,
+               i.unit_price_minor, i.line_total_minor,
+               COALESCE(i.returned_minor, 0) AS returned_minor,
+               COALESCE(u.name, 'وحدة') AS unit_name,
+               COALESCE(u.allows_fraction, 0) AS allows_fraction
+        FROM sale_items i
+        JOIN sales s ON s.id = i.sale_id
+        JOIN products p ON p.id = i.product_id
+        LEFT JOIN product_units u ON u.id = p.unit_id
+        WHERE i.sale_id = ?
+          AND i.quantity > COALESCE(i.returned_quantity, 0)
+          AND s.warehouse_id IS NOT NULL
+        ORDER BY i.id ASC
+      ''', [saleId]);
+
+  Future<int> createCustomerReturn({
+    required int saleId,
+    required List<SaleReturnLineInput> items,
+    required int refundedMinor,
+    required String reason,
+  }) async {
+    if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
+    if (items.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل للمرتجع');
+    if (items.any((item) => item.saleItemId <= 0 || item.quantity <= 0)) {
+      throw AppException('بنود المرتجع أو كمياته غير صالحة');
+    }
+    if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) throw AppException('سبب المرتجع مطلوب');
+    if (items.map((item) => item.saleItemId).toSet().length != items.length) {
+      throw AppException('لا يمكن تكرار الصنف نفسه في بنود المرتجع');
+    }
+
+    return _db.transaction((txn) async {
+      final sales = await txn.query('sales',
+        columns: ['id', 'customer_id', 'warehouse_id'],
+        where: 'id = ?', whereArgs: [saleId], limit: 1);
+      if (sales.isEmpty) throw AppException('فاتورة البيع غير موجودة');
+      final sale = sales.single;
+      final warehouseId = sale['warehouse_id'] as int?;
+      if (warehouseId == null) {
+        throw AppException('لا يمكن إرجاع فاتورة قديمة لا يحتوي سجلها على مخزن محدد');
+      }
+      final customerId = sale['customer_id'] as int?;
+      final createdAt = DateTime.now().toUtc().toIso8601String();
+      final prepared = <Map<String, int>>[];
+      var totalMinor = 0;
+
+      for (final input in items) {
+        final rows = await txn.rawQuery('''
+          SELECT i.product_id, i.quantity, i.unit_price_minor, i.line_total_minor,
+                 COALESCE(i.returned_quantity, 0) AS returned_quantity,
+                 COALESCE(i.returned_minor, 0) AS returned_minor,
+                 COALESCE(u.allows_fraction, 0) AS allows_fraction
+          FROM sale_items i
+          JOIN products p ON p.id = i.product_id
+          LEFT JOIN product_units u ON u.id = p.unit_id
+          WHERE i.id = ? AND i.sale_id = ? LIMIT 1
+        ''', [input.saleItemId, saleId]);
+        if (rows.isEmpty) throw AppException('أحد الأصناف لا ينتمي إلى فاتورة البيع المحددة');
+        final line = rows.single;
+        final soldQuantity = line['quantity']! as int;
+        final alreadyReturned = line['returned_quantity']! as int;
+        final remainingQuantity = soldQuantity - alreadyReturned;
+        if (input.quantity > remainingQuantity) {
+          throw AppException('كمية المرتجع أكبر من الكمية المتبقية من الصنف المباع');
+        }
+        if (line['allows_fraction'] != 1 && input.quantity % Quantity.scale != 0) {
+          throw AppException('وحدة قياس أحد الأصناف لا تقبل الكميات الكسرية');
+        }
+        final unitPrice = line['unit_price_minor']! as int;
+        final remainingValue = (line['line_total_minor']! as int) -
+            (line['returned_minor']! as int);
+        final lineValue = input.quantity == remainingQuantity
+            ? remainingValue
+            : Quantity.lineTotalMinor(unitPriceMinor: unitPrice,
+                quantityScaled: input.quantity).clamp(0, remainingValue);
+        final balances = await txn.query('product_warehouse_stock',
+          columns: ['quantity'], where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [line['product_id'], warehouseId], limit: 1);
+        final stock = balances.isEmpty ? 0 : balances.single['quantity']! as int;
+        prepared.add({
+          'saleItemId': input.saleItemId,
+          'productId': line['product_id']! as int,
+          'quantity': input.quantity,
+          'newReturnedQuantity': alreadyReturned + input.quantity,
+          'newReturnedMinor': (line['returned_minor']! as int) + lineValue,
+          'unitPrice': unitPrice,
+          'lineTotal': lineValue,
+          'stock': stock,
+        });
+        totalMinor += lineValue;
+      }
+      if (refundedMinor > totalMinor) {
+        throw AppException('المبلغ المسترد نقدًا لا يمكن أن يتجاوز قيمة البضاعة المرتجعة');
+      }
+
+      final returnId = await txn.insert('customer_returns', {
+        'sale_id': saleId, 'customer_id': customerId,
+        'warehouse_id': warehouseId, 'total_minor': totalMinor,
+        'refunded_minor': refundedMinor, 'reason': cleanReason,
+        'created_at': createdAt,
+      });
+      for (final line in prepared) {
+        await txn.insert('customer_return_items', {
+          'customer_return_id': returnId,
+          'sale_item_id': line['saleItemId'],
+          'product_id': line['productId'],
+          'quantity': line['quantity'],
+          'unit_price_minor': line['unitPrice'],
+          'line_total_minor': line['lineTotal'],
+        });
+        await txn.update('sale_items', {
+          'returned_quantity': line['newReturnedQuantity'],
+          'returned_minor': line['newReturnedMinor'],
+        }, where: 'id = ?', whereArgs: [line['saleItemId']]);
+
+        final newStock = line['stock']! + line['quantity']!;
+        final existing = await txn.query('product_warehouse_stock',
+          columns: ['id'], where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [line['productId'], warehouseId], limit: 1);
+        if (existing.isEmpty) {
+          await txn.insert('product_warehouse_stock', {
+            'product_id': line['productId'], 'warehouse_id': warehouseId,
+            'quantity': newStock, 'updated_at': createdAt,
+          });
+        } else {
+          await txn.update('product_warehouse_stock', {
+            'quantity': newStock, 'updated_at': createdAt,
+          }, where: 'product_id = ? AND warehouse_id = ?',
+            whereArgs: [line['productId'], warehouseId]);
+        }
+        final totals = await txn.rawQuery(
+          'SELECT COALESCE(SUM(quantity), 0) AS total FROM product_warehouse_stock WHERE product_id = ?',
+          [line['productId']]);
+        await txn.update('products', {'stock_quantity': totals.single['total']},
+          where: 'id = ?', whereArgs: [line['productId']]);
+        await txn.insert('inventory_movements', {
+          'product_id': line['productId'], 'warehouse_id': warehouseId,
+          'quantity_delta': line['quantity'],
+          'reason': 'مرتجع بيع فاتورة رقم $saleId',
+          'created_at': createdAt,
+        });
+      }
+      if (customerId != null && totalMinor > 0) {
+        await txn.insert('customer_account_entries', {
+          'customer_id': customerId, 'amount_minor': -totalMinor,
+          'entry_type': 'return', 'reference_id': returnId,
+          'note': 'مرتجع فاتورة البيع رقم $saleId', 'created_at': createdAt,
+        });
+        if (refundedMinor > 0) {
+          await txn.insert('customer_account_entries', {
+            'customer_id': customerId, 'amount_minor': refundedMinor,
+            'entry_type': 'refund', 'reference_id': returnId,
+            'note': 'مبلغ نقدي مسترد عن مرتجع فاتورة البيع رقم $saleId',
+            'created_at': createdAt,
+          });
+        }
+      }
+      return returnId;
     });
   }
 
