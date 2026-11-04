@@ -663,7 +663,7 @@ void main() {
     );
     final purchaseItemId = (await db.query('purchase_items')).single['id'] as int;
     await SalesRepository(db).createSale(
-      quantities: {productId: 2500},
+      quantities: {productId: 2000},
       paidMinor: 0,
       warehouseId: warehouseId,
     );
@@ -671,14 +671,14 @@ void main() {
     await expectLater(
       purchases.createSupplierReturn(
         purchaseId: purchaseId,
-        items: [SupplierReturnLineInput(purchaseItemId: purchaseItemId, quantity: 1000)],
+        items: [SupplierReturnLineInput(purchaseItemId: purchaseItemId, quantity: 2000)],
         reason: 'مرتجع بعد البيع',
       ),
       throwsA(isA<AppException>()),
     );
     expect(await db.query('supplier_returns'), isEmpty);
     expect((await db.query('purchase_items')).single['returned_quantity'], 0);
-    expect((await products.all()).single.stockQuantity, 500);
+    expect((await products.all()).single.stockQuantity, 1000);
     expect((await db.query('supplier_account_entries')).length, 1);
   });
 
