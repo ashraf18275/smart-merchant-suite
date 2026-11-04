@@ -54,6 +54,30 @@ void main() {
     expect(find.text('لا توجد حسابات مسجلة في هذا القسم.'), findsOneWidget);
   });
 
+  testWidgets('creates a customer with a signed opening balance from the accounts screen', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: AccountsPage(accounts: accounts, purchases: purchases),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.text('العملاء'));
+    await pumpDatabaseResult(tester);
+    await tester.tap(find.text('إضافة عميل جديد'));
+    await pumpDatabaseResult(tester);
+
+    final fields = find.byType(TextFormField);
+    expect(fields, findsNWidgets(2));
+    await tester.enterText(fields.at(0), 'عميل افتتاحي');
+    await tester.enterText(fields.at(1), '75.00');
+    await tester.tap(find.text('حفظ الحساب'));
+    await pumpDatabaseResult(tester);
+
+    final customer = (await accounts.customers()).single;
+    expect(customer['name'], 'عميل افتتاحي');
+    expect(await accounts.customerBalance(customer['id']! as int), 7500);
+    expect(await database.query('cash_transactions'), isEmpty);
+  });
+
   testWidgets('records a supplier payment from the account statement', (tester) async {
     final supplierId = await purchases.addSupplier(name: 'مورد السداد');
     await database.insert('supplier_account_entries', {
