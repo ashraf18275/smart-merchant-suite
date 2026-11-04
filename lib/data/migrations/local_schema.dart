@@ -556,6 +556,11 @@ Future<void> createCustomerReturnsSchema(Database db) async {
       'ALTER TABLE sale_items ADD COLUMN returned_minor INTEGER NOT NULL DEFAULT 0 CHECK (returned_minor >= 0)',
     );
   }
+  if (!names.contains('returned_cost_minor')) {
+    await db.execute(
+      'ALTER TABLE sale_items ADD COLUMN returned_cost_minor INTEGER NOT NULL DEFAULT 0 CHECK (returned_cost_minor >= 0)',
+    );
+  }
 
   await db.execute('''
     CREATE TABLE IF NOT EXISTS customer_returns (
@@ -580,7 +585,9 @@ Future<void> createCustomerReturnsSchema(Database db) async {
       product_id INTEGER NOT NULL,
       quantity INTEGER NOT NULL CHECK (quantity > 0),
       unit_price_minor INTEGER NOT NULL CHECK (unit_price_minor >= 0),
+      unit_cost_minor INTEGER NOT NULL CHECK (unit_cost_minor >= 0),
       line_total_minor INTEGER NOT NULL CHECK (line_total_minor >= 0),
+      line_cost_minor INTEGER NOT NULL CHECK (line_cost_minor >= 0),
       FOREIGN KEY (customer_return_id) REFERENCES customer_returns(id),
       FOREIGN KEY (sale_item_id) REFERENCES sale_items(id),
       FOREIGN KEY (product_id) REFERENCES products(id)
