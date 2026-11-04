@@ -333,4 +333,149 @@ void main() {
     expect(returnLine['line_cost_minor'], 700);
   });
 
+
+  test('cancels customer invoice once, restores stock, reverses ledger and records refund due', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل إلغاء');
+    final saleId = await sales.createSale(
+      quantities: {productId: 2000},
+      paidMinor: 1000,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
+    final cancellationId = await sales.cancelSale(
+      saleId: saleId,
+      refundedMinor: 400,
+      reason: 'طلب العميل إلغاء الشراء',
+    );
+    final invoice = (await db.query('sales', where: 'id = ?', whereArgs: [saleId])).single;
+    expect(invoice['cancelled_at'], isNotNull);
+    expect(invoice['cancellation_reason'], 'طلب العميل إلغاء الشراء');
+    final cancellation = (await db.query('sales_cancellations',
+      where: 'id = ?', whereArgs: [cancellationId])).single;
+    expect(cancellation['total_minor'], 3000);
+    expect(cancellation['paid_minor'], 1000);
+    expect(cancellation['refunded_minor'], 400);
+    expect((await products.all()).single.stockQuantity, 5000);
+    final movement = (await db.query('inventory_movements',
+      where: 'reason LIKE ?', whereArgs: ['إلغاء فاتورة بيع%'])).single;
+    expect(movement['quantity_delta'], 2000);
+    expect(movement['warehouse_id'], warehouseId);
+    final entries = await db.query('customer_account_entries', orderBy: 'id ASC');
+    expect(entries.map((row) => row['entry_type']),
+      ['sale', 'receipt', 'sale_cancel', 'receipt_reversal', 'refund_due']);
+    expect(entries.map((row) => row['amount_minor']),
+      [3000, -1000, -3000, 1000, -600]);
+    expect(await accounts.customerBalance(customerId), -600);
+    expect((await sales.all()).single.isCancelled, isTrue);
+  });
+
+  test('rejects duplicate cancellation without changing stock or ledger', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+    );
+    await sales.cancelSale(
+      saleId: saleId, refundedMinor: 1500, reason: 'إلغاء أول',
+    );
+    await expectLater(
+      sales.cancelSale(
+        saleId: saleId, refundedMinor: 0, reason: 'محاولة ثانية',
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('sales_cancellations'), hasLength(1));
+    expect((await products.all()).single.stockQuantity, 5000);
+    expect(await db.query('inventory_movements',
+      where: 'reason LIKE ?', whereArgs: ['إلغاء فاتورة بيع%']), hasLength(1));
+  });
+
+  test('rejects cancellation after a customer return to prevent double stock and ledger reversal', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل مرتجع');
+    final saleId = await sales.createSale(
+      quantities: {productId: 2000},
+      paidMinor: 3000,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
+    final saleItemId = (await db.query('sale_items')).single['id']! as int;
+    await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 0,
+      reason: 'مرتجع سابق',
+    );
+    await expectLater(
+      sales.cancelSale(
+        saleId: saleId, refundedMinor: 0, reason: 'محاولة إلغاء بعد المرتجع',
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('sales_cancellations'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 4000);
+  });
+
+  test('rejects cancellation refund above amount collected', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1000,
+      warehouseId: warehouseId,
+    );
+    await expectLater(
+      sales.cancelSale(
+        saleId: saleId, refundedMinor: 1001, reason: 'مبلغ غير صحيح',
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('sales_cancellations'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 4000);
+  });
+
+  test('rolls back cancellation stock and document when customer ledger reversal fails', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل فشل الإلغاء');
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
+    await db.execute('''
+      CREATE TRIGGER reject_sale_cancel_entry
+      BEFORE INSERT ON customer_account_entries
+      WHEN NEW.entry_type = 'sale_cancel'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced cancellation ledger failure');
+      END
+    ''');
+    await expectLater(
+      sales.cancelSale(
+        saleId: saleId, refundedMinor: 1500, reason: 'اختبار التراجع',
+      ),
+      throwsA(anything),
+    );
+    expect(await db.query('sales_cancellations'), isEmpty);
+    expect((await db.query('sales')).single['cancelled_at'], isNull);
+    expect((await products.all()).single.stockQuantity, 4000);
+    expect(await db.query('inventory_movements',
+      where: 'reason LIKE ?', whereArgs: ['إلغاء فاتورة بيع%']), isEmpty);
+    expect(await accounts.customerBalance(customerId), 0);
+  });
+
+  test('cancellation restores inventory at the original sale cost', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 2000},
+      paidMinor: 3000,
+      warehouseId: warehouseId,
+    );
+    await db.update('products', {'cost_minor': 900},
+      where: 'id = ?', whereArgs: [productId]);
+    await sales.cancelSale(
+      saleId: saleId, refundedMinor: 0, reason: 'إلغاء بعد تغير التكلفة',
+    );
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 5000);
+    expect(product.costMinor, 820);
+  });
+
+
 }
