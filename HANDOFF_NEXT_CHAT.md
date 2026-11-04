@@ -544,3 +544,17 @@ Workflow: `.github/workflows/flutter-ci.yml`
 - Supabase/PostgreSQL run #114: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41919630572 — migrations/security regression/legacy quantity/Deno checks: success.
 - فشل اختبار وسيط بسبب توقع غير صحيح لعدد صلاحيات العضو العادي؛ تم تصحيح التوقع ليتحقق من ظهور صلاحياته الثلاث فقط، ثم نجح التشغيل #114.
 - النسخ الاحتياطية Android/Windows الموثقة أعلاه مبنية من commit `46b4684ce5449a032f89da514b9121d26bc1c464` قبل إضافة شاشة إدارة المستخدمين، وهي نقطة رجوع ثابتة.
+
+
+### تحديث إضافي — نجاح فحص Flutter وتصحيح صلاحيات قراءة المواقع (5 نوفمبر 2026)
+
+- تم إصلاح تحذير Flutter الذي أوقف CI في شاشة `cloud_locations_page.dart` باستبدال `DropdownButtonFormField.value` بـ `initialValue`.
+- CI run #633: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41935563533 — Analyze وtests نجحا.
+- أثناء مراجعة RLS ظهر عدم تطابق: سياسات PostgreSQL تسمح لصلاحيات تشغيلية محددة بقراءة الفروع والمخازن لاستخدامها في محددات العمليات، لكن `CloudLocationWorkspace.canView` كان يمنع هذه الصلاحيات في واجهة Flutter.
+- تم توحيد منطق العميل مع سياسة RLS، وإضافة اختبارات تغطي `inventory.view`, `sales.create`, `products.view`, `purchases.view`, `purchases.create`، مع التأكد من أنها لا تمنح إدارة الفروع أو المخازن.
+- الكود: `4b1a9295e7bd3a49b82ce4d9476d64e52280d159`، والاختبارات: `4c82abe2fc87899c0831e505ac9cf7a5aaa4f717`.
+- Flutter CI run #634: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41936707253 — `flutter analyze`: No issues found، و176 اختبارًا ناجحًا.
+- آخر تعديل لاحق على الفرع كان تنظيفًا لملف قفل غير مكتمل، ولم يغير كود التطبيق. لا يوجد `pubspec.lock` محفوظ في الفرع حاليًا؛ يجب إضافته لاحقًا من ملف artifact الفعلي بعد materialization/commit موثوق، لا بإنشاء ملف بديل أو نص غير متحقق.
+- لا تزال شاشات التشغيل اليومية تعمل عبر SQLite؛ وجود حساب سحابي وإدارة الأعضاء والفروع والمخازن لا يعني أن المزامنة أو ربط البيع والمخزون السحابي قد اكتمل.
+
+**الخطوة الهندسية التالية:** تصميم وتنفيذ اختيار سياق النشاط/الفرع/المخزن وربطه بجلسة موثوقة، ثم ربط أول مسار تشغيلي سحابي (المنتجات والمخزون) عبر Repository وواجهات/اختبارات تكامل، قبل الانتقال للمبيعات والمشتريات وباقي الوحدات. لا تعرض البيانات السحابية على أنها بديل عن SQLite قبل وجود مزامنة فعلية وحل تعارضات واختبارات جهازين.
