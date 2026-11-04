@@ -7,6 +7,12 @@ import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:smart_merchant_suite/features/accounts_page.dart';
 
+Future<void> pumpDatabaseResult(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+  await pumpDatabaseResult(tester);
+}
+
 void main() {
   late Database database;
   late AccountRepository accounts;
@@ -15,7 +21,7 @@ void main() {
   setUpAll(sqfliteFfiInit);
 
   setUp(() async {
-    database = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    database = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(database);
     accounts = AccountRepository(database);
     purchases = PurchaseRepository(database);
