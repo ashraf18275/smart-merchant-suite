@@ -4,6 +4,9 @@ import 'package:smart_merchant_suite/application/services/product_application_se
 import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
+import 'package:smart_merchant_suite/data/expense_repository.dart';
+import 'package:smart_merchant_suite/data/sales_repository.dart';
+import 'package:smart_merchant_suite/domain/sale_return_line.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
@@ -590,6 +593,33 @@ void main() {
     expect(s.grossProfitMinor, 800);
     expect(s.netProfitMinor, -3200);
     expect((await expenses.all()).single.description, 'إيجار المحل');
+  });
+
+  test('profit summary subtracts customer return revenue and original inventory cost', () async {
+    final id = await products.add(const Product(
+      name: 'صنف مرتجع للأرباح',
+      costMinor: 500,
+      priceMinor: 900,
+      stockQuantity: 5000,
+    ));
+    final sales = SalesRepository(database);
+    final saleId = await sales.createSale(
+      quantities: {id: 2000},
+      paidMinor: 1800,
+      warehouseId: await mainWarehouseId(),
+    );
+    final saleItemId = (await database.query('sale_items')).single['id']! as int;
+    await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 900,
+      reason: 'مرتجع لاختبار الأرباح',
+    );
+
+    final summary = await ExpenseRepository(database).summary();
+    expect(summary.salesMinor, 900);
+    expect(summary.costOfGoodsMinor, 500);
+    expect(summary.grossProfitMinor, 400);
   });
 
   test('filters profit summary and expenses by inclusive calendar dates', () async {
