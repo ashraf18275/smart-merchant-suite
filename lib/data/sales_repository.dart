@@ -246,7 +246,7 @@ class SalesRepository implements SalesStore {
         final lineValue = input.quantity == remainingQuantity
             ? remainingValue
             : Quantity.lineTotalMinor(unitPriceMinor: unitPrice,
-                quantityScaled: input.quantity).clamp(0, remainingValue);
+                quantityScaled: input.quantity).clamp(0, remainingValue).toInt();
         final balances = await txn.query('product_warehouse_stock',
           columns: ['quantity'], where: 'product_id = ? AND warehouse_id = ?',
           whereArgs: [line['product_id'], warehouseId], limit: 1);
