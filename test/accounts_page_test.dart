@@ -78,6 +78,24 @@ void main() {
     expect(await database.query('cash_transactions'), isEmpty);
   });
 
+  testWidgets('explains supplier credit balance and does not offer a supplier payment', (tester) async {
+    await purchases.addSupplier(
+      name: 'مورد له رصيد',
+      openingBalanceMinor: -4500,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: AccountsPage(accounts: accounts, purchases: purchases),
+    ));
+    await pumpDatabaseResult(tester);
+
+    expect(find.text('رصيد لنا لدى المورد'), findsOneWidget);
+    expect(find.text('-45.00 ج.م'), findsOneWidget);
+    final paymentButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'تسجيل سداد للمورد'),
+    );
+    expect(paymentButton.onPressed, isNull);
+  });
+
   testWidgets('records a supplier payment from the account statement', (tester) async {
     final supplierId = await purchases.addSupplier(name: 'مورد السداد');
     await database.insert('supplier_account_entries', {
