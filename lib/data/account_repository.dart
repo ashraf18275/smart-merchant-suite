@@ -36,14 +36,16 @@ class AccountRepository {
           'created_at': stamp,
         });
       }
-      await writeAuditEvent(txn,
-        action: 'customer_created',
-        entityType: 'customer',
-        entityId: customerId,
-        amountMinor: openingBalanceMinor,
-        details: 'opening_balance_minor=' + openingBalanceMinor.toString(),
-        createdAt: stamp,
-      );
+      if (openingBalanceMinor != 0) {
+        await writeAuditEvent(txn,
+          action: 'customer_opening_balance_set',
+          entityType: 'customer',
+          entityId: customerId,
+          amountMinor: openingBalanceMinor,
+          details: 'opening_balance_minor=' + openingBalanceMinor.toString(),
+          createdAt: stamp,
+        );
+      }
       return customerId;
     });
   }
