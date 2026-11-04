@@ -50,7 +50,7 @@ Future<sqflite.Database> openLocalDatabase() async {
   return databaseFactoryFfi.openDatabase(
     databasePath,
     options: OpenDatabaseOptions(
-      version: 10,
+      version: 11,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
