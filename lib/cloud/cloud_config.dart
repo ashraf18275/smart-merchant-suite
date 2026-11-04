@@ -1,7 +1,7 @@
 /// Runtime configuration for the optional shared-cloud layer.
 ///
 /// Values are injected at build time. No service-role credential is ever
-/// embedded in the client; the public anon key is protected by RLS.
+/// embedded in the client; the public publishable key is protected by RLS.
 class CloudConfig {
   const CloudConfig({required this.url, required this.publishableKey});
 
