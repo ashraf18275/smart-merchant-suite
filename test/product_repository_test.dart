@@ -3,16 +3,14 @@ import 'package:smart_merchant_suite/application/services/expense_application_se
 import 'package:smart_merchant_suite/application/services/product_application_service.dart';
 import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
-import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
-import 'package:smart_merchant_suite/data/sales_repository.dart';
-import 'package:smart_merchant_suite/domain/sale_return_line.dart';
+import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
+import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
-import 'package:smart_merchant_suite/data/expense_repository.dart';
-import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
+import 'package:smart_merchant_suite/domain/sale_return_line.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
