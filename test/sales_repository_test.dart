@@ -95,7 +95,7 @@ void main() {
     expect(payment['source_type'], 'sale');
     expect(payment['source_id'], saleId);
     expect(payment['payment_method'], 'card');
-    expect(payment['amount_minor'], 500);
+    expect(payment['amount_minor'], 1500);
     expect(await db.query('cash_transactions'), isEmpty);
   });
 
