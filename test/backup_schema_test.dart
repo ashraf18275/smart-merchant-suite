@@ -7,7 +7,7 @@ void main() {
       expect(BackupSchema.supports(version), isTrue, reason: 'version $version');
     }
     expect(BackupSchema.supports(2), isFalse);
-    expect(BackupSchema.supports(12), isFalse);
+    expect(BackupSchema.supports(13), isFalse);
   });
 
   test('maps purchase and account data to the schema versions that introduced them', () {
@@ -20,6 +20,8 @@ void main() {
     expect(BackupSchema.hasSupplierReturnData(10), isTrue);
     expect(BackupSchema.hasCustomerReturnData(10), isFalse);
     expect(BackupSchema.hasCustomerReturnData(11), isTrue);
+    expect(BackupSchema.hasSalesCancellationData(11), isFalse);
+    expect(BackupSchema.hasSalesCancellationData(12), isTrue);
   });
 
   test('restore ordering covers every current business table', () {
@@ -76,6 +78,14 @@ void main() {
     expect(
       BackupSchema.restoreInsertOrder.indexOf('sale_items'),
       lessThan(BackupSchema.restoreInsertOrder.indexOf('customer_return_items')),
+    );
+    expect(
+      BackupSchema.restoreDeleteOrder.indexOf('sales_cancellations'),
+      lessThan(BackupSchema.restoreDeleteOrder.indexOf('sales')),
+    );
+    expect(
+      BackupSchema.restoreInsertOrder.indexOf('sales'),
+      lessThan(BackupSchema.restoreInsertOrder.indexOf('sales_cancellations')),
     );
     expect(
       BackupSchema.restoreInsertOrder.indexOf('sales'),
