@@ -100,7 +100,7 @@ const _legacyV8Tables = <_ExportTable>[
 ];
 
 // Version 9 adds customer accounts and both append-only account ledgers.
-const _tables = <_ExportTable>[
+const _legacyV9Tables = <_ExportTable>[
   _ExportTable('الفروع', 'branches', ['id', 'name', 'address', 'phone', 'is_active', 'created_at']),
   _ExportTable('المخازن', 'warehouses', ['id', 'branch_id', 'name', 'is_active', 'created_at']),
   _ExportTable('التصنيفات', 'product_categories', ['id', 'name', 'is_active', 'created_at']),
@@ -142,6 +142,41 @@ const _tables = <_ExportTable>[
   ]),
   _ExportTable('حسابات العملاء', 'customer_account_entries', [
     'id', 'customer_id', 'amount_minor', 'entry_type', 'reference_id', 'note', 'created_at',
+  ]),
+];
+
+
+// Version 10 adds supplier return documents and returned purchase quantities.
+final _legacyV10Tables = <_ExportTable>[
+  ..._legacyV9Tables.where((spec) => spec.table != 'purchase_items'),
+  const _ExportTable('بنود المشتريات', 'purchase_items', [
+    'id', 'purchase_id', 'product_id', 'quantity', 'returned_quantity',
+    'unit_cost_minor', 'line_total_minor',
+  ]),
+  const _ExportTable('مرتجعات الموردين', 'supplier_returns', [
+    'id', 'purchase_id', 'supplier_id', 'warehouse_id', 'total_minor',
+    'reason', 'created_at',
+  ]),
+  const _ExportTable('بنود مرتجعات الموردين', 'supplier_return_items', [
+    'id', 'supplier_return_id', 'purchase_item_id', 'product_id',
+    'quantity', 'unit_cost_minor', 'line_total_minor',
+  ]),
+];
+
+// Version 11 adds customer returns and returned sale quantities/value tracking.
+final _tables = <_ExportTable>[
+  ..._legacyV10Tables.where((spec) => spec.table != 'sale_items'),
+  const _ExportTable('بنود الفواتير', 'sale_items', [
+    'id', 'sale_id', 'product_id', 'quantity', 'returned_quantity',
+    'returned_minor', 'unit_price_minor', 'unit_cost_minor', 'line_total_minor',
+  ]),
+  const _ExportTable('مرتجعات العملاء', 'customer_returns', [
+    'id', 'sale_id', 'customer_id', 'warehouse_id', 'total_minor',
+    'refunded_minor', 'reason', 'created_at',
+  ]),
+  const _ExportTable('بنود مرتجعات العملاء', 'customer_return_items', [
+    'id', 'customer_return_id', 'sale_item_id', 'product_id',
+    'quantity', 'unit_price_minor', 'line_total_minor',
   ]),
 ];
 
@@ -277,14 +312,18 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 9).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 11).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion == 9
+      final restoreTables = schemaVersion >= 11
           ? _tables
-          : schemaVersion == 8
+          : schemaVersion == 10
+              ? _legacyV10Tables
+              : schemaVersion == 9
+                  ? _legacyV9Tables
+                  : schemaVersion == 8
               ? _legacyV8Tables
               : schemaVersion == 7
                   ? _legacyV7Tables
@@ -358,10 +397,26 @@ class _DataTransferPageState extends State<DataTransferPage> {
           ...row, 'warehouse_id': warehouseId,
         }).toList(growable: false);
       }
+      if (schemaVersion < 11) {
+        data['sale_items'] = data['sale_items']!.map((row) => {
+          ...row, 'returned_quantity': 0, 'returned_minor': 0,
+        }).toList(growable: false);
+      }
       if (!BackupSchema.hasPurchaseData(schemaVersion)) {
         data['suppliers'] = [];
         data['purchases'] = [];
         data['purchase_items'] = [];
+      }
+      if (!BackupSchema.hasSupplierReturnData(schemaVersion)) {
+        data['supplier_returns'] = [];
+        data['supplier_return_items'] = [];
+        data['purchase_items'] = data['purchase_items']!.map((row) => {
+          ...row, 'returned_quantity': 0,
+        }).toList(growable: false);
+      }
+      if (!BackupSchema.hasCustomerReturnData(schemaVersion)) {
+        data['customer_returns'] = [];
+        data['customer_return_items'] = [];
       }
       if (!BackupSchema.hasAccountData(schemaVersion)) {
         data['customers'] = [];
