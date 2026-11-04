@@ -35,11 +35,11 @@
 | products | cloud_products | أساس موجود؛ يحتاج تصنيف/وحدة ومزامنة |
 | product_categories | cloud_product_categories | غير موجود |
 | product_units | cloud_product_units | غير موجود |
-| branches | cloud_branches | غير موجود |
-| warehouses | cloud_warehouses | غير موجود |
-| product_warehouse_stock | cloud_product_warehouse_stock | غير موجود |
-| inventory_movements | cloud_inventory_movements | موجود جزئيًا؛ يفتقد branch/warehouse |
-| sales | cloud_sales | أساس موجود؛ يفتقد branch/warehouse/customer/status |
+| branches | cloud_branches | أساس موجود: فرع افتراضي تلقائي لكل نشاط؛ واجهة إدارة الفروع لم تنفذ |
+| warehouses | cloud_warehouses | أساس موجود: مخزن افتراضي لكل فرع؛ واجهة الإدارة لم تنفذ |
+| product_warehouse_stock | cloud_product_warehouse_stock | موجود؛ أرصدة مستقلة مع RLS |
+| inventory_movements | cloud_inventory_movements | موجود جزئيًا؛ أصبح يحمل branch/warehouse، لكن دقة الكمية ما زالت whole units |
+| sales | cloud_sales | أساس موجود؛ أصبح يحمل branch/warehouse، لكن customer/status/دفعات مستقلة غير مكتملة |
 | sale_items | cloud_sale_items | موجود؛ وحدة الكمية غير متوافقة بعد |
 | customers | cloud_customers | غير موجود |
 | customer_account_entries | cloud_customer_account_entries | غير موجود |
@@ -91,6 +91,15 @@
 - تنقل كمية كل منتج الحالية إلى مخزنه الافتراضي دون تغيير إجمالي الرصيد.
 - تسند حركات المخزون القديمة إلى المخزن الافتراضي مع الاحتفاظ بسببها وتاريخها ومعرف العملية.
 - لا تخمن فرعًا أو مخزنًا لعملية تاريخية إذا كانت البيانات لا تسمح بذلك؛ تستخدم قيمة افتراضية موثقة أو تترك الحقل nullable وفق قرار ترحيل واضح.
+
+### ما نُفذ حتى الآن (4 نوفمبر 2026)
+
+- أضيفت `cloud_branches` و`cloud_warehouses` و`cloud_product_warehouse_stock`.
+- النشاط الجديد يحصل على فرع ومخزن افتراضيين، والمنتجات ترتبط بالمخزن الافتراضي تلقائيًا.
+- أضيفت مفاتيح أجنبية مركبة تربط الفاتورة والحركة بالمخزن والفرع داخل النشاط نفسه.
+- RPCs البيع والتسوية تقبل مخزنًا محددًا وتحدث رصيد المخزن وإجمالي المنتج ذريًا.
+- اختبارات PostgreSQL تتحقق من عزل نشاطين ومن استقلال رصيد مخزن ثانٍ.
+- **قيد حالي:** RPCs السحابية ما زالت تتعامل مع الكمية بوحدة صحيحة كاملة، بينما SQLite يخزن الألف. لا ترسل كميات SQLite إلى هذه RPCs قبل إتمام ترحيل وحدة القياس وتحديث العقود.
 
 ## 6. المبيعات والدفعات والمرتجعات
 
