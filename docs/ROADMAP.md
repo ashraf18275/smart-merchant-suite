@@ -361,8 +361,7 @@
 
 ### تحقق Flutter منفصل
 - تشغيل Flutter CI رقم `41751141214`: Flutter Analyze ناجح بلا مشاكل، و102 اختبار Flutter ناجح.
-- بناء Windows release نجح ورفع artifact `smart-merchant-suite-windows-x64`.
-- بناء Android debug متعدد المعماريات ما زال جاريًا في التشغيل نفسه؛ لا تُسجل نتيجة بناء قبل اكتماله.
+- بناء Windows release وAndroid debug split-per-ABI نجحا، ورُفعت artifacts مع checksums ومعلومات البناء: `smart-merchant-suite-windows-x64` و`smart-merchant-suite-android-debug-apks`.
 - رابط التشغيل والـ artifacts: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41751141214
 
 ### التحقق السابق للنسخة المحلية
