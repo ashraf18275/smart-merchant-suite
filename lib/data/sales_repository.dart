@@ -217,6 +217,7 @@ class SalesRepository implements SalesStore {
     required List<SaleReturnLineInput> items,
     required int refundedMinor,
     required String reason,
+    String refundMethod = PaymentMethod.cash,
   }) async {
     if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
     if (items.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل للمرتجع');
@@ -224,6 +225,7 @@ class SalesRepository implements SalesStore {
       throw AppException('بنود المرتجع أو كمياته غير صالحة');
     }
     if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
+    if (!PaymentMethod.isValid(refundMethod)) throw AppException('طريقة رد المبلغ غير مدعومة');
     final cleanReason = reason.trim();
     if (cleanReason.isEmpty) throw AppException('سبب المرتجع مطلوب');
     if (items.map((item) => item.saleItemId).toSet().length != items.length) {
@@ -388,8 +390,9 @@ class SalesRepository implements SalesStore {
         amountMinor: refundedMinor,
         sourceType: 'customer_return',
         sourceId: returnId,
-        note: 'رد نقدي عن مرتجع فاتورة رقم $saleId',
+        note: 'رد مبلغ عن مرتجع فاتورة رقم $saleId',
         createdAt: createdAt,
+        paymentMethod: refundMethod,
       );
       if (customerId != null && totalMinor > 0) {
         await txn.insert('customer_account_entries', {
@@ -418,9 +421,11 @@ class SalesRepository implements SalesStore {
     required int saleId,
     required int refundedMinor,
     required String reason,
+    String refundMethod = PaymentMethod.cash,
   }) async {
     if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
     if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
+    if (!PaymentMethod.isValid(refundMethod)) throw AppException('طريقة رد المبلغ غير مدعومة');
     final cleanReason = reason.trim();
     if (cleanReason.isEmpty) throw AppException('سبب الإلغاء مطلوب');
 
@@ -568,8 +573,9 @@ class SalesRepository implements SalesStore {
         amountMinor: refundedMinor,
         sourceType: 'sale_cancellation',
         sourceId: cancellationId,
-        note: 'رد نقدي عن إلغاء فاتورة رقم $saleId',
+        note: 'رد مبلغ عن إلغاء فاتورة رقم $saleId',
         createdAt: createdAt,
+        paymentMethod: refundMethod,
       );
       await txn.update('sales', {
         'cancelled_at': createdAt,
