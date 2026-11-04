@@ -204,8 +204,8 @@ begin
   from public.cloud_products
   where id = '30000000-0000-0000-0000-000000000001';
 
-  if v_stock <> 8 then
-    raise exception 'idempotency failed: expected stock 8 after one sale and retry, got %', v_stock;
+  if v_stock <> 8000 then
+    raise exception 'idempotency failed: expected stock 8000 scaled units after one sale and retry, got %', v_stock;
   end if;
 
   begin
@@ -268,8 +268,8 @@ begin
   from public.cloud_products
   where id = '30000000-0000-0000-0000-000000000001';
 
-  if v_stock <> 11 then
-    raise exception 'idempotency failed: expected stock 11 after one adjustment and retry, got %', v_stock;
+  if v_stock <> 11000 then
+    raise exception 'idempotency failed: expected stock 11000 scaled units after one adjustment and retry, got %', v_stock;
   end if;
 
   -- A second warehouse has an independent balance; sales there must not
@@ -279,7 +279,7 @@ begin
     '22000000-0000-0000-0000-000000000001',
     '23000000-0000-0000-0000-000000000001',
     '30000000-0000-0000-0000-000000000001',
-    5,
+    5000,
     'opening balance second warehouse',
     '50000000-0000-0000-0000-000000000020'
   );
@@ -290,28 +290,28 @@ begin
     '23000000-0000-0000-0000-000000000001',
     jsonb_build_array(jsonb_build_object(
       'product_id', '30000000-0000-0000-0000-000000000001',
-      'quantity', 2
+      'quantity_scaled', 2000
     )),
     200,
     '50000000-0000-0000-0000-000000000021'
   );
 
-  select quantity into v_stock
+  select quantity_scaled into v_stock
   from public.cloud_product_warehouse_stock
   where business_id = '20000000-0000-0000-0000-000000000001'
     and warehouse_id = '23000000-0000-0000-0000-000000000001'
     and product_id = '30000000-0000-0000-0000-000000000001';
 
-  if v_stock <> 3 then
-    raise exception 'warehouse stock failed: expected 3 in second warehouse, got %', v_stock;
+  if v_stock <> 3000 then
+    raise exception 'warehouse stock failed: expected 3000 scaled units in second warehouse, got %', v_stock;
   end if;
 
   select stock_quantity into v_stock
   from public.cloud_products
   where id = '30000000-0000-0000-0000-000000000001';
 
-  if v_stock <> 14 then
-    raise exception 'aggregate stock failed: expected 14 after warehouse operations, got %', v_stock;
+  if v_stock <> 14000 then
+    raise exception 'aggregate stock failed: expected 14000 scaled units after warehouse operations, got %', v_stock;
   end if;
 
   select count(*) into v_count from public.cloud_sales
