@@ -436,6 +436,106 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
+
+  Future<void> _cancelSale(SaleRecord sale) async {
+    if (sale.isCancelled) return;
+    var refundedText = '0';
+    var reasonText = '';
+    final result = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('إلغاء فاتورة رقم ${sale.id}'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('إجمالي الفاتورة: ${_money(sale.totalMinor)}'),
+                Text('المبلغ المحصل: ${_money(sale.paidMinor)}'),
+                const SizedBox(height: 10),
+                const Text(
+                  'سيتم إعادة الأصناف إلى مخزن الفاتورة وعكس قيود الحساب. '
+                  'أي مبلغ محصل لم يتم رده نقدًا سيظهر كرصيد مستحق للعميل.',
+                ),
+                TextField(
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'المبلغ الذي سترده نقدًا (جنيه)',
+                    helperText: 'لا يمكن أن يتجاوز المبلغ المحصل',
+                  ),
+                  onChanged: (value) => refundedText = value,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'سبب الإلغاء *'),
+                  onChanged: (value) => reasonText = value,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('رجوع'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () {
+              if (reasonText.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('سبب الإلغاء مطلوب')),
+                );
+                return;
+              }
+              final refund = _parseMoney(
+                refundedText.trim().isEmpty ? '0' : refundedText.trim(),
+              );
+              if (refund == null || refund > sale.paidMinor) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('أدخل مبلغ استرداد صحيحًا لا يتجاوز المبلغ المحصل')),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext, {
+                'refundedMinor': refund,
+                'reason': reasonText.trim(),
+              });
+            },
+            child: const Text('تأكيد الإلغاء'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    try {
+      final cancellationId = await _sales.cancelSale(
+        saleId: sale.id,
+        refundedMinor: result['refundedMinor']! as int,
+        reason: result['reason']! as String,
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم إلغاء الفاتورة وحفظ مستند الإلغاء رقم $cancellationId')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appErrorMessage(
+            error,
+            fallback: 'لم يتم إلغاء الفاتورة.',
+            operation: 'sales.cancel',
+          ))),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('المبيعات والفواتير')),
@@ -489,10 +589,29 @@ class _SalesPageState extends State<SalesPage> {
                                   leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
                                   title: Text('فاتورة رقم ${sale.id}'),
                                   subtitle: Text(
-                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\nالمصدر: ${sale.branchName ?? 'غير محدد'} — ${sale.warehouseName ?? 'فاتورة قديمة'}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}',
+                                    '${sale.createdAt.year}-${sale.createdAt.month.toString().padLeft(2, '0')}-${sale.createdAt.day.toString().padLeft(2, '0')} • الأصناف: ${sale.itemCount}\nالمصدر: ${sale.branchName ?? 'غير محدد'} — ${sale.warehouseName ?? 'فاتورة قديمة'}\nالمدفوع: ${_money(sale.paidMinor)} • المتبقي: ${_money(sale.remainingMinor)}'
+                                    ${sale.isCancelled ? '\nملغاة: ${sale.cancellationReason ?? 'بدون سبب مسجل'}' : ''},
                                   ),
                                   isThreeLine: true,
-                                  trailing: Text(_money(sale.totalMinor)),
+                                  trailing: SizedBox(
+                                    width: 104,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(_money(sale.totalMinor)),
+                                        if (sale.isCancelled)
+                                          const Text('ملغاة', style: TextStyle(color: Colors.red))
+                                        else
+                                          IconButton(
+                                            tooltip: 'إلغاء الفاتورة',
+                                            visualDensity: VisualDensity.compact,
+                                            onPressed: () => _cancelSale(sale),
+                                            icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
                                 ));
                               },
                             ),
