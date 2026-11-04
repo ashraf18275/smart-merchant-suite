@@ -46,6 +46,7 @@ Future<void> createLocalSchema(Database db) async {
   await createPurchaseSchema(db);
   await createAccountSchema(db);
   await createSupplierReturnsSchema(db);
+  await createCustomerReturnsSchema(db);
 }
 
 
@@ -536,6 +537,85 @@ Future<void> createSupplierReturnsSchema(Database db) async {
 
   await db.insert('schema_migrations', {
     'version': 10,
+    'applied_at': DateTime.now().toUtc().toIso8601String(),
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+}
+
+
+/// Adds auditable customer returns linked to original sale lines.
+Future<void> createCustomerReturnsSchema(Database db) async {
+  final itemColumns = await db.rawQuery('PRAGMA table_info(sale_items)');
+  final names = itemColumns.map((row) => row['name']).toSet();
+  if (!names.contains('returned_quantity')) {
+    await db.execute(
+      'ALTER TABLE sale_items ADD COLUMN returned_quantity INTEGER NOT NULL DEFAULT 0 CHECK (returned_quantity >= 0)',
+    );
+  }
+  if (!names.contains('returned_minor')) {
+    await db.execute(
+      'ALTER TABLE sale_items ADD COLUMN returned_minor INTEGER NOT NULL DEFAULT 0 CHECK (returned_minor >= 0)',
+    );
+  }
+
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS customer_returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL,
+      customer_id INTEGER,
+      warehouse_id INTEGER NOT NULL,
+      total_minor INTEGER NOT NULL CHECK (total_minor >= 0),
+      refunded_minor INTEGER NOT NULL DEFAULT 0 CHECK (refunded_minor >= 0 AND refunded_minor <= total_minor),
+      reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (sale_id) REFERENCES sales(id),
+      FOREIGN KEY (customer_id) REFERENCES customers(id),
+      FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS customer_return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_return_id INTEGER NOT NULL,
+      sale_item_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_price_minor INTEGER NOT NULL CHECK (unit_price_minor >= 0),
+      line_total_minor INTEGER NOT NULL CHECK (line_total_minor >= 0),
+      FOREIGN KEY (customer_return_id) REFERENCES customer_returns(id),
+      FOREIGN KEY (sale_item_id) REFERENCES sale_items(id),
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+  ''');
+
+  final ledgerSql = await db.rawQuery(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'customer_account_entries'",
+  );
+  final definition = ledgerSql.isEmpty ? '' : ledgerSql.single['sql'] as String;
+  if (!definition.contains("'return'") || !definition.contains("'refund'")) {
+    await db.execute('''
+      CREATE TABLE customer_account_entries_v11 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+        entry_type TEXT NOT NULL CHECK (entry_type IN ('sale', 'receipt', 'adjustment', 'return', 'refund')),
+        reference_id INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO customer_account_entries_v11
+        (id, customer_id, amount_minor, entry_type, reference_id, note, created_at)
+      SELECT id, customer_id, amount_minor, entry_type, reference_id, note, created_at
+      FROM customer_account_entries
+    ''');
+    await db.execute('DROP TABLE customer_account_entries');
+    await db.execute('ALTER TABLE customer_account_entries_v11 RENAME TO customer_account_entries');
+  }
+
+  await db.insert('schema_migrations', {
+    'version': 11,
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   }, conflictAlgorithm: ConflictAlgorithm.ignore);
 }
