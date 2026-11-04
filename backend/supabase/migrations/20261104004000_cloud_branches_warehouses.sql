@@ -46,7 +46,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $function$
 declare
   v_branch_id uuid;
 begin
@@ -59,7 +59,7 @@ begin
 
   return new;
 end;
-$;
+$function$;
 
 drop trigger if exists businesses_create_default_cloud_location on public.businesses;
 create trigger businesses_create_default_cloud_location
