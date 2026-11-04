@@ -48,7 +48,11 @@ insert into public.business_members (
   ('21000000-0000-0000-0000-000000000006',
    '20000000-0000-0000-0000-000000000001',
    '10000000-0000-0000-0000-000000000006',
-   'Delegated administrator', false, true)
+   'Delegated administrator', false, true),
+  ('21000000-0000-0000-0000-000000000007',
+   '20000000-0000-0000-0000-000000000001',
+   '10000000-0000-0000-0000-000000000005',
+   'Location viewer', false, true)
 on conflict (id) do nothing;
 
 insert into public.member_permissions (
@@ -80,7 +84,13 @@ insert into public.member_permissions (
    'users.edit', true),
   ('20000000-0000-0000-0000-000000000001',
    '21000000-0000-0000-0000-000000000006',
-   'branches.manage', true)
+   'branches.manage', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000007',
+   'branches.view', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000007',
+   'warehouses.view', true)
 on conflict (member_id, permission_key) do nothing;
 
 insert into public.cloud_products (
@@ -460,6 +470,20 @@ begin
   if not v_location_rejected then
     raise exception 'location security regression: branch creation without settings.edit was not rejected';
   end if;
+
+  -- Dedicated read permissions must be sufficient for location selectors.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000005', true);
+  select count(*) into v_count from public.cloud_branches
+  where business_id = '20000000-0000-0000-0000-000000000001';
+  if v_count < 2 then
+    raise exception 'location read regression: branches.view cannot read branches';
+  end if;
+  select count(*) into v_count from public.cloud_warehouses
+  where business_id = '20000000-0000-0000-0000-000000000001';
+  if v_count < 2 then
+    raise exception 'location read regression: warehouses.view cannot read warehouses';
+  end if;
+
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 
   -- Delegated branch managers may create branches but not warehouses without the separate grant.
