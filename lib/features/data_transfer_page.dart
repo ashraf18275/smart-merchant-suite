@@ -208,8 +208,26 @@ final _legacyV13Tables = <_ExportTable>[
 ];
 
 // Version 14 adds unified settlement records (cash, card, transfer, wallet).
-final _tables = <_ExportTable>[
+final _legacyV14Tables = <_ExportTable>[
   ..._legacyV13Tables,
+  const _ExportTable('المدفوعات', 'payment_records', [
+    'id', 'direction', 'payment_method', 'amount_minor',
+    'source_type', 'source_id', 'note', 'created_at',
+  ]),
+];
+
+// Version 15 adds cash sessions and associates new cash movements with a shift.
+final _tables = <_ExportTable>[
+  ..._legacyV13Tables.where((spec) => spec.table != 'cash_transactions'),
+  const _ExportTable('ورديات الصندوق', 'cash_sessions', [
+    'id', 'opened_at', 'opening_balance_minor', 'opening_note',
+    'closed_at', 'expected_balance_minor', 'counted_balance_minor',
+    'difference_minor', 'closing_note', 'status',
+  ]),
+  const _ExportTable('حركة الصندوق', 'cash_transactions', [
+    'id', 'direction', 'category', 'amount_minor', 'source_type',
+    'source_id', 'cash_session_id', 'note', 'created_at',
+  ]),
   const _ExportTable('المدفوعات', 'payment_records', [
     'id', 'direction', 'payment_method', 'amount_minor',
     'source_type', 'source_id', 'note', 'created_at',
@@ -350,15 +368,17 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 14).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 15).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion >= 14
+      final restoreTables = schemaVersion >= 15
           ? _tables
-          : schemaVersion >= 13
-              ? _legacyV13Tables
+          : schemaVersion >= 14
+              ? _legacyV14Tables
+              : schemaVersion >= 13
+                  ? _legacyV13Tables
               : schemaVersion == 12
               ? _legacyV12Tables
               : schemaVersion == 11
@@ -447,6 +467,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
       }
       if (schemaVersion < 14) {
         data['payment_records'] = [];
+      }
+      if (schemaVersion < 15) {
+        data['cash_sessions'] = [];
+        data['cash_transactions'] = data['cash_transactions']!.map((row) => {
+          ...row, 'cash_session_id': null,
+        }).toList(growable: false);
       }
       if (schemaVersion < 12) {
         data['sales'] = data['sales']!.map((row) => {
