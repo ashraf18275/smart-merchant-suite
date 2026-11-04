@@ -80,7 +80,7 @@ class SmartMerchantApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const Directionality(
+      home: Directionality(
         textDirection: TextDirection.rtl,
         child: HomeDashboard(cloudEnabled: cloudEnabled),
       ),
