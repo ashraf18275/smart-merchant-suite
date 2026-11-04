@@ -195,7 +195,7 @@ final _legacyV12Tables = <_ExportTable>[
 ];
 
 // Version 13 adds the audit trail and cash journal.
-final _tables = <_ExportTable>[
+final _legacyV13Tables = <_ExportTable>[
   ..._legacyV12Tables,
   const _ExportTable('سجل النشاط', 'audit_events', [
     'id', 'action', 'entity_type', 'entity_id', 'amount_minor',
@@ -204,6 +204,15 @@ final _tables = <_ExportTable>[
   const _ExportTable('حركة الصندوق', 'cash_transactions', [
     'id', 'direction', 'category', 'amount_minor', 'source_type',
     'source_id', 'note', 'created_at',
+  ]),
+];
+
+// Version 14 adds unified settlement records (cash, card, transfer, wallet).
+final _tables = <_ExportTable>[
+  ..._legacyV13Tables,
+  const _ExportTable('المدفوعات', 'payment_records', [
+    'id', 'direction', 'payment_method', 'amount_minor',
+    'source_type', 'source_id', 'note', 'created_at',
   ]),
 ];
 
@@ -341,14 +350,16 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 13).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 14).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion >= 13
+      final restoreTables = schemaVersion >= 14
           ? _tables
-          : schemaVersion == 12
+          : schemaVersion >= 13
+              ? _legacyV13Tables
+              : schemaVersion == 12
               ? _legacyV12Tables
               : schemaVersion == 11
               ? _legacyV11Tables
@@ -433,6 +444,9 @@ class _DataTransferPageState extends State<DataTransferPage> {
       if (schemaVersion < 13) {
         data['audit_events'] = [];
         data['cash_transactions'] = [];
+      }
+      if (schemaVersion < 14) {
+        data['payment_records'] = [];
       }
       if (schemaVersion < 12) {
         data['sales'] = data['sales']!.map((row) => {
