@@ -102,8 +102,25 @@ void main() {
       'purchase_id': purchaseId,
       'product_id': productId,
       'quantity': 2000,
+      'returned_quantity': 500,
       'unit_cost_minor': 125,
       'line_total_minor': 250,
+    });
+    final supplierReturnId = await database.insert('supplier_returns', {
+      'purchase_id': purchaseId,
+      'supplier_id': supplierId,
+      'warehouse_id': warehouse['id'],
+      'total_minor': 63,
+      'reason': 'جزء تالف',
+      'created_at': stamp,
+    });
+    await database.insert('supplier_return_items', {
+      'supplier_return_id': supplierReturnId,
+      'purchase_item_id': (await database.query('purchase_items')).single['id'],
+      'product_id': productId,
+      'quantity': 500,
+      'unit_cost_minor': 125,
+      'line_total_minor': 63,
     });
     await database.insert('supplier_account_entries', {
       'supplier_id': supplierId,
@@ -243,6 +260,8 @@ void main() {
     version8['customers'] = [];
     version8['supplier_account_entries'] = [];
     version8['customer_account_entries'] = [];
+    version8['supplier_returns'] = [];
+    version8['supplier_return_items'] = [];
     version8['sales'] = version8['sales']!.map((row) {
       final compatible = Map<String, Object?>.from(row)..remove('customer_id');
       return compatible;
@@ -272,6 +291,8 @@ void main() {
     version7['purchases'] = [];
     version7['purchase_items'] = [];
     version7['supplier_account_entries'] = [];
+    version7['supplier_returns'] = [];
+    version7['supplier_return_items'] = [];
 
     await database.transaction(
       (txn) => replaceBackupBusinessData(txn, version7),
