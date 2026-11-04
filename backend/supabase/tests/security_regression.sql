@@ -328,6 +328,41 @@ begin
   ) then
     raise exception 'location management failed: branch deactivation was not atomic';
   end if;
+  -- Neither inventory nor warehouse activation is allowed while the branch is inactive.
+  v_location_rejected := false;
+  begin
+    perform public.adjust_cloud_inventory(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_branch,
+      v_created_second_warehouse,
+      '30000000-0000-0000-0000-000000000001',
+      1000,
+      'reject stock in inactive branch',
+      '50000000-0000-0000-0000-000000000015'
+    );
+    raise exception 'location security regression: stock was added to an inactive branch';
+  exception when check_violation then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: stock write to inactive branch was not rejected';
+  end if;
+
+  v_location_rejected := false;
+  begin
+    perform public.set_cloud_warehouse_active(
+      '20000000-0000-0000-0000-000000000001',
+      v_created_second_warehouse,
+      true
+    );
+    raise exception 'location security regression: warehouse activated under inactive branch';
+  exception when check_violation then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: warehouse activation under inactive branch was not rejected';
+  end if;
+
   perform public.set_cloud_branch_active(
     '20000000-0000-0000-0000-000000000001',
     v_created_branch,
