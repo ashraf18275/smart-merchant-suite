@@ -174,7 +174,7 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
                           Text(widget.businessName, style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: _branchId,
+                            initialValue: _branchId,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'الفرع',
