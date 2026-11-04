@@ -259,7 +259,7 @@ begin
     p_paid_minor, p_customer_id, p_payment_method, p_operation_id
   );
 end;
-$;
+$$;
 
 create or replace function public.create_cloud_sale(
   p_business_id uuid,
