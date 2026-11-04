@@ -875,7 +875,7 @@ begin
   begin
     perform public.record_cloud_customer_receipt(
       '20000000-0000-0000-0000-000000000001', v_customer_id, 1600,
-      'cash', 'تحصيل أكبر من الرصيد', '50000000-0000-0000-000000000035'
+      'cash', 'تحصيل أكبر من الرصيد', '50000000-0000-0000-0000-000000000035'
     );
     raise exception 'customer balance regression: overpayment was accepted';
   exception when check_violation then
