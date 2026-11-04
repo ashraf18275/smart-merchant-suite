@@ -444,7 +444,6 @@ class _SalesPageState extends State<SalesPage> {
         refundedMinor: result['refundedMinor']! as int,
         reason: result['reason']! as String,
         refundMethod: result['refundMethod']! as String,
-        refundMethod: result['refundMethod']! as String,
       );
       await _load();
       if (mounted) {
@@ -553,6 +552,7 @@ class _SalesPageState extends State<SalesPage> {
         saleId: sale.id,
         refundedMinor: result['refundedMinor']! as int,
         reason: result['reason']! as String,
+        refundMethod: result['refundMethod']! as String,
       );
       await _load();
       if (mounted) {
