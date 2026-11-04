@@ -93,7 +93,8 @@ on conflict (id) do nothing;
 -- The minimal PostgreSQL CI database emulates Supabase's public-schema read grants.
 grant usage on schema public to authenticated;
 grant select on public.businesses, public.business_members, public.cloud_products, public.cloud_inventory_movements,
-  public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events,\n  public.cloud_branches, public.cloud_warehouses, public.cloud_product_warehouse_stock to authenticated;
+  public.cloud_sales, public.cloud_sale_items, public.cloud_expenses, public.audit_events,
+  public.cloud_branches, public.cloud_warehouses, public.cloud_product_warehouse_stock to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
