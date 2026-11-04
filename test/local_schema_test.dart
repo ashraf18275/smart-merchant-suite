@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
+import 'package:smart_merchant_suite/data/migrations/payment_methods_schema.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -23,7 +24,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -247,8 +248,36 @@ void main() {
     expect(cash, hasLength(1));
     expect(await database.query('audit_events'), isEmpty);
     expect(await database.query('cash_transactions'), isEmpty);
+    expect(await database.query('payment_records'), isEmpty);
     expect(await database.query('schema_migrations',
       where: 'version = ?', whereArgs: [13]), hasLength(1));
+    expect(await database.query('schema_migrations',
+      where: 'version = ?', whereArgs: [14]), hasLength(1));
+  });
+
+  test('payment migration backfills existing cash movements once', () async {
+    await createLocalSchema(database);
+    await database.insert('cash_transactions', {
+      'direction': 'in',
+      'category': 'sale_receipt',
+      'amount_minor': 12500,
+      'source_type': 'sale',
+      'source_id': 42,
+      'note': 'تحصيل قديم',
+      'created_at': DateTime.utc(2026, 11, 4).toIso8601String(),
+    });
+
+    // Simulate a v13 database upgraded to v14.
+    await database.delete('payment_records');
+    await database.delete('schema_migrations', where: 'version = ?', whereArgs: [14]);
+    await createPaymentMethodsSchema(database);
+    await createPaymentMethodsSchema(database);
+
+    final payments = await database.query('payment_records');
+    expect(payments, hasLength(1));
+    expect(payments.single['payment_method'], 'cash');
+    expect(payments.single['amount_minor'], 12500);
+    expect(payments.single['source_id'], 42);
   });
 
   test('sale cancellation migration preserves customer ledger and allows reversal entries', () async {
