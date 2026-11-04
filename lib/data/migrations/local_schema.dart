@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import 'payment_methods_schema.dart';
+import 'cash_sessions_schema.dart';
 
 /// Creates the current local schema for a new database.
 Future<void> createLocalSchema(Database db) async {
@@ -52,6 +53,7 @@ Future<void> createLocalSchema(Database db) async {
   await createSalesCancellationSchema(db);
   await createAuditCashSchema(db);
   await createPaymentMethodsSchema(db);
+  await createCashSessionsSchema(db);
 }
 
 
