@@ -660,6 +660,69 @@ void main() {
     expect(movement['reason'], 'مرتجع مشتريات رقم $returnId');
   });
 
+  test('records electronic supplier refund as a positive supplier adjustment', () async {
+    final productId = await products.add(const Product(
+      name: 'صنف استرداد مورد', costMinor: 1000, priceMinor: 1500, stockQuantity: 0,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد استرداد');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    final purchaseId = await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(productId: productId, quantity: 2000, unitCostMinor: 1000)],
+      paidMinor: 2000,
+    );
+    final purchaseItemId = (await db.query('purchase_items')).single['id']! as int;
+    final returnId = await purchases.createSupplierReturn(
+      purchaseId: purchaseId,
+      items: [SupplierReturnLineInput(purchaseItemId: purchaseItemId, quantity: 1000)],
+      reason: 'استرداد جزء من المبلغ',
+      refundedMinor: 400,
+      refundMethod: PaymentMethod.card,
+    );
+
+    final refund = (await db.query('payment_records',
+      where: "source_type = 'supplier_return_refund' AND source_id = ?",
+      whereArgs: [returnId])).single;
+    expect(refund['payment_method'], 'card');
+    expect(refund['direction'], 'in');
+    expect(refund['amount_minor'], 400);
+    final ledger = await db.query('supplier_account_entries', orderBy: 'id ASC');
+    expect(ledger.map((row) => row['amount_minor']), [2000, -2000, -1000, 400]);
+    expect(await purchases.supplierBalance(supplierId), -600);
+    expect(await db.query('cash_transactions',
+      where: "category = 'supplier_return_refund'"), isEmpty);
+  });
+
+  test('rejects supplier refund above returned goods value without partial writes', () async {
+    final productId = await products.add(const Product(
+      name: 'صنف رفض استرداد', costMinor: 500, priceMinor: 900, stockQuantity: 0,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد رفض الاسترداد');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    final purchaseId = await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(productId: productId, quantity: 1000, unitCostMinor: 500)],
+      paidMinor: 0,
+    );
+    final purchaseItemId = (await db.query('purchase_items')).single['id']! as int;
+    await expectLater(
+      purchases.createSupplierReturn(
+        purchaseId: purchaseId,
+        items: [SupplierReturnLineInput(purchaseItemId: purchaseItemId, quantity: 1000)],
+        reason: 'مبلغ استرداد أكبر من المرتجع',
+        refundedMinor: 501,
+        refundMethod: PaymentMethod.bankTransfer,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('supplier_returns'), isEmpty);
+    expect((await db.query('purchase_items')).single['returned_quantity'], 0);
+    expect((await products.all()).single.stockQuantity, 1000);
+    expect(await db.query('payment_records'), isEmpty);
+  });
+
   test('rejects supplier return beyond remaining purchase quantity', () async {
     final productId = await products.add(const Product(
       name: 'منتج تجاوز المرتجع', costMinor: 1000, priceMinor: 1500,
