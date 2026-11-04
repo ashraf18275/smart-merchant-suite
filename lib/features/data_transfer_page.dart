@@ -231,6 +231,8 @@ class _DataTransferPageState extends State<DataTransferPage> {
       'products': {'stock_quantity'},
       'product_warehouse_stock': {'quantity'},
       'sale_items': {'quantity'},
+      'supplier_return_items': {'quantity'},
+      'customer_return_items': {'quantity'},
       'inventory_movements': {'quantity_delta'},
     };
     if (quantityFields[table]?.contains(column) == true && value is num) {
