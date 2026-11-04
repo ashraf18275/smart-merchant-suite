@@ -1,3 +1,28 @@
+-- Recompute historical request fingerprints after assigning each document
+-- to its default branch and warehouse.
+update public.cloud_sales s
+set request_hash = encode(public.digest(jsonb_build_object(
+  'branch_id', s.branch_id,
+  'warehouse_id', s.warehouse_id,
+  'paid_minor', s.paid_minor,
+  'items', coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'product_id', i.product_id, 'quantity', i.quantity
+    ) order by i.product_id)
+    from public.cloud_sale_items i
+    where i.sale_id = s.id and i.business_id = s.business_id
+  ), '[]'::jsonb)
+)::text, 'sha256'), 'hex');
+
+update public.cloud_inventory_movements m
+set request_hash = encode(public.digest(jsonb_build_object(
+  'branch_id', m.branch_id,
+  'warehouse_id', m.warehouse_id,
+  'product_id', m.product_id,
+  'quantity_delta', m.quantity_delta,
+  'reason', m.reason
+)::text, 'sha256'), 'hex');
+
 -- Keep aggregate product stock and per-warehouse balances in sync.
 -- Legacy RPC signatures remain as wrappers targeting the business default warehouse.
 create or replace function public.assign_cloud_product_default_warehouse()
