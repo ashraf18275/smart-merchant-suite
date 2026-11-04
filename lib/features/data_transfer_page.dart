@@ -182,7 +182,7 @@ final _legacyV11Tables = <_ExportTable>[
 
  
 // Version 12 adds sale cancellation documents and cancellation status.
-final _tables = <_ExportTable>[
+const _legacyV12Tables = <_ExportTable>[
   ..._legacyV11Tables.where((spec) => spec.table != 'sales'),
   const _ExportTable('فواتير البيع', 'sales', [
     'id', 'total_minor', 'paid_minor', 'warehouse_id', 'customer_id',
@@ -191,6 +191,19 @@ final _tables = <_ExportTable>[
   const _ExportTable('إلغاءات فواتير البيع', 'sales_cancellations', [
     'id', 'sale_id', 'customer_id', 'warehouse_id', 'total_minor',
     'paid_minor', 'refunded_minor', 'reason', 'created_at',
+  ]),
+];
+
+// Version 13 adds the audit trail and cash journal.
+final _tables = <_ExportTable>[
+  ..._legacyV12Tables,
+  const _ExportTable('سجل النشاط', 'audit_events', [
+    'id', 'action', 'entity_type', 'entity_id', 'amount_minor',
+    'details', 'actor_label', 'created_at',
+  ]),
+  const _ExportTable('حركة الصندوق', 'cash_transactions', [
+    'id', 'direction', 'category', 'amount_minor', 'source_type',
+    'source_id', 'note', 'created_at',
   ]),
 ];
 
@@ -328,14 +341,16 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 12).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 13).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion >= 12
+      final restoreTables = schemaVersion >= 13
           ? _tables
-          : schemaVersion == 11
+          : schemaVersion == 12
+              ? _legacyV12Tables
+              : schemaVersion == 11
               ? _legacyV11Tables
               : schemaVersion == 10
               ? _legacyV10Tables
@@ -414,6 +429,10 @@ class _DataTransferPageState extends State<DataTransferPage> {
         data['inventory_movements'] = data['inventory_movements']!.map((row) => {
           ...row, 'warehouse_id': warehouseId,
         }).toList(growable: false);
+      }
+      if (schemaVersion < 13) {
+        data['audit_events'] = [];
+        data['cash_transactions'] = [];
       }
       if (schemaVersion < 12) {
         data['sales'] = data['sales']!.map((row) => {
