@@ -78,7 +78,7 @@ void main() {
   testWidgets('creates a customer return from the sales screen', (tester) async {
     final customerId = await accounts.addCustomer(name: 'عميل اختبار المرتجع');
     await sales.createSale(
-      quantities: {1: 1000},
+      quantities: {(await productStore.all()).single.id!: 1000},
       paidMinor: 1500,
       warehouseId: (await warehouses.warehouses()).single.id,
       customerId: customerId,
@@ -99,7 +99,7 @@ void main() {
 
     await tester.tap(find.text('إنشاء مرتجع عميل'));
     await pumpDatabaseResult(tester);
-    expect(find.text('إنشاء مرتجع عميل'), findsOneWidget);
+    expect(find.text('إنشاء مرتجع عميل'), findsNWidgets(2));
     expect(find.textContaining('عميل اختبار المرتجع'), findsOneWidget);
 
     final quantityField = find.byWidgetPredicate((widget) =>
@@ -107,10 +107,9 @@ void main() {
       widget.decoration?.labelText == 'كمية الإرجاع');
     expect(quantityField, findsOneWidget);
     await tester.enterText(quantityField, '1');
-    await tester.enterText(
-      find.widgetWithText(TextField, 'سبب المرتجع *'),
-      'تجربة واجهة المرتجع',
-    );
+    final reasonField = find.byWidgetPredicate((widget) =>
+      widget is TextField && widget.decoration?.labelText == 'سبب المرتجع *');
+    await tester.enterText(reasonField, 'تجربة واجهة المرتجع');
     await tester.tap(find.text('حفظ المرتجع'));
     await pumpDatabaseResult(tester);
 
