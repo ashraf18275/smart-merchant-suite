@@ -7,6 +7,7 @@ import '../core/app_error.dart';
 import '../data/account_repository.dart';
 import '../domain/product.dart';
 import '../domain/sale_record.dart';
+import '../domain/sale_return_line.dart';
 import '../domain/warehouse.dart';
 import '../domain/warehouse_stock.dart';
 import '../core/quantity.dart';
@@ -226,6 +227,216 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
+
+  Future<void> _createCustomerReturn() async {
+    late List<Map<String, Object?>> invoices;
+    try {
+      invoices = await _sales.returnableSales();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appErrorMessage(error,
+            fallback: 'تعذر تحميل فواتير المرتجع.', operation: 'sales.return.load'))),
+        );
+      }
+      return;
+    }
+    if (invoices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا توجد فواتير تحتوي على كميات قابلة للإرجاع')),
+      );
+      return;
+    }
+
+    var selectedSaleId = invoices.first['id']! as int;
+    var lines = await _sales.returnableSaleItems(selectedSaleId);
+    final quantities = <int, String>{};
+    final refunded = TextEditingController(text: '0');
+    final reason = TextEditingController();
+    final result = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final selectedInvoice = invoices.firstWhere(
+            (invoice) => invoice['id'] == selectedSaleId,
+          );
+          return AlertDialog(
+            title: const Text('إنشاء مرتجع عميل'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedSaleId,
+                      decoration: const InputDecoration(labelText: 'فاتورة البيع الأصلية'),
+                      items: [
+                        for (final invoice in invoices)
+                          DropdownMenuItem(
+                            value: invoice['id']! as int,
+                            child: Text(
+                              'فاتورة #${invoice['id']} • ${invoice['customer_name'] ?? 'بيع نقدي'}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        final nextLines = await _sales.returnableSaleItems(value);
+                        setDialogState(() {
+                          selectedSaleId = value;
+                          lines = nextLines;
+                          quantities.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'المخزن: ${selectedInvoice['warehouse_name'] ?? 'المخزن الأصلي'}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    const Divider(),
+                    ...lines.map((line) {
+                      final id = line['sale_item_id']! as int;
+                      final remaining = line['remaining_quantity']! as int;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${line['product_name']}\nالمتبقي: ${_quantity(remaining)} ${line['unit_name']} • سعر الوحدة: ${_money(line['unit_price_minor']! as int)}',
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 112,
+                              child: TextFormField(
+                                key: ValueKey('customer_return_quantity_$id'),
+                                initialValue: quantities[id] ?? '',
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  labelText: 'كمية الإرجاع',
+                                  isDense: true,
+                                ),
+                                onChanged: (value) => quantities[id] = value,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const Divider(),
+                    TextField(
+                      controller: refunded,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'المبلغ المسترد نقدًا (جنيه)',
+                      ),
+                    ),
+                    TextField(
+                      controller: reason,
+                      decoration: const InputDecoration(labelText: 'سبب المرتجع *'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (reason.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('سبب المرتجع مطلوب')),
+                    );
+                    return;
+                  }
+                  final returnItems = <SaleReturnLineInput>[];
+                  for (final line in lines) {
+                    final id = line['sale_item_id']! as int;
+                    final value = (quantities[id] ?? '').trim();
+                    if (value.isEmpty) continue;
+                    final quantity = Quantity.parse(
+                      value,
+                      allowsFraction: line['allows_fraction'] == 1,
+                    );
+                    if (quantity == null ||
+                        quantity <= 0 ||
+                        quantity > (line['remaining_quantity']! as int)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('راجع كميات الإرجاع؛ يجب ألا تتجاوز المتبقي من الفاتورة')),
+                      );
+                      return;
+                    }
+                    returnItems.add(SaleReturnLineInput(
+                      saleItemId: id,
+                      quantity: quantity,
+                    ));
+                  }
+                  if (returnItems.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('أدخل كمية لصنف واحد على الأقل')),
+                    );
+                    return;
+                  }
+                  final refundValue = _parseMoney(
+                    refunded.text.trim().isEmpty ? '0' : refunded.text.trim(),
+                  );
+                  if (refundValue == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('أدخل مبلغًا نقديًا صحيحًا')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx, {
+                    'saleId': selectedSaleId,
+                    'items': returnItems,
+                    'refundedMinor': refundValue,
+                    'reason': reason.text.trim(),
+                  });
+                },
+                child: const Text('حفظ المرتجع'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    refunded.dispose();
+    reason.dispose();
+    if (result == null) return;
+
+    try {
+      final returnId = await _sales.createCustomerReturn(
+        saleId: result['saleId']! as int,
+        items: result['items']! as List<SaleReturnLineInput>,
+        refundedMinor: result['refundedMinor']! as int,
+        reason: result['reason']! as String,
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم حفظ مرتجع العميل رقم $returnId وتحديث المخزون والحساب')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appErrorMessage(error,
+            fallback: 'لم يتم حفظ مرتجع العميل.', operation: 'sales.return.create'))),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('المبيعات والفواتير')),
@@ -257,6 +468,14 @@ class _SalesPageState extends State<SalesPage> {
                         setState(() { _selectedWarehouseId = value; _loading = true; });
                         await _load();
                       },
+                    ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _loading ? null : _createCustomerReturn,
+                        icon: const Icon(Icons.assignment_return_outlined),
+                        label: const Text('إنشاء مرتجع عميل'),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Expanded(
