@@ -620,6 +620,27 @@ void main() {
     expect(summary.grossProfitMinor, 400);
   });
 
+  test('profit summary excludes cancelled invoices and their cost of goods', () async {
+    final id = await products.add(const Product(
+      name: 'صنف فاتورة ملغاة', costMinor: 500, priceMinor: 900, stockQuantity: 5000,
+    ));
+    final sales = SalesRepository(database);
+    final saleId = await sales.createSale(
+      quantities: {id: 2000},
+      paidMinor: 1800,
+      warehouseId: await mainWarehouseId(),
+    );
+    await sales.cancelSale(
+      saleId: saleId,
+      refundedMinor: 1800,
+      reason: 'إلغاء لاختبار التقرير',
+    );
+    final summary = await ExpenseRepository(database).summary();
+    expect(summary.salesMinor, 0);
+    expect(summary.costOfGoodsMinor, 0);
+    expect(summary.grossProfitMinor, 0);
+  });
+
   test('filters profit summary and expenses by inclusive calendar dates', () async {
     final id = await products.add(const Product(
       name: 'شاحن', costMinor: 500, priceMinor: 900, stockQuantity: 5000,
