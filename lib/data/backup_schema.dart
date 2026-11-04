@@ -1,6 +1,6 @@
 /// Compatibility and referential ordering for full SQLite backups.
 abstract final class BackupSchema {
-  static const currentVersion = 14;
+  static const currentVersion = 15;
 
   static bool supports(int version) => version >= 3 && version <= currentVersion;
   static bool hasPurchaseData(int version) => version >= 8;
@@ -10,6 +10,7 @@ abstract final class BackupSchema {
   static bool hasSalesCancellationData(int version) => version >= 12;
   static bool hasAuditCashData(int version) => version >= 13;
   static bool hasPaymentData(int version) => version >= 14;
+  static bool hasCashSessionData(int version) => version >= 15;
 
   /// Every business-data table that a current backup must preserve.
   static const currentTableNames = <String>{
@@ -23,8 +24,10 @@ abstract final class BackupSchema {
     'sales',
     'sales_cancellations',
     'audit_events',
+    'cash_sessions',
     'cash_transactions',
     'payment_records',
+    'cash_sessions',
     'sale_items',
     'expenses',
     'inventory_movements',
@@ -46,6 +49,7 @@ abstract final class BackupSchema {
     'sales_cancellations',
     'payment_records',
     'cash_transactions',
+    'cash_sessions',
     'audit_events',
     'supplier_return_items',
     'supplier_returns',
