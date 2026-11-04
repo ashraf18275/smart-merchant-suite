@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'cloud/cloud_config.dart';
+import 'features/cloud_login_page.dart';
 
 import 'application/services/expense_application_service.dart';
 import 'application/services/product_application_service.dart';
@@ -21,12 +25,25 @@ import 'features/products_page.dart';
 import 'features/purchases_page.dart';
 import 'features/sales_page.dart';
 
-void main() {
-  runApp(const SmartMerchantApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final config = CloudConfig.fromEnvironment();
+  var cloudEnabled = false;
+  if (config.isConfigured) {
+    try {
+      await Supabase.initialize(url: config.url, anonKey: config.anonKey);
+      cloudEnabled = true;
+    } catch (_) {
+      // Local-first operation remains available if cloud setup is unavailable.
+    }
+  }
+  runApp(SmartMerchantApp(cloudEnabled: cloudEnabled));
 }
 
 class SmartMerchantApp extends StatelessWidget {
-  const SmartMerchantApp({super.key});
+  const SmartMerchantApp({super.key, required this.cloudEnabled});
+
+  final bool cloudEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -65,14 +82,16 @@ class SmartMerchantApp extends StatelessWidget {
       ),
       home: const Directionality(
         textDirection: TextDirection.rtl,
-        child: HomeDashboard(),
+        child: HomeDashboard(cloudEnabled: cloudEnabled),
       ),
     );
   }
 }
 
 class HomeDashboard extends StatelessWidget {
-  const HomeDashboard({super.key});
+  const HomeDashboard({super.key, required this.cloudEnabled});
+
+  final bool cloudEnabled;
 
   static const modules = <({IconData icon, String title, String subtitle})>[
     (icon: Icons.inventory_2_outlined, title: 'المنتجات والمخزون', subtitle: 'إضافة المنتجات ومتابعة الأرصدة'),
@@ -161,7 +180,21 @@ class HomeDashboard extends StatelessWidget {
     final columns = width >= 900 ? 4 : width >= 600 ? 3 : 2;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('عدة التاجر الذكي')),
+      appBar: AppBar(
+        title: const Text('عدة التاجر الذكي'),
+        actions: [
+          if (cloudEnabled)
+            IconButton(
+              tooltip: 'الحساب السحابي',
+              icon: const Icon(Icons.cloud_outlined),
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => CloudLoginPage(client: Supabase.instance.client),
+                ));
+              },
+            ),
+        ],
+      ),
       body: SafeArea(
         top: false,
         child: GridView.builder(
