@@ -1,0 +1,393 @@
+import 'dart:convert';
+
+import 'package:sqflite_common/sqlite_api.dart';
+import 'package:uuid/uuid.dart';
+
+class SyncOutboxEvent {
+  const SyncOutboxEvent({
+    required this.eventId,
+    required this.operationId,
+    required this.businessId,
+    required this.entityType,
+    required this.localEntityId,
+    required this.action,
+    required this.payload,
+    required this.status,
+    required this.attempts,
+  });
+
+  final String eventId;
+  final String operationId;
+  final String? businessId;
+  final String entityType;
+  final String localEntityId;
+  final String action;
+  final Map<String, dynamic> payload;
+  final String status;
+  final int attempts;
+
+  factory SyncOutboxEvent.fromRow(Map<String, Object?> row) {
+    final decoded = jsonDecode(row['payload_json']! as String);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Sync event payload must be a JSON object');
+    }
+    return SyncOutboxEvent(
+      eventId: row['event_id']! as String,
+      operationId: row['operation_id']! as String,
+      businessId: row['business_id'] as String?,
+      entityType: row['entity_type']! as String,
+      localEntityId: row['local_entity_id']! as String,
+      action: row['action']! as String,
+      payload: Map<String, dynamic>.unmodifiable(decoded),
+      status: row['status']! as String,
+      attempts: row['attempts']! as int,
+    );
+  }
+}
+
+/// Transactional local queue. Call [enqueue] with the same transaction that
+/// writes the business record so a crash cannot save one without the other.
+class SyncOutboxRepository {
+  SyncOutboxRepository(this._db);
+
+  final Database _db;
+  static const _uuid = Uuid();
+
+  Future<String> ensureDeviceId({DatabaseExecutor? executor}) async {
+    final db = executor ?? _db;
+    final rows = await db.query(
+      'sync_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['device_id'],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) return rows.single['value']! as String;
+
+    final id = _uuid.v4();
+    await db.insert(
+      'sync_metadata',
+      {
+        'key': 'device_id',
+        'value': id,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    final saved = await db.query(
+      'sync_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['device_id'],
+      limit: 1,
+    );
+    return saved.single['value']! as String;
+  }
+
+  Future<String> enqueue({
+    DatabaseExecutor? executor,
+    String? businessId,
+    required String entityType,
+    required String localEntityId,
+    required String action,
+    required Map<String, dynamic> payload,
+  }) async {
+    if (entityType.trim().isEmpty || localEntityId.trim().isEmpty) {
+      throw ArgumentError('entityType and localEntityId are required');
+    }
+    if (!const {'create', 'update', 'delete', 'adjust'}.contains(action)) {
+      throw ArgumentError.value(action, 'action', 'Unsupported sync action');
+    }
+
+    final db = executor ?? _db;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final operationId = _uuid.v4();
+    final eventId = _uuid.v4();
+    await db.insert('sync_outbox', {
+      'event_id': eventId,
+      'operation_id': operationId,
+      'business_id': businessId,
+      'entity_type': entityType,
+      'local_entity_id': localEntityId,
+      'action': action,
+      'payload_json': jsonEncode(payload),
+      'status': 'pending',
+      'attempts': 0,
+      'created_at': now,
+      'updated_at': now,
+    });
+    return eventId;
+  }
+
+  /// Binds existing local-only changes to the business selected by the owner.
+  /// This is intentionally explicit: a queue must never guess the tenant.
+  Future<int> assignUnboundEventsToBusiness(String businessId) async {
+    if (businessId.trim().isEmpty) {
+      throw ArgumentError.value(businessId, 'businessId');
+    }
+    return _db.update(
+      'sync_outbox',
+      {
+        'business_id': businessId,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: "business_id IS NULL AND status IN ('pending', 'failed')",
+    );
+  }
+
+  Future<List<SyncOutboxEvent>> claimPendingBatch({
+    int limit = 25,
+    int maxAttempts = 5,
+    Duration staleProcessingAge = const Duration(minutes: 5),
+  }) async {
+    if (limit < 1 || maxAttempts < 1) {
+      throw ArgumentError('limit and maxAttempts must be positive');
+    }
+    return _db.transaction((txn) async {
+      final now = DateTime.now().toUtc();
+      final nowIso = now.toIso8601String();
+      final staleBefore =
+          now.subtract(staleProcessingAge).toIso8601String();
+
+      await txn.update(
+        'sync_outbox',
+        {
+          'status': 'failed',
+          'last_error': 'Previous synchronization was interrupted',
+          'updated_at': nowIso,
+        },
+        where: "status = 'processing' AND updated_at < ?",
+        whereArgs: [staleBefore],
+      );
+
+      final rows = await txn.query(
+        'sync_outbox',
+        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id IS NOT NULL",
+        whereArgs: [maxAttempts],
+        orderBy: 'created_at ASC, event_id ASC',
+        limit: limit,
+      );
+
+      final claimed = <SyncOutboxEvent>[];
+      for (final row in rows) {
+        final eventId = row['event_id']! as String;
+        final attempts = (row['attempts']! as int) + 1;
+        await txn.update(
+          'sync_outbox',
+          {
+            'status': 'processing',
+            'attempts': attempts,
+            'updated_at': nowIso,
+            'last_error': null,
+          },
+          where: "event_id = ? AND status IN ('pending', 'failed')",
+          whereArgs: [eventId],
+        );
+        claimed.add(SyncOutboxEvent.fromRow({
+          ...row,
+          'status': 'processing',
+          'attempts': attempts,
+        }));
+      }
+      return claimed;
+    });
+  }
+
+  Future<void> markSynced(
+    String eventId, {
+    String? remoteEntityId,
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _db.update(
+      'sync_outbox',
+      {
+        'status': 'synced',
+        'remote_entity_id': remoteEntityId,
+        'last_error': null,
+        'synced_at': now,
+        'updated_at': now,
+      },
+      where: 'event_id = ? AND status = ?',
+      whereArgs: [eventId, 'processing'],
+    );
+  }
+
+  Future<void> markFailed(String eventId, Object error) async {
+    final message = error.toString();
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _db.update(
+      'sync_outbox',
+      {
+        'status': 'failed',
+        'last_error': message.length > 1000 ? message.substring(0, 1000) : message,
+        'updated_at': now,
+      },
+      where: 'event_id = ? AND status = ?',
+      whereArgs: [eventId, 'processing'],
+    );
+  }
+
+  Future<void> recordConflict({
+    required String eventId,
+    required String conflictType,
+    Map<String, dynamic>? remotePayload,
+  }) async {
+    final rows = await _db.query(
+      'sync_outbox',
+      where: 'event_id = ?',
+      whereArgs: [eventId],
+      limit: 1,
+    );
+    if (rows.isEmpty) throw StateError('Sync event not found: $eventId');
+    final event = SyncOutboxEvent.fromRow(rows.single);
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    await _db.transaction((txn) async {
+      await txn.insert(
+        'sync_conflicts',
+        {
+          'id': _uuid.v4(),
+          'event_id': event.eventId,
+          'business_id': event.businessId,
+          'entity_type': event.entityType,
+          'local_entity_id': event.localEntityId,
+          'conflict_type': conflictType,
+          'local_payload_json': jsonEncode(event.payload),
+          'remote_payload_json':
+              remotePayload == null ? null : jsonEncode(remotePayload),
+          'detected_at': now,
+        },
+      );
+      await txn.update(
+        'sync_outbox',
+        {
+          'status': 'conflict',
+          'last_error': conflictType,
+          'updated_at': now,
+        },
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+    });
+  }
+
+  Future<void> upsertEntityMapping({
+    required String businessId,
+    required String entityType,
+    required String localEntityId,
+    required String remoteEntityId,
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _db.transaction((txn) async {
+      final localRows = await txn.query(
+        'sync_entity_map',
+        columns: ['remote_entity_id'],
+        where: 'business_id = ? AND entity_type = ? AND local_entity_id = ?',
+        whereArgs: [businessId, entityType, localEntityId],
+        limit: 1,
+      );
+      if (localRows.isNotEmpty &&
+          localRows.single['remote_entity_id'] != remoteEntityId) {
+        throw StateError('Local entity is already mapped to another cloud id');
+      }
+
+      final remoteRows = await txn.query(
+        'sync_entity_map',
+        columns: ['local_entity_id'],
+        where: 'business_id = ? AND entity_type = ? AND remote_entity_id = ?',
+        whereArgs: [businessId, entityType, remoteEntityId],
+        limit: 1,
+      );
+      if (remoteRows.isNotEmpty &&
+          remoteRows.single['local_entity_id'] != localEntityId) {
+        throw StateError('Cloud entity is already mapped to another local id');
+      }
+
+      if (localRows.isEmpty) {
+        await txn.insert('sync_entity_map', {
+          'business_id': businessId,
+          'entity_type': entityType,
+          'local_entity_id': localEntityId,
+          'remote_entity_id': remoteEntityId,
+          'created_at': now,
+          'updated_at': now,
+        });
+      } else {
+        await txn.update(
+          'sync_entity_map',
+          {'updated_at': now},
+          where: 'business_id = ? AND entity_type = ? AND local_entity_id = ?',
+          whereArgs: [businessId, entityType, localEntityId],
+        );
+      }
+    });
+  }
+
+  Future<String?> remoteIdFor({
+    required String businessId,
+    required String entityType,
+    required String localEntityId,
+  }) async {
+    final rows = await _db.query(
+      'sync_entity_map',
+      columns: ['remote_entity_id'],
+      where: 'business_id = ? AND entity_type = ? AND local_entity_id = ?',
+      whereArgs: [businessId, entityType, localEntityId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['remote_entity_id'] as String;
+  }
+
+  Future<String?> localIdFor({
+    required String businessId,
+    required String entityType,
+    required String remoteEntityId,
+  }) async {
+    final rows = await _db.query(
+      'sync_entity_map',
+      columns: ['local_entity_id'],
+      where: 'business_id = ? AND entity_type = ? AND remote_entity_id = ?',
+      whereArgs: [businessId, entityType, remoteEntityId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['local_entity_id'] as String;
+  }
+
+  Future<void> saveCursor({
+    required String businessId,
+    required String scope,
+    required String? cursor,
+  }) async {
+    await _db.insert(
+      'sync_cursors',
+      {
+        'business_id': businessId,
+        'scope': scope,
+        'cursor_value': cursor,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<String?> cursorFor({
+    required String businessId,
+    required String scope,
+  }) async {
+    final rows = await _db.query(
+      'sync_cursors',
+      columns: ['cursor_value'],
+      where: 'business_id = ? AND scope = ?',
+      whereArgs: [businessId, scope],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['cursor_value'] as String?;
+  }
+
+  Future<int> pendingCount({String? businessId}) async {
+    return _db.rawQuery(
+      "SELECT COUNT(*) AS count FROM sync_outbox WHERE status IN ('pending', 'failed', 'processing') AND (? IS NULL OR business_id = ?)",
+      [businessId, businessId],
+    ).then((rows) => rows.single['count']! as int);
+  }
+}
