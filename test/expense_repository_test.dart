@@ -46,6 +46,28 @@ void main() {
     expect(audit['amount_minor'], 25000);
   });
 
+  test('rolls back expense and audit when cash journal write fails', () async {
+    await db.execute('''
+      CREATE TRIGGER reject_cash_expense
+      BEFORE INSERT ON cash_transactions
+      WHEN NEW.category = 'expense'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced cash journal failure');
+      END
+    ''');
+    await expectLater(
+      expenses.add(
+        description: 'مصروف يجب التراجع عنه',
+        category: 'تشغيل',
+        amountMinor: 1000,
+      ),
+      throwsA(anything),
+    );
+    expect(await db.query('expenses'), isEmpty);
+    expect(await db.query('audit_events'), isEmpty);
+    expect(await db.query('cash_transactions'), isEmpty);
+  });
+
   test('rejects blank description, blank category, and non-positive amount', () async {
     final invalidInputs = <Map<String, Object>>[
       {'description': ' ', 'category': 'مرافق', 'amount': 100},
