@@ -47,6 +47,7 @@ Future<void> createLocalSchema(Database db) async {
   await createAccountSchema(db);
   await createSupplierReturnsSchema(db);
   await createCustomerReturnsSchema(db);
+  await createSalesCancellationSchema(db);
 }
 
 
@@ -623,6 +624,72 @@ Future<void> createCustomerReturnsSchema(Database db) async {
 
   await db.insert('schema_migrations', {
     'version': 11,
+    'applied_at': DateTime.now().toUtc().toIso8601String(),
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
+}
+
+
+/// Adds reversible, auditable sale cancellation documents.
+Future<void> createSalesCancellationSchema(Database db) async {
+  final salesColumns = await db.rawQuery('PRAGMA table_info(sales)');
+  final salesNames = salesColumns.map((row) => row['name']).toSet();
+  if (!salesNames.contains('cancelled_at')) {
+    await db.execute('ALTER TABLE sales ADD COLUMN cancelled_at TEXT');
+  }
+  if (!salesNames.contains('cancellation_reason')) {
+    await db.execute('ALTER TABLE sales ADD COLUMN cancellation_reason TEXT');
+  }
+
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS sales_cancellations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL UNIQUE,
+      customer_id INTEGER,
+      warehouse_id INTEGER,
+      total_minor INTEGER NOT NULL CHECK (total_minor >= 0),
+      paid_minor INTEGER NOT NULL CHECK (paid_minor >= 0),
+      refunded_minor INTEGER NOT NULL CHECK (refunded_minor >= 0 AND refunded_minor <= paid_minor),
+      reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (sale_id) REFERENCES sales(id),
+      FOREIGN KEY (customer_id) REFERENCES customers(id),
+      FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+    )
+  ''');
+
+  final ledgerSql = await db.rawQuery(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'customer_account_entries'",
+  );
+  final definition = ledgerSql.isEmpty ? '' : ledgerSql.single['sql'] as String;
+  const cancellationTypes = ["'sale_cancel'", "'receipt_reversal'", "'refund_due'"];
+  if (cancellationTypes.any((type) => !definition.contains(type))) {
+    await db.execute('''
+      CREATE TABLE customer_account_entries_v12 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+        entry_type TEXT NOT NULL CHECK (entry_type IN (
+          'sale', 'receipt', 'adjustment', 'return', 'refund',
+          'sale_cancel', 'receipt_reversal', 'refund_due'
+        )),
+        reference_id INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO customer_account_entries_v12
+        (id, customer_id, amount_minor, entry_type, reference_id, note, created_at)
+      SELECT id, customer_id, amount_minor, entry_type, reference_id, note, created_at
+      FROM customer_account_entries
+    ''');
+    await db.execute('DROP TABLE customer_account_entries');
+    await db.execute('ALTER TABLE customer_account_entries_v12 RENAME TO customer_account_entries');
+  }
+
+  await db.insert('schema_migrations', {
+    'version': 12,
     'applied_at': DateTime.now().toUtc().toIso8601String(),
   }, conflictAlgorithm: ConflictAlgorithm.ignore);
 }
