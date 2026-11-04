@@ -11,6 +11,7 @@ import 'data/product_repository.dart';
 import 'data/purchase_repository.dart';
 import 'data/sales_repository.dart';
 import 'data/warehouse_repository.dart';
+import 'features/accounts_page.dart';
 import 'features/branch_warehouse_page.dart';
 import 'features/data_transfer_page.dart';
 import 'features/expenses_page.dart';
@@ -78,6 +79,7 @@ class HomeDashboard extends StatelessWidget {
     (icon: Icons.account_balance_wallet_outlined, title: 'المصروفات والأرباح', subtitle: 'تسجيل المصروفات ومراجعة الملخص'),
     (icon: Icons.backup_outlined, title: 'النسخ الاحتياطي وتصدير البيانات', subtitle: 'حفظ نسخة محلية وتصدير ملفات CSV'),
     (icon: Icons.warehouse_outlined, title: 'الفروع والمخازن', subtitle: 'إدارة الأرصدة والتحويلات والتسويات'),
+    (icon: Icons.account_balance_outlined, title: 'حسابات العملاء والموردين', subtitle: 'كشوف الحساب والتحصيل والسداد'),
   ];
 
   Future<void> _openModule(BuildContext context, int index) async {
@@ -108,6 +110,10 @@ class HomeDashboard extends StatelessWidget {
           3 => ExpensesPage(repository: ExpenseApplicationService(ExpenseRepository(database))),
           4 => DataTransferPage(database: database),
           5 => BranchWarehousePage(store: WarehouseRepository(database)),
+          6 => AccountsPage(
+              accounts: AccountRepository(database),
+              purchases: PurchaseRepository(database),
+            ),
           _ => const SizedBox.shrink(),
         };
 
@@ -124,6 +130,7 @@ class HomeDashboard extends StatelessWidget {
         3 => 'تعذر فتح شاشة المصروفات.',
         4 => 'تعذر فتح أدوات تصدير البيانات.',
         5 => 'تعذر فتح إدارة الفروع والمخازن.',
+        6 => 'تعذر فتح حسابات العملاء والموردين.',
         _ => 'تعذر فتح القسم المطلوب.',
       };
       final operation = switch (index) {
@@ -133,6 +140,7 @@ class HomeDashboard extends StatelessWidget {
         3 => 'expenses.open',
         4 => 'data_transfer.open',
         5 => 'warehouse.open',
+        6 => 'accounts.open',
         _ => 'module.open',
       };
       ScaffoldMessenger.of(context).showSnackBar(
