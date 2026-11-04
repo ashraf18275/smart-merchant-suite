@@ -93,6 +93,9 @@ class SalesRepository implements SalesStore {
         });
       }
       if (paidMinor > total) throw AppException('المبلغ المدفوع أكبر من إجمالي الفاتورة');
+      if (paidMinor < total && customerId == null) {
+        throw AppException('حدد العميل عند ترك أي مبلغ آجل من الفاتورة');
+      }
 
       final createdAt = DateTime.now().toUtc().toIso8601String();
       final saleId = await txn.insert('sales', {
