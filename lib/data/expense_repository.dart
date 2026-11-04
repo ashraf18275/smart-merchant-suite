@@ -54,13 +54,17 @@ class ExpenseRepository implements ExpenseStore {
 
   Future<ProfitSummary> summary({DateTime? from, DateTime? to}) async {
     final bounds = _dateBounds(from, to);
-    final salesWhere = _whereDateRange(from, to, 'created_at');
+    final salesDateWhere = _whereDateRange(from, to, 'created_at');
+    final salesWhere = ' WHERE cancelled_at IS NULL' +
+        (salesDateWhere.isEmpty ? '' : ' AND ' + salesDateWhere.substring(7));
     final sales = await _db.rawQuery(
       'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM sales$salesWhere', bounds);
     final returnWhere = _whereDateRange(from, to, 'created_at');
     final returns = await _db.rawQuery(
       'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM customer_returns$returnWhere', bounds);
-    final costWhere = _whereDateRange(from, to, 's.created_at');
+    final costDateWhere = _whereDateRange(from, to, 's.created_at');
+    final costWhere = ' WHERE s.cancelled_at IS NULL' +
+        (costDateWhere.isEmpty ? '' : ' AND ' + costDateWhere.substring(7));
     final cost = await _db.rawQuery('''
       SELECT COALESCE(SUM((i.quantity * i.unit_cost_minor + 500) / 1000), 0) AS amount
       FROM sale_items i JOIN sales s ON s.id = i.sale_id$costWhere
