@@ -174,6 +174,15 @@ declare
   v_purchase_retry uuid;
   v_purchase_payload_rejected boolean := false;
   v_purchase_stock bigint;
+  v_sale_item_id uuid;
+  v_purchase_item_id uuid;
+  v_sale_return_id uuid;
+  v_sale_return_retry uuid;
+  v_purchase_return_id uuid;
+  v_purchase_return_retry uuid;
+  v_sale_return_payload_rejected boolean := false;
+  v_purchase_return_payload_rejected boolean := false;
+  v_return_stock bigint;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -1198,6 +1207,171 @@ begin
   end;
   if not v_purchase_payload_rejected then
     raise exception 'purchase idempotency failed: mismatched payload was not rejected';
+  end if;
+
+  -- Sales return restores stock, credits the customer account and records the actual refund.
+  select id into v_sale_item_id from public.cloud_sale_items
+  where sale_id = v_sale_one and product_id = '30000000-0000-0000-0000-000000000001';
+  v_sale_return_id := public.create_cloud_sale_return(
+    '20000000-0000-0000-0000-000000000001',
+    v_sale_one,
+    jsonb_build_array(jsonb_build_object(
+      'sale_item_id', v_sale_item_id, 'quantity_scaled', 1000
+    )),
+    50,
+    'card',
+    null,
+    '550e8400-e29b-41d4-a716-446655440060'
+  );
+  v_sale_return_retry := public.create_cloud_sale_return(
+    '20000000-0000-0000-0000-000000000001',
+    v_sale_one,
+    jsonb_build_array(jsonb_build_object(
+      'sale_item_id', v_sale_item_id, 'quantity_scaled', 1000
+    )),
+    50,
+    'card',
+    null,
+    '550e8400-e29b-41d4-a716-446655440060'
+  );
+  if v_sale_return_id is distinct from v_sale_return_retry then
+    raise exception 'sales return idempotency failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_sale_returns
+    where id = v_sale_return_id and total_minor = 100 and refunded_minor = 50
+  ) then
+    raise exception 'sales return valuation/refund amount failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_customer_account_entries
+    where reference_type = 'sale_return' and reference_id = v_sale_return_id
+      and amount_minor = -50
+  ) then
+    raise exception 'sales return customer account net credit failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_sale_return_refunds
+    where return_id = v_sale_return_id and amount_minor = 50
+      and payment_method = 'card' and cash_session_id is null
+  ) then
+    raise exception 'electronic sales refund was not recorded';
+  end if;
+  select quantity_scaled into v_return_stock
+  from public.cloud_product_warehouse_stock
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and warehouse_id = v_default_warehouse_id
+    and product_id = '30000000-0000-0000-0000-000000000001';
+  if v_return_stock < 1000 then
+    raise exception 'sales return did not restore inventory';
+  end if;
+  begin
+    perform public.create_cloud_sale_return(
+      '20000000-0000-0000-0000-000000000001',
+      v_sale_one,
+      jsonb_build_array(jsonb_build_object(
+        'sale_item_id', v_sale_item_id, 'quantity_scaled', 1000
+      )),
+      50,
+      'card',
+      null,
+      '550e8400-e29b-41d4-a716-446655440060'
+    );
+    raise exception 'sales return idempotency accepted a different payload';
+  exception when invalid_parameter_value then
+    v_sale_return_payload_rejected := true;
+  end;
+  if not v_sale_return_payload_rejected then
+    raise exception 'sales return mismatched payload was not rejected';
+  end if;
+
+  -- Purchase return reverses stock and supplier liability, and records supplier refund.
+  select id into v_purchase_item_id from public.cloud_purchase_items
+  where purchase_id = v_purchase_id and product_id = '30000000-0000-0000-0000-000000000001';
+  v_purchase_return_id := public.create_cloud_purchase_return(
+    '20000000-0000-0000-0000-000000000001',
+    v_purchase_id,
+    jsonb_build_array(jsonb_build_object(
+      'purchase_item_id', v_purchase_item_id, 'quantity_scaled', 250
+    )),
+    50,
+    'bank_transfer',
+    null,
+    '550e8400-e29b-41d4-a716-446655440061'
+  );
+  v_purchase_return_retry := public.create_cloud_purchase_return(
+    '20000000-0000-0000-0000-000000000001',
+    v_purchase_id,
+    jsonb_build_array(jsonb_build_object(
+      'purchase_item_id', v_purchase_item_id, 'quantity_scaled', 250
+    )),
+    50,
+    'bank_transfer',
+    null,
+    '550e8400-e29b-41d4-a716-446655440061'
+  );
+  if v_purchase_return_id is distinct from v_purchase_return_retry then
+    raise exception 'purchase return idempotency failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_purchase_returns
+    where id = v_purchase_return_id and total_minor = 250 and refunded_minor = 50
+  ) then
+    raise exception 'purchase return valuation/refund amount failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_supplier_account_entries
+    where reference_type = 'purchase_return' and reference_id = v_purchase_return_id
+      and amount_minor = -200
+  ) then
+    raise exception 'purchase return supplier account net adjustment failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_purchase_return_refunds
+    where return_id = v_purchase_return_id and amount_minor = 50
+      and payment_method = 'bank_transfer' and cash_session_id is null
+  ) then
+    raise exception 'electronic purchase return refund was not recorded';
+  end if;
+  select quantity_scaled into v_return_stock
+  from public.cloud_product_warehouse_stock
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and warehouse_id = v_default_warehouse_id
+    and product_id = '30000000-0000-0000-0000-000000000001';
+  if v_return_stock is null then
+    raise exception 'purchase return stock row missing';
+  end if;
+  if not exists (
+    select 1 from public.cloud_inventory_movements
+    where source_type = 'purchase_return' and source_id = v_purchase_return_id
+      and quantity_delta = -250
+  ) then
+    raise exception 'purchase return inventory reversal was not recorded';
+  end if;
+  begin
+    perform public.create_cloud_purchase_return(
+      '20000000-0000-0000-0000-000000000001',
+      v_purchase_id,
+      jsonb_build_array(jsonb_build_object(
+        'purchase_item_id', v_purchase_item_id, 'quantity_scaled', 250
+      )),
+      50,
+      'bank_transfer',
+      null,
+      '550e8400-e29b-41d4-a716-446655440061'
+    );
+    raise exception 'purchase return idempotency accepted a different payload';
+  exception when invalid_parameter_value then
+    v_purchase_return_payload_rejected := true;
+  end;
+  if not v_purchase_return_payload_rejected then
+    raise exception 'purchase return mismatched payload was not rejected';
+  end if;
+
+  if has_table_privilege(current_user, 'public.cloud_sale_returns', 'INSERT')
+     or has_table_privilege(current_user, 'public.cloud_purchase_return_items', 'DELETE')
+     or has_table_privilege(current_user, 'public.cloud_purchase_return_refunds', 'UPDATE') then
+    raise exception 'security regression: authenticated can directly mutate return records';
   end if;
 
   select coalesce(sum(amount_minor), 0) into v_customer_balance
