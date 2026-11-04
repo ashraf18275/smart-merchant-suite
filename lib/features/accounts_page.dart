@@ -127,9 +127,10 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     if (id == null || _saving) return;
     var amountText = '';
     var note = '';
+    var paymentMethod = PaymentMethod.cash;
     final formKey = GlobalKey<FormState>();
     final isSupplier = _isSupplier;
-    final amount = await showDialog<int>(
+    final result = await showDialog<Map<String, Object?>?>( 
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(isSupplier ? 'تسجيل سداد للمورد' : 'تسجيل تحصيل من العميل'),
@@ -149,6 +150,13 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                 return null;
               },
             ),
+            DropdownButtonFormField<String>(
+              initialValue: paymentMethod,
+              decoration: const InputDecoration(labelText: 'طريقة الدفع'),
+              items: PaymentMethod.labels.entries.map((entry) =>
+                DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+              onChanged: (value) { if (value != null) paymentMethod = value; },
+            ),
             TextField(
               onChanged: (value) => note = value,
               decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)'),
@@ -163,7 +171,10 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           FilledButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(dialogContext, _parseMoney(amountText));
+                Navigator.pop(dialogContext, {
+                  'amount': _parseMoney(amountText)!,
+                  'paymentMethod': paymentMethod,
+                });
               }
             },
             child: const Text('حفظ'),
@@ -171,16 +182,20 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
         ],
       ),
     );
-    if (amount == null) return;
+    if (result == null) return;
+    final amount = result['amount']! as int;
+    final selectedPaymentMethod = result['paymentMethod']! as String;
 
     setState(() => _saving = true);
     try {
       if (isSupplier) {
         await widget.accounts.recordSupplierPayment(
-          supplierId: id, amountMinor: amount, note: note);
+          supplierId: id, amountMinor: amount, note: note,
+          paymentMethod: selectedPaymentMethod);
       } else {
         await widget.accounts.recordCustomerReceipt(
-          customerId: id, amountMinor: amount, note: note);
+          customerId: id, amountMinor: amount, note: note,
+          paymentMethod: selectedPaymentMethod);
       }
       await _loadLedger();
       if (mounted) {
