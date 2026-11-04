@@ -14,6 +14,7 @@ Future<void> createSyncOutboxSchema(Database db) async {
     CREATE TABLE IF NOT EXISTS sync_outbox (
       event_id TEXT PRIMARY KEY,
       operation_id TEXT NOT NULL UNIQUE,
+      business_id TEXT,
       entity_type TEXT NOT NULL CHECK (length(trim(entity_type)) > 0),
       local_entity_id TEXT NOT NULL CHECK (length(trim(local_entity_id)) > 0),
       action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'adjust')),
@@ -41,19 +42,21 @@ Future<void> createSyncOutboxSchema(Database db) async {
 
   await db.execute('''
     CREATE TABLE IF NOT EXISTS sync_entity_map (
+      business_id TEXT NOT NULL,
       entity_type TEXT NOT NULL,
       local_entity_id TEXT NOT NULL,
       remote_entity_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      PRIMARY KEY(entity_type, local_entity_id),
-      UNIQUE(entity_type, remote_entity_id)
+      PRIMARY KEY(business_id, entity_type, local_entity_id),
+      UNIQUE(business_id, entity_type, remote_entity_id)
     )
   ''');
 
   await db.execute('''
     CREATE TABLE IF NOT EXISTS sync_cursors (
-      scope TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      scope TEXT NOT NULL,
       cursor_value TEXT,
       updated_at TEXT NOT NULL
     )
@@ -63,6 +66,7 @@ Future<void> createSyncOutboxSchema(Database db) async {
     CREATE TABLE IF NOT EXISTS sync_conflicts (
       id TEXT PRIMARY KEY,
       event_id TEXT NOT NULL,
+      business_id TEXT,
       entity_type TEXT NOT NULL,
       local_entity_id TEXT NOT NULL,
       conflict_type TEXT NOT NULL,
@@ -77,7 +81,7 @@ Future<void> createSyncOutboxSchema(Database db) async {
 
   await db.execute('''
     CREATE INDEX IF NOT EXISTS idx_sync_conflicts_open
-    ON sync_conflicts(resolved_at, detected_at)
+    ON sync_conflicts(business_id, resolved_at, detected_at)
   ''');
 
   await db.insert(
