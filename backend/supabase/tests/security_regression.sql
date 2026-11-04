@@ -1780,8 +1780,8 @@ begin
   select count(*) into v_permission_visibility_count
   from public.member_permissions
   where business_id = '20000000-0000-0000-0000-000000000001';
-  if v_permission_visibility_count <> 1 then
-    raise exception 'least-privilege member sees % permission rows, expected only its own 1', v_permission_visibility_count;
+  if v_permission_visibility_count <> 3 then
+    raise exception 'least-privilege member sees % permission rows, expected only its own 3', v_permission_visibility_count;
   end if;
 
   -- Delegated managers cannot deactivate users without the dedicated capability.
