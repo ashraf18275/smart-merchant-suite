@@ -1210,13 +1210,14 @@ begin
   v_account_cash_close := public.close_cloud_cash_session(
     '20000000-0000-0000-0000-000000000001',
     v_account_cash_session_id,
-    200,
+    100,
     'إقفال وردية تحصيل وسداد الحسابات',
     '550e8400-e29b-41d4-a716-446655440056'
   );
   if (v_account_cash_close->>'expected_balance_minor')::bigint <> 100
+     or (v_account_cash_close->>'counted_balance_minor')::bigint <> 100
      or (v_account_cash_close->>'difference_minor')::bigint <> 0 then
-    raise exception 'account cash session calculation failed: expected 100 after purchase cash payment, got %', v_account_cash_close;
+    raise exception 'account cash session calculation failed: expected and counted balance should both be 100, got %', v_account_cash_close;
   end if;
   begin
     perform public.record_cloud_supplier_payment(
