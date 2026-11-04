@@ -309,12 +309,59 @@ begin
     raise exception 'warehouse stock failed: expected 3000 scaled units in second warehouse, got %', v_stock;
   end if;
 
+  perform public.adjust_cloud_inventory(
+    '20000000-0000-0000-0000-000000000001',
+    '22000000-0000-0000-0000-000000000001',
+    '23000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    250,
+    'quarter-unit receipt',
+    '50000000-0000-0000-0000-000000000022'
+  );
+
+  v_fractional_sale_one := public.create_cloud_sale(
+    '20000000-0000-0000-0000-000000000001',
+    '22000000-0000-0000-0000-000000000001',
+    '23000000-0000-0000-0000-000000000001',
+    jsonb_build_array(jsonb_build_object(
+      'product_id', '30000000-0000-0000-0000-000000000001',
+      'quantity_scaled', 1250
+    )),
+    125,
+    '50000000-0000-0000-0000-000000000023'
+  );
+
+  v_fractional_sale_two := public.create_cloud_sale(
+    '20000000-0000-0000-0000-000000000001',
+    '22000000-0000-0000-0000-000000000001',
+    '23000000-0000-0000-0000-000000000001',
+    jsonb_build_array(jsonb_build_object(
+      'product_id', '30000000-0000-0000-0000-000000000001',
+      'quantity_scaled', 1250
+    )),
+    125,
+    '50000000-0000-0000-0000-000000000023'
+  );
+
+  if v_fractional_sale_one is distinct from v_fractional_sale_two then
+    raise exception 'fractional sale retry returned a different sale id';
+  end if;
+
+  select quantity_scaled, line_total_minor
+  into v_stock, v_line_total
+  from public.cloud_sale_items
+  where sale_id = v_fractional_sale_one;
+
+  if v_stock <> 1250 or v_line_total <> 125 then
+    raise exception 'fractional sale rounding failed: quantity %, line total %', v_stock, v_line_total;
+  end if;
+
   select stock_quantity into v_stock
   from public.cloud_products
   where id = '30000000-0000-0000-0000-000000000001';
 
-  if v_stock <> 14000 then
-    raise exception 'aggregate stock failed: expected 14000 scaled units after warehouse operations, got %', v_stock;
+  if v_stock <> 13000 then
+    raise exception 'aggregate stock failed: expected 13000 scaled units after fractional warehouse operations, got %', v_stock;
   end if;
 
   select count(*) into v_count from public.cloud_sales
