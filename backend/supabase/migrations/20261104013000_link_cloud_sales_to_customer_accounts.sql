@@ -234,7 +234,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 declare
   v_branch_id uuid;
   v_warehouse_id uuid;
