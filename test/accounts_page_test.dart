@@ -64,7 +64,7 @@ void main() {
 
     await tester.tap(find.text('تسجيل سداد للمورد'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextFormField, 'المبلغ بالجنيه *'), '25.00');
+    await tester.enterText(find.byType(TextFormField).last, '25.00');
     await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
     await tester.pumpAndSettle();
 
