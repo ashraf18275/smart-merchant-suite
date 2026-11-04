@@ -62,7 +62,8 @@ jobs:
           LANGUAGE sql STABLE
           AS $$
             SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
-          $$;
+          $$
+          ;
           SQL
       - name: Apply all migrations in order
         run: |
@@ -73,6 +74,9 @@ jobs:
 
       - name: Run PostgreSQL security regression tests
         run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/security_regression.sql
+
+      - name: Verify cloud product stock read permissions
+        run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/cloud_product_stock_read_permission.sql
 
       - name: Verify legacy quantity migration
         run: |
