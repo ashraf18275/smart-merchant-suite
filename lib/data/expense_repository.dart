@@ -4,6 +4,7 @@ import '../application/ports/expense_store.dart';
 import '../core/app_error.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
+import 'audit_cash_writer.dart';
 
 class ExpenseRepository implements ExpenseStore {
   ExpenseRepository(this._db);
@@ -34,9 +35,30 @@ class ExpenseRepository implements ExpenseStore {
     if (d.isEmpty) throw const AppException('وصف المصروف مطلوب');
     if (c.isEmpty) throw const AppException('تصنيف المصروف مطلوب');
     if (amountMinor <= 0) throw const AppException('قيمة المصروف يجب أن تكون أكبر من صفر');
-    return _db.insert('expenses', {
-      'description': d, 'category': c, 'amount_minor': amountMinor,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
+    return _db.transaction((txn) async {
+      final createdAt = DateTime.now().toUtc().toIso8601String();
+      final expenseId = await txn.insert('expenses', {
+        'description': d, 'category': c, 'amount_minor': amountMinor,
+        'created_at': createdAt,
+      });
+      await writeAuditEvent(txn,
+        action: 'expense_recorded',
+        entityType: 'expense',
+        entityId: expenseId,
+        amountMinor: amountMinor,
+        details: '$c — $d',
+        createdAt: createdAt,
+      );
+      await writeCashMovement(txn,
+        direction: 'out',
+        category: 'expense',
+        amountMinor: amountMinor,
+        sourceType: 'expense',
+        sourceId: expenseId,
+        note: '$c — $d',
+        createdAt: createdAt,
+      );
+      return expenseId;
     });
   }
 
