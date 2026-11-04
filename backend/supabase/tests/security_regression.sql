@@ -183,6 +183,12 @@ declare
   v_sale_return_payload_rejected boolean := false;
   v_purchase_return_payload_rejected boolean := false;
   v_return_stock bigint;
+  v_return_cash_session_id uuid;
+  v_return_cash_close jsonb;
+  v_sale_cash_refund_id uuid;
+  v_purchase_cash_refund_id uuid;
+  v_sale_overreturn_rejected boolean := false;
+  v_purchase_overreturn_rejected boolean := false;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -1366,6 +1372,105 @@ begin
   end;
   if not v_purchase_return_payload_rejected then
     raise exception 'purchase return mismatched payload was not rejected';
+  end if;
+
+  -- Remaining quantities are capped across all returns, including concurrent retry paths.
+  begin
+    perform public.create_cloud_sale_return(
+      '20000000-0000-0000-0000-000000000001',
+      v_sale_one,
+      jsonb_build_array(jsonb_build_object(
+        'sale_item_id', v_sale_item_id, 'quantity_scaled', 1500
+      )),
+      50,
+      'card',
+      null,
+      '550e8400-e29b-41d4-a716-446655440062'
+    );
+    raise exception 'sales return accepted more than the unreturned quantity';
+  exception when check_violation then
+    v_sale_overreturn_rejected := true;
+  end;
+  if not v_sale_overreturn_rejected then
+    raise exception 'sales return remaining quantity guard failed';
+  end if;
+  begin
+    perform public.create_cloud_purchase_return(
+      '20000000-0000-0000-0000-000000000001',
+      v_purchase_id,
+      jsonb_build_array(jsonb_build_object(
+        'purchase_item_id', v_purchase_item_id, 'quantity_scaled', 800
+      )),
+      50,
+      'bank_transfer',
+      null,
+      '550e8400-e29b-41d4-a716-446655440065'
+    );
+    raise exception 'purchase return accepted more than the unreturned quantity';
+  exception when check_violation then
+    v_purchase_overreturn_rejected := true;
+  end;
+  if not v_purchase_overreturn_rejected then
+    raise exception 'purchase return remaining quantity guard failed';
+  end if;
+
+  -- Cash refunds are posted to the correct branch register and included in its closing balance.
+  v_return_cash_session_id := public.open_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    'returns-register',
+    500,
+    'رصيد افتتاحي لاختبار ردود المرتجعات',
+    '550e8400-e29b-41d4-a716-446655440066'
+  );
+  v_sale_cash_refund_id := public.create_cloud_sale_return(
+    '20000000-0000-0000-0000-000000000001',
+    v_sale_one,
+    jsonb_build_array(jsonb_build_object(
+      'sale_item_id', v_sale_item_id, 'quantity_scaled', 1000
+    )),
+    50,
+    'cash',
+    v_return_cash_session_id,
+    '550e8400-e29b-41d4-a716-446655440063'
+  );
+  if not exists (
+    select 1 from public.cloud_cash_movements
+    where cash_session_id = v_return_cash_session_id
+      and direction = 'out' and category = 'sale_return_refund'
+      and amount_minor = 50 and source_type = 'sale_return_refund'
+  ) then
+    raise exception 'cash sales return refund was not posted as an outgoing movement';
+  end if;
+  v_purchase_cash_refund_id := public.create_cloud_purchase_return(
+    '20000000-0000-0000-0000-000000000001',
+    v_purchase_id,
+    jsonb_build_array(jsonb_build_object(
+      'purchase_item_id', v_purchase_item_id, 'quantity_scaled', 750
+    )),
+    50,
+    'cash',
+    v_return_cash_session_id,
+    '550e8400-e29b-41d4-a716-446655440064'
+  );
+  if not exists (
+    select 1 from public.cloud_cash_movements
+    where cash_session_id = v_return_cash_session_id
+      and direction = 'in' and category = 'purchase_return_refund'
+      and amount_minor = 50 and source_type = 'purchase_return_refund'
+  ) then
+    raise exception 'cash purchase return refund was not posted as an incoming movement';
+  end if;
+  v_return_cash_close := public.close_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_return_cash_session_id,
+    500,
+    'إقفال وردية ردود المرتجعات',
+    '550e8400-e29b-41d4-a716-446655440067'
+  );
+  if (v_return_cash_close->>'expected_balance_minor')::bigint <> 500
+     or (v_return_cash_close->>'difference_minor')::bigint <> 0 then
+    raise exception 'return cash refund reconciliation failed: %', v_return_cash_close;
   end if;
 
   if has_table_privilege(current_user, 'public.cloud_sale_returns', 'INSERT')
