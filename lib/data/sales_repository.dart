@@ -162,6 +162,7 @@ class SalesRepository implements SalesStore {
     JOIN warehouses w ON w.id = s.warehouse_id
     JOIN sale_items i ON i.sale_id = s.id
     WHERE i.quantity > COALESCE(i.returned_quantity, 0)
+      AND s.cancelled_at IS NULL
     GROUP BY s.id, c.name, w.name
     ORDER BY s.id DESC
   ''');
@@ -181,6 +182,7 @@ class SalesRepository implements SalesStore {
         LEFT JOIN product_units u ON u.id = p.unit_id
         WHERE i.sale_id = ?
           AND i.quantity > COALESCE(i.returned_quantity, 0)
+          AND s.cancelled_at IS NULL
           AND s.warehouse_id IS NOT NULL
         ORDER BY i.id ASC
       ''', [saleId]);
@@ -205,10 +207,13 @@ class SalesRepository implements SalesStore {
 
     return _db.transaction((txn) async {
       final sales = await txn.query('sales',
-        columns: ['id', 'customer_id', 'warehouse_id'],
+        columns: ['id', 'customer_id', 'warehouse_id', 'cancelled_at'],
         where: 'id = ?', whereArgs: [saleId], limit: 1);
       if (sales.isEmpty) throw AppException('فاتورة البيع غير موجودة');
       final sale = sales.single;
+      if (sale['cancelled_at'] != null) {
+        throw AppException('لا يمكن تسجيل مرتجع على فاتورة ملغاة');
+      }
       final warehouseId = sale['warehouse_id'] as int?;
       if (warehouseId == null) {
         throw AppException('لا يمكن إرجاع فاتورة قديمة لا يحتوي سجلها على مخزن محدد');
