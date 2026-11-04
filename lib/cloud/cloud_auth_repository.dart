@@ -93,17 +93,33 @@ class CloudAuthRepository {
         .single();
     final business = CloudBusiness.fromMap(row);
 
+    final metadataUsername = user.userMetadata['username'];
+    if (metadataUsername is String &&
+        normalizeUsername(metadataUsername) != normalized) {
+      throw AppException('اسم المستخدم لا يطابق الحساب المسجل');
+    }
+
     final member = await _client
         .from('business_members')
         .select('id')
         .eq('business_id', business.id)
         .eq('user_id', user.id)
         .single();
-    await _client.from('member_login_names').insert({
-      'business_id': business.id,
-      'member_id': member['id'],
-      'username': normalized,
-    });
+    // A single Auth identity may own multiple businesses. Its globally unique
+    // username is attached once to the first owner membership, not duplicated
+    // for every additional business.
+    final existingLogin = await _client
+        .from('member_login_names')
+        .select('id')
+        .eq('username', normalized)
+        .maybeSingle();
+    if (existingLogin == null) {
+      await _client.from('member_login_names').insert({
+        'business_id': business.id,
+        'member_id': member['id'],
+        'username': normalized,
+      });
+    }
     return business;
   }
 
