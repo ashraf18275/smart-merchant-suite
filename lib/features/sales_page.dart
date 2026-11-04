@@ -265,6 +265,7 @@ class _SalesPageState extends State<SalesPage> {
     var lines = await _sales.returnableSaleItems(selectedSaleId);
     final quantities = <int, String>{};
     var refundedText = '0';
+    var refundMethod = PaymentMethod.cash;
     var reasonText = '';
     final result = await showDialog<Map<String, Object?>>(
       context: context,
@@ -349,8 +350,17 @@ class _SalesPageState extends State<SalesPage> {
                       onChanged: (value) => refundedText = value,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
-                        labelText: 'المبلغ المسترد نقدًا (جنيه)',
+                        labelText: 'المبلغ المسترد (جنيه)',
                       ),
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: refundMethod,
+                      decoration: const InputDecoration(labelText: 'طريقة رد المبلغ'),
+                      items: PaymentMethod.labels.entries.map((entry) =>
+                        DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                      onChanged: (value) {
+                        if (value != null) setDialogState(() => refundMethod = value);
+                      },
                     ),
                     TextField(
                       onChanged: (value) => reasonText = value,
@@ -414,6 +424,7 @@ class _SalesPageState extends State<SalesPage> {
                     'saleId': selectedSaleId,
                     'items': returnItems,
                     'refundedMinor': refundValue,
+                    'refundMethod': refundMethod,
                     'reason': reasonText.trim(),
                   });
                 },
@@ -432,6 +443,8 @@ class _SalesPageState extends State<SalesPage> {
         items: result['items']! as List<SaleReturnLineInput>,
         refundedMinor: result['refundedMinor']! as int,
         reason: result['reason']! as String,
+        refundMethod: result['refundMethod']! as String,
+        refundMethod: result['refundMethod']! as String,
       );
       await _load();
       if (mounted) {
@@ -453,6 +466,7 @@ class _SalesPageState extends State<SalesPage> {
   Future<void> _cancelSale(SaleRecord sale) async {
     if (sale.isCancelled) return;
     var refundedText = '0';
+    var refundMethod = PaymentMethod.cash;
     var reasonText = '';
     final result = await showDialog<Map<String, Object?>>(
       context: context,
@@ -475,10 +489,19 @@ class _SalesPageState extends State<SalesPage> {
                 TextField(
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
-                    labelText: 'المبلغ الذي سترده نقدًا (جنيه)',
+                    labelText: 'المبلغ المسترد (جنيه)',
                     helperText: 'لا يمكن أن يتجاوز المبلغ المحصل',
                   ),
                   onChanged: (value) => refundedText = value,
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: refundMethod,
+                  decoration: const InputDecoration(labelText: 'طريقة رد المبلغ'),
+                  items: PaymentMethod.labels.entries.map((entry) =>
+                    DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                  onChanged: (value) {
+                    if (value != null) refundMethod = value;
+                  },
                 ),
                 TextField(
                   decoration: const InputDecoration(labelText: 'سبب الإلغاء *'),
@@ -515,6 +538,7 @@ class _SalesPageState extends State<SalesPage> {
               }
               Navigator.pop(dialogContext, {
                 'refundedMinor': refund,
+                'refundMethod': refundMethod,
                 'reason': reasonText.trim(),
               });
             },
