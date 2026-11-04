@@ -24,8 +24,6 @@ abstract final class BackupSchema {
     'suppliers',
     'purchases',
     'purchase_items',
-    'customer_returns',
-    'customer_return_items',
     'supplier_returns',
     'supplier_return_items',
     'customer_returns',
