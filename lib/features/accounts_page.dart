@@ -125,8 +125,8 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
   Future<void> _recordPayment() async {
     final id = _selectedId;
     if (id == null || _saving) return;
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
+    var amountText = '';
+    var note = '';
     final formKey = GlobalKey<FormState>();
     final isSupplier = _isSupplier;
     final amount = await showDialog<int>(
@@ -138,8 +138,8 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('الرصيد المتاح: ${_money(_balance)}'),
             TextFormField(
-              controller: amountController,
               autofocus: true,
+              onChanged: (value) => amountText = value,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'المبلغ بالجنيه *'),
               validator: (value) {
@@ -150,7 +150,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
               },
             ),
             TextField(
-              controller: noteController,
+              onChanged: (value) => note = value,
               decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)'),
             ),
           ]),
@@ -163,7 +163,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           FilledButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(dialogContext, _parseMoney(amountController.text));
+                Navigator.pop(dialogContext, _parseMoney(amountText));
               }
             },
             child: const Text('حفظ'),
@@ -171,9 +171,6 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
         ],
       ),
     );
-    final note = noteController.text;
-    amountController.dispose();
-    noteController.dispose();
     if (amount == null) return;
 
     setState(() => _saving = true);
