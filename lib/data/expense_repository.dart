@@ -57,16 +57,31 @@ class ExpenseRepository implements ExpenseStore {
     final salesWhere = _whereDateRange(from, to, 'created_at');
     final sales = await _db.rawQuery(
       'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM sales$salesWhere', bounds);
+    final returnWhere = _whereDateRange(from, to, 'created_at');
+    final returns = await _db.rawQuery(
+      'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM customer_returns$returnWhere', bounds);
     final costWhere = _whereDateRange(from, to, 's.created_at');
     final cost = await _db.rawQuery('''
       SELECT COALESCE(SUM((i.quantity * i.unit_cost_minor + 500) / 1000), 0) AS amount
       FROM sale_items i JOIN sales s ON s.id = i.sale_id$costWhere
     ''', bounds);
+    final returnCostWhere = _whereDateRange(from, to, 'r.created_at');
+    final returnCost = await _db.rawQuery('''
+      SELECT COALESCE(SUM(i.line_cost_minor), 0) AS amount
+      FROM customer_return_items i
+      JOIN customer_returns r ON r.id = i.customer_return_id$returnCostWhere
+    ''', bounds);
     final expenseWhere = _whereDateRange(from, to, 'created_at');
     final expenses = await _db.rawQuery(
       'SELECT COALESCE(SUM(amount_minor), 0) AS amount FROM expenses$expenseWhere', bounds);
-    return ProfitSummary(salesMinor: sales.single['amount']! as int,
-      costOfGoodsMinor: cost.single['amount']! as int,
-      expensesMinor: expenses.single['amount']! as int);
+    final netSales = (sales.single['amount']! as num).toInt() -
+        (returns.single['amount']! as num).toInt();
+    final netCost = (cost.single['amount']! as num).toInt() -
+        (returnCost.single['amount']! as num).toInt();
+    return ProfitSummary(
+      salesMinor: netSales,
+      costOfGoodsMinor: netCost,
+      expensesMinor: (expenses.single['amount']! as num).toInt(),
+    );
   }
 }
