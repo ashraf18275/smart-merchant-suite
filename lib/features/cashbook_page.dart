@@ -30,21 +30,20 @@ class _CashbookPageState extends State<CashbookPage>
   }
 
   Future<_CashbookData> _load() async {
-    final values = await Future.wait([
-      widget.repository.totals(),
-      widget.repository.movements(),
-      widget.repository.auditEvents(),
-      widget.repository.payments(),
-      widget.repository.currentSession(),
-      widget.repository.sessionHistory(),
-    ]);
+    // Use sequential reads: all repositories share one local SQLite connection.
+    final totals = await widget.repository.totals();
+    final movements = await widget.repository.movements();
+    final events = await widget.repository.auditEvents();
+    final payments = await widget.repository.payments();
+    final currentSession = await widget.repository.currentSession();
+    final sessions = await widget.repository.sessionHistory();
     return _CashbookData(
-      totals: values[0] as Map<String, int>,
-      movements: values[1] as List<Map<String, Object?>>,
-      events: values[2] as List<Map<String, Object?>>,
-      payments: values[3] as List<Map<String, Object?>>,
-      currentSession: values[4] as Map<String, Object?>?,
-      sessions: values[5] as List<Map<String, Object?>>,
+      totals: totals,
+      movements: movements,
+      events: events,
+      payments: payments,
+      currentSession: currentSession,
+      sessions: sessions,
     );
   }
 
