@@ -209,6 +209,19 @@ class _PurchasesPageState extends State<PurchasesPage> {
     }
   }
 
+  Future<void> _createSupplierReturn() async {
+    final returnId = await showDialog<int>(
+      context: context,
+      builder: (_) => _SupplierReturnDialog(repository: widget.purchases),
+    );
+    if (returnId == null || !mounted) return;
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم حفظ مرتجع المورد رقم $returnId وتحديث المخزون والحساب')),
+    );
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)));
@@ -305,6 +318,12 @@ class _PurchasesPageState extends State<PurchasesPage> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _createSupplierReturn,
+                    icon: const Icon(Icons.assignment_return_outlined),
+                    label: const Text('إنشاء مرتجع مورد'),
+                  ),
+                  const SizedBox(height: 12),
                   Row(children: [
                     Expanded(child: DropdownButtonFormField<int>(
                       initialValue: _supplierId,
@@ -454,6 +473,253 @@ class _AddSupplierDialogState extends State<_AddSupplierDialog> {
           }
         },
         child: const Text('حفظ المورد'),
+      ),
+    ],
+  );
+}
+
+
+class _SupplierReturnLineDraft {
+  _SupplierReturnLineDraft(this.data);
+  final Map<String, Object?> data;
+  final quantity = TextEditingController();
+
+  void dispose() => quantity.dispose();
+}
+
+class _SupplierReturnDialog extends StatefulWidget {
+  const _SupplierReturnDialog({required this.repository});
+  final PurchaseRepository repository;
+
+  @override
+  State<_SupplierReturnDialog> createState() => _SupplierReturnDialogState();
+}
+
+class _SupplierReturnDialogState extends State<_SupplierReturnDialog> {
+  final _reason = TextEditingController();
+  List<Map<String, Object?>> _invoices = [];
+  List<_SupplierReturnLineDraft> _lines = [];
+  int? _purchaseId;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvoices();
+  }
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    for (final line in _lines) {
+      line.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadInvoices() async {
+    try {
+      final invoices = await widget.repository.supplierReturnablePurchases();
+      if (!mounted) return;
+      setState(() {
+        _invoices = invoices;
+        _purchaseId = invoices.isEmpty ? null : invoices.first['id'] as int;
+        _loading = false;
+      });
+      if (_purchaseId != null) await _loadLines(_purchaseId!);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = appErrorMessage(error,
+          fallback: 'تعذر تحميل فواتير الشراء القابلة للمرتجع.',
+          operation: 'supplierReturns.invoices');
+      });
+    }
+  }
+
+  Future<void> _loadLines(int purchaseId) async {
+    setState(() => _loading = true);
+    try {
+      final rows = await widget.repository.supplierReturnableItems(purchaseId);
+      if (!mounted) return;
+      for (final line in _lines) {
+        line.dispose();
+      }
+      setState(() {
+        _lines = rows.map(_SupplierReturnLineDraft.new).toList();
+        _loading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = appErrorMessage(error,
+          fallback: 'تعذر تحميل أصناف الفاتورة.',
+          operation: 'supplierReturns.items');
+      });
+    }
+  }
+
+  String _money(int value) =>
+      '${value ~/ 100}.${(value % 100).toString().padLeft(2, '0')} ج.م';
+
+  Future<void> _save() async {
+    final purchaseId = _purchaseId;
+    if (purchaseId == null || _saving) return;
+    if (_reason.text.trim().isEmpty) {
+      setState(() => _error = 'اكتب سبب المرتجع أولًا.');
+      return;
+    }
+    final items = <SupplierReturnLineInput>[];
+    for (final line in _lines) {
+      final data = line.data;
+      final text = line.quantity.text.trim();
+      if (text.isEmpty) continue;
+      final quantity = Quantity.parse(
+        text,
+        allowsFraction: data['allows_fraction'] == 1,
+      );
+      final remaining = (data['quantity']! as num).toInt() -
+          (data['returned_quantity']! as num).toInt();
+      final available = (data['available_quantity']! as num).toInt();
+      if (quantity == null || quantity <= 0) {
+        setState(() => _error = 'أدخل كمية صحيحة للصنف ${data['product_name']}.');
+        return;
+      }
+      if (quantity > remaining) {
+        setState(() => _error = 'كمية ${data['product_name']} تتجاوز المتبقي من الفاتورة.');
+        return;
+      }
+      if (quantity > available) {
+        setState(() => _error = 'المخزون الحالي من ${data['product_name']} لا يكفي للمرتجع.');
+        return;
+      }
+      items.add(SupplierReturnLineInput(
+        purchaseItemId: data['purchase_item_id']! as int,
+        quantity: quantity,
+      ));
+    }
+    if (items.isEmpty) {
+      setState(() => _error = 'أدخل كمية مرتجعة لصنف واحد على الأقل.');
+      return;
+    }
+
+    setState(() { _saving = true; _error = null; });
+    try {
+      final id = await widget.repository.createSupplierReturn(
+        purchaseId: purchaseId,
+        items: items,
+        reason: _reason.text,
+      );
+      if (mounted) Navigator.pop(context, id);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = appErrorMessage(error,
+          fallback: 'تعذر حفظ مرتجع المورد.',
+          operation: 'supplierReturns.create');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('إنشاء مرتجع مورد'),
+    content: SizedBox(
+      width: 520,
+      child: _loading
+          ? const SizedBox(height: 120,
+              child: Center(child: CircularProgressIndicator()))
+          : _error != null && _invoices.isEmpty
+              ? Text(_error!)
+              : _invoices.isEmpty
+                  ? const Text('لا توجد فواتير بها كميات متبقية قابلة للمرتجع.')
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DropdownButtonFormField<int>(
+                          initialValue: _purchaseId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'فاتورة الشراء الأصلية'),
+                          items: [
+                            for (final invoice in _invoices)
+                              DropdownMenuItem(
+                                value: invoice['id']! as int,
+                                child: Text(
+                                  'فاتورة #${invoice['id']} — ${invoice['supplier_name']} — ${_money((invoice['total_minor']! as num).toInt())}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: _saving ? null : (value) {
+                            if (value == null) return;
+                            setState(() => _purchaseId = value);
+                            _loadLines(value);
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        if (_error != null)
+                          Align(alignment: Alignment.centerRight,
+                            child: Text(_error!,
+                              style: TextStyle(color: Theme.of(context).colorScheme.error))),
+                        Flexible(
+                          child: _lines.isEmpty
+                              ? const Center(child: Text('لا توجد أصناف متاحة للمرتجع في هذه الفاتورة.'))
+                              : ListView(
+                                  shrinkWrap: true,
+                                  children: [
+                                    for (final line in _lines)
+                                      Card(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              Text(line.data['product_name']! as String,
+                                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                                              Text(
+                                                'المتبقي من الفاتورة: ${Quantity.format((line.data['quantity']! as num).toInt() - (line.data['returned_quantity']! as num).toInt())} ${line.data['unit_name']} • المتاح بالمخزن: ${Quantity.format((line.data['available_quantity']! as num).toInt())}',
+                                                style: Theme.of(context).textTheme.bodySmall,
+                                              ),
+                                              Text('تكلفة الوحدة: ${_money((line.data['unit_cost_minor']! as num).toInt())}',
+                                                style: Theme.of(context).textTheme.bodySmall),
+                                              TextField(
+                                                controller: line.quantity,
+                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                decoration: InputDecoration(
+                                                  labelText: 'الكمية المرتجعة (${line.data['unit_name']})',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                        ),
+                        TextField(
+                          controller: _reason,
+                          decoration: const InputDecoration(
+                            labelText: 'سبب المرتجع *',
+                            hintText: 'مثال: بضاعة تالفة أو غير مطابقة',
+                          ),
+                        ),
+                      ],
+                    ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: _saving ? null : () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(
+        onPressed: _loading || _saving || _invoices.isEmpty ? null : _save,
+        child: Text(_saving ? 'جارٍ الحفظ...' : 'حفظ المرتجع'),
       ),
     ],
   );
