@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../application/ports/sales_store.dart';
+import 'audit_cash_writer.dart';
 import '../core/app_error.dart';
 import '../domain/sale_record.dart';
 import '../core/quantity.dart';
@@ -118,6 +119,23 @@ class SalesRepository implements SalesStore {
           });
         }
       }
+      await writeAuditEvent(txn,
+        action: 'sale_created',
+        entityType: 'sale',
+        entityId: saleId,
+        amountMinor: total,
+        details: 'warehouse_id=$warehouseId; customer_id=${customerId ?? ''}',
+        createdAt: createdAt,
+      );
+      await writeCashMovement(txn,
+        direction: 'in',
+        category: 'sale_receipt',
+        amountMinor: paidMinor,
+        sourceType: 'sale',
+        sourceId: saleId,
+        note: 'تحصيل نقدي لفاتورة بيع رقم $saleId',
+        createdAt: createdAt,
+      );
       for (final item in items) {
         final productId = item['productId']!;
         final quantity = item['quantity']!;
@@ -349,6 +367,23 @@ class SalesRepository implements SalesStore {
           'created_at': createdAt,
         });
       }
+      await writeAuditEvent(txn,
+        action: 'customer_return_created',
+        entityType: 'customer_return',
+        entityId: returnId,
+        amountMinor: totalMinor,
+        details: 'sale_id=$saleId; refunded_minor=$refundedMinor; reason=$cleanReason',
+        createdAt: createdAt,
+      );
+      await writeCashMovement(txn,
+        direction: 'out',
+        category: 'customer_return_refund',
+        amountMinor: refundedMinor,
+        sourceType: 'customer_return',
+        sourceId: returnId,
+        note: 'رد نقدي عن مرتجع فاتورة رقم $saleId',
+        createdAt: createdAt,
+      );
       if (customerId != null && totalMinor > 0) {
         await txn.insert('customer_account_entries', {
           'customer_id': customerId, 'amount_minor': -totalMinor,
@@ -512,6 +547,23 @@ class SalesRepository implements SalesStore {
         }
       }
 
+      await writeAuditEvent(txn,
+        action: 'sale_cancelled',
+        entityType: 'sale_cancellation',
+        entityId: cancellationId,
+        amountMinor: totalMinor,
+        details: 'sale_id=$saleId; refunded_minor=$refundedMinor; reason=$cleanReason',
+        createdAt: createdAt,
+      );
+      await writeCashMovement(txn,
+        direction: 'out',
+        category: 'sale_cancellation_refund',
+        amountMinor: refundedMinor,
+        sourceType: 'sale_cancellation',
+        sourceId: cancellationId,
+        note: 'رد نقدي عن إلغاء فاتورة رقم $saleId',
+        createdAt: createdAt,
+      );
       await txn.update('sales', {
         'cancelled_at': createdAt,
         'cancellation_reason': cleanReason,
