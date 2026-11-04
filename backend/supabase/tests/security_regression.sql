@@ -1176,8 +1176,8 @@ begin
   );
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
   select count(*) into v_count from public.cloud_customers;
-  if v_count <> 1 then
-    raise exception 'customer tenant isolation failed: member sees % customers, expected 1', v_count;
+  if v_count <> 2 then
+    raise exception 'customer tenant isolation failed: member sees % customers, expected 2 in its own business', v_count;
   end if;
   if has_table_privilege(current_user, 'public.cloud_customer_account_entries', 'INSERT')
      or has_table_privilege(current_user, 'public.cloud_supplier_account_entries', 'UPDATE')
