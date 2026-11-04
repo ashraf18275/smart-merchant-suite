@@ -32,7 +32,7 @@ Future<void> createSyncOutboxSchema(Database db) async {
 
   await db.execute('''
     CREATE INDEX IF NOT EXISTS idx_sync_outbox_pending
-    ON sync_outbox(status, created_at, event_id)
+    ON sync_outbox(business_id, status, created_at, event_id)
   ''');
 
   await db.execute('''
@@ -58,7 +58,8 @@ Future<void> createSyncOutboxSchema(Database db) async {
       business_id TEXT NOT NULL,
       scope TEXT NOT NULL,
       cursor_value TEXT,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(business_id, scope)
     )
   ''');
 
@@ -75,7 +76,8 @@ Future<void> createSyncOutboxSchema(Database db) async {
       detected_at TEXT NOT NULL,
       resolved_at TEXT,
       resolution TEXT,
-      FOREIGN KEY (event_id) REFERENCES sync_outbox(event_id)
+      FOREIGN KEY (event_id) REFERENCES sync_outbox(event_id),
+      UNIQUE(event_id)
     )
   ''');
 
