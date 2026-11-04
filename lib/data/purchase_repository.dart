@@ -227,10 +227,14 @@ class PurchaseRepository {
     required int purchaseId,
     required List<SupplierReturnLineInput> items,
     required String reason,
+    int refundedMinor = 0,
+    String refundMethod = PaymentMethod.cash,
   }) async {
     final cleanReason = reason.trim();
     if (items.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل للمرتجع');
     if (cleanReason.isEmpty) throw AppException('سبب المرتجع مطلوب');
+    if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
+    if (!PaymentMethod.isValid(refundMethod)) throw AppException('طريقة استرداد المبلغ غير مدعومة');
     final seen = <int>{};
     for (final item in items) {
       if (item.quantity <= 0) throw AppException('كمية المرتجع يجب أن تكون أكبر من صفر');
@@ -300,6 +304,9 @@ class PurchaseRepository {
         });
       }
 
+      if (refundedMinor > total) {
+        throw AppException('المبلغ المسترد من المورد لا يمكن أن يتجاوز قيمة المرتجع');
+      }
       final stamp = DateTime.now().toUtc().toIso8601String();
       final returnId = await txn.insert('supplier_returns', {
         'purchase_id': purchaseId,
@@ -360,6 +367,34 @@ class PurchaseRepository {
         'note': 'مرتجع مشتريات رقم $returnId — فاتورة رقم $purchaseId',
         'created_at': stamp,
       });
+      if (refundedMinor > 0) {
+        await txn.insert('supplier_account_entries', {
+          'supplier_id': supplierId,
+          'amount_minor': refundedMinor,
+          'entry_type': 'adjustment',
+          'reference_id': returnId,
+          'note': 'استرداد من المورد عن مرتجع رقم $returnId',
+          'created_at': stamp,
+        });
+        await writeAuditEvent(txn,
+          action: 'supplier_return_refund_received',
+          entityType: 'supplier_return',
+          entityId: returnId,
+          amountMinor: refundedMinor,
+          details: 'payment_method=$refundMethod',
+          createdAt: stamp,
+        );
+        await writeCashMovement(txn,
+          direction: 'in',
+          category: 'supplier_return_refund',
+          amountMinor: refundedMinor,
+          sourceType: 'supplier_return_refund',
+          sourceId: returnId,
+          note: 'استرداد من المورد عن مرتجع رقم $returnId',
+          createdAt: stamp,
+          paymentMethod: refundMethod,
+        );
+      }
       return returnId;
     });
   }
