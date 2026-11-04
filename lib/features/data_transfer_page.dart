@@ -182,7 +182,7 @@ final _legacyV11Tables = <_ExportTable>[
 
  
 // Version 12 adds sale cancellation documents and cancellation status.
-const _legacyV12Tables = <_ExportTable>[
+final _legacyV12Tables = <_ExportTable>[
   ..._legacyV11Tables.where((spec) => spec.table != 'sales'),
   const _ExportTable('فواتير البيع', 'sales', [
     'id', 'total_minor', 'paid_minor', 'warehouse_id', 'customer_id',
