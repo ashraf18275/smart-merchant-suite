@@ -2,6 +2,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
 import 'audit_cash_writer.dart';
+import '../domain/payment_method.dart';
 
 /// Account balances are derived from immutable signed ledger entries.
 /// Positive = customer owes the shop / shop owes supplier.
@@ -32,6 +33,7 @@ class AccountRepository {
     required int supplierId,
     required int amountMinor,
     String? note,
+    String paymentMethod = PaymentMethod.cash,
   }) => _recordPayment(
     table: 'supplier_account_entries',
     ownerColumn: 'supplier_id',
@@ -40,12 +42,14 @@ class AccountRepository {
     entryType: 'payment',
     note: note,
     balanceLabel: 'المستحق للمورد',
+    paymentMethod: paymentMethod,
   );
 
   Future<int> recordCustomerReceipt({
     required int customerId,
     required int amountMinor,
     String? note,
+    String paymentMethod = PaymentMethod.cash,
   }) => _recordPayment(
     table: 'customer_account_entries',
     ownerColumn: 'customer_id',
@@ -54,6 +58,7 @@ class AccountRepository {
     entryType: 'receipt',
     note: note,
     balanceLabel: 'مديونية العميل',
+    paymentMethod: paymentMethod,
   );
 
   Future<int> _recordPayment({
@@ -63,9 +68,11 @@ class AccountRepository {
     required int amountMinor,
     required String entryType,
     required String balanceLabel,
+    required String paymentMethod,
     String? note,
   }) async {
     if (amountMinor <= 0) throw AppException('قيمة الدفعة يجب أن تكون أكبر من صفر');
+    if (!PaymentMethod.isValid(paymentMethod)) throw AppException('طريقة الدفع المحددة غير مدعومة');
     return _db.transaction((txn) async {
       final ownerTable = ownerColumn == 'supplier_id' ? 'suppliers' : 'customers';
       final owner = await txn.query(ownerTable,
@@ -103,6 +110,7 @@ class AccountRepository {
         sourceId: entryId,
         note: note?.trim(),
         createdAt: createdAt,
+        paymentMethod: paymentMethod,
       );
       return entryId;
     });
