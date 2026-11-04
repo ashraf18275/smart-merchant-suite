@@ -1,11 +1,12 @@
 /// Compatibility and referential ordering for full SQLite backups.
 abstract final class BackupSchema {
-  static const currentVersion = 10;
+  static const currentVersion = 11;
 
   static bool supports(int version) => version >= 3 && version <= currentVersion;
   static bool hasPurchaseData(int version) => version >= 8;
   static bool hasAccountData(int version) => version >= 9;
   static bool hasSupplierReturnData(int version) => version >= 10;
+  static bool hasCustomerReturnData(int version) => version >= 11;
 
   /// Every business-data table that a current backup must preserve.
   static const currentTableNames = <String>{
@@ -23,14 +24,20 @@ abstract final class BackupSchema {
     'suppliers',
     'purchases',
     'purchase_items',
+    'customer_returns',
+    'customer_return_items',
     'supplier_returns',
     'supplier_return_items',
+    'customer_returns',
+    'customer_return_items',
     'supplier_account_entries',
     'customer_account_entries',
   };
 
   /// Delete child rows before parent rows while foreign keys are enabled.
   static const restoreDeleteOrder = <String>[
+    'customer_return_items',
+    'customer_returns',
     'supplier_return_items',
     'supplier_returns',
     'inventory_movements',
@@ -69,6 +76,8 @@ abstract final class BackupSchema {
     'purchase_items',
     'supplier_returns',
     'supplier_return_items',
+    'customer_returns',
+    'customer_return_items',
     'supplier_account_entries',
     'customer_account_entries',
   ];
