@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
+import 'package:smart_merchant_suite/data/account_repository.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
@@ -148,10 +149,12 @@ void main() {
     final supplierId = await purchases.addSupplier(name: 'المورد الثاني');
     final warehouseId = (await warehouses.warehouses()).single.id;
 
+    final customerId = await AccountRepository(db).addCustomer(name: 'عميل شراء اختبار');
     await SalesRepository(db).createSale(
       quantities: {productId: 1000},
       paidMinor: 0,
       warehouseId: warehouseId,
+      customerId: customerId,
     );
     await purchases.createPurchase(
       supplierId: supplierId,
@@ -706,10 +709,12 @@ void main() {
       paidMinor: 0,
     );
     final purchaseItemId = (await db.query('purchase_items')).single['id'] as int;
+    final customerId = await AccountRepository(db).addCustomer(name: 'عميل نفاد مخزون');
     await SalesRepository(db).createSale(
       quantities: {productId: 2000},
       paidMinor: 0,
       warehouseId: warehouseId,
+      customerId: customerId,
     );
 
     await expectLater(
