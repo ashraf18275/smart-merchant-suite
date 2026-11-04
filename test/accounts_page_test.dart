@@ -10,7 +10,7 @@ import 'package:smart_merchant_suite/features/accounts_page.dart';
 Future<void> pumpDatabaseResult(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
-  await pumpDatabaseResult(tester);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -42,7 +42,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: AccountsPage(accounts: accounts, purchases: purchases),
     ));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     expect(find.text('حسابات العملاء والموردين'), findsOneWidget);
     expect(find.text('مورد الواجهة'), findsOneWidget);
@@ -50,7 +50,7 @@ void main() {
     expect(find.text('فاتورة مشتريات'), findsOneWidget);
 
     await tester.tap(find.text('العملاء'));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
     expect(find.text('لا توجد حسابات مسجلة في هذا القسم.'), findsOneWidget);
   });
 
@@ -66,13 +66,13 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: AccountsPage(accounts: accounts, purchases: purchases),
     ));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     await tester.tap(find.text('تسجيل سداد للمورد'));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
     await tester.enterText(find.byType(TextFormField).last, '25.00');
     await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
-    await tester.pumpAndSettle();
+    await pumpDatabaseResult(tester);
 
     expect(await accounts.supplierBalance(supplierId), 7500);
     expect(find.text('تم تسجيل سداد المورد'), findsOneWidget);
