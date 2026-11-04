@@ -119,6 +119,17 @@ class _CashbookPageState extends State<CashbookPage>
     child: ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Card(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(
+              'يعرض الصندوق الحركات النقدية المسجلة من تاريخ تحديث النظام. '
+              'العمليات الأقدم محفوظة في فواتيرها وكشوفها، ولم تُحوّل تلقائيًا إلى نقدية حتى لا نفترض وسيلة دفع غير موثقة.',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
         Row(children: [
           Expanded(child: _totalCard('إجمالي المقبوضات', data.totals['incoming']!, Colors.green)),
           const SizedBox(width: 8),
