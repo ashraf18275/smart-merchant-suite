@@ -1,5 +1,8 @@
 -- Expose permission assignments to authorized user managers and add audited
 -- member activation/deactivation with open-register protection.
+-- RLS limits these reads to the owner, user managers, or the member themselves.
+grant select on public.member_permissions to authenticated;
+
 drop policy if exists permissions_select_authorized on public.member_permissions;
 create policy permissions_select_authorized on public.member_permissions
   for select to authenticated
