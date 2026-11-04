@@ -74,4 +74,53 @@ void main() {
     expect(find.text('أدخل كمية لصنف واحد على الأقل'), findsOneWidget);
     expect(await database.query('sales'), isEmpty);
   });
+
+  testWidgets('creates a customer return from the sales screen', (tester) async {
+    final customerId = await accounts.addCustomer(name: 'عميل اختبار المرتجع');
+    await sales.createSale(
+      quantities: {1: 1000},
+      paidMinor: 1500,
+      warehouseId: (await warehouses.warehouses()).single.id,
+      customerId: customerId,
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: SalesPage(
+          products: products,
+          sales: sales,
+          warehouseStore: warehouses,
+          accountRepository: accounts,
+        ),
+      ),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.text('إنشاء مرتجع عميل'));
+    await pumpDatabaseResult(tester);
+    expect(find.text('إنشاء مرتجع عميل'), findsOneWidget);
+    expect(find.textContaining('عميل اختبار المرتجع'), findsOneWidget);
+
+    final quantityField = find.byWidgetPredicate((widget) =>
+      widget is TextFormField &&
+      widget.decoration?.labelText == 'كمية الإرجاع');
+    expect(quantityField, findsOneWidget);
+    await tester.enterText(quantityField, '1');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'سبب المرتجع *'),
+      'تجربة واجهة المرتجع',
+    );
+    await tester.tap(find.text('حفظ المرتجع'));
+    await pumpDatabaseResult(tester);
+
+    expect(await database.query('customer_returns'), hasLength(1));
+    expect((await database.query('customer_returns')).single['total_minor'], 1500);
+    expect((await database.query('sale_items')).single['returned_quantity'], 1000);
+    expect((await productStore.all()).single.stockQuantity, 5000);
+    expect((await database.query('customer_account_entries', orderBy: 'id DESC'))
+      .first['entry_type'], 'return');
+    expect(find.textContaining('تم حفظ مرتجع العميل رقم'), findsOneWidget);
+  });
+
 }
