@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../cloud/cloud_auth_repository.dart';
 import '../cloud/cloud_business.dart';
 import 'cloud_members_page.dart';
+import 'cloud_locations_page.dart';
 
 class CloudLoginPage extends StatefulWidget {
   const CloudLoginPage({super.key, required this.client});
@@ -245,7 +246,19 @@ class _CloudLoginPageState extends State<CloudLoginPage> {
                         leading: const Icon(Icons.store_outlined),
                         title: Text(business.name),
                         subtitle: Text(business.id),
-                        trailing: const Icon(Icons.chevron_left),
+                        trailing: IconButton(
+                          tooltip: 'الفروع والمخازن',
+                          icon: const Icon(Icons.warehouse_outlined),
+                          onPressed: () {
+                            Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => CloudLocationsPage(
+                                client: widget.client,
+                                businessId: business.id,
+                                businessName: business.name,
+                              ),
+                            ));
+                          },
+                        ),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute<void>(
                             builder: (_) => CloudMembersPage(
