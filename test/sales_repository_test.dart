@@ -461,6 +461,30 @@ void main() {
     expect(await accounts.customerBalance(customerId), 0);
   });
 
+  test('does not expose cancelled invoices as returnable and rejects direct return attempts', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+    );
+    final saleItemId = (await db.query('sale_items')).single['id']! as int;
+    await sales.cancelSale(
+      saleId: saleId, refundedMinor: 1500, reason: 'إلغاء قبل المرتجع',
+    );
+    expect(await sales.returnableSales(), isEmpty);
+    await expectLater(
+      sales.createCustomerReturn(
+        saleId: saleId,
+        items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+        refundedMinor: 0,
+        reason: 'محاولة مرتجع بعد الإلغاء',
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('customer_returns'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 5000);
+  });
+
   test('cancels cash sale and stores refund without creating customer ledger entries', () async {
     final saleId = await sales.createSale(
       quantities: {productId: 1000},
