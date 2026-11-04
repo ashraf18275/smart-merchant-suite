@@ -176,7 +176,7 @@ final _tables = <_ExportTable>[
   ]),
   const _ExportTable('بنود مرتجعات العملاء', 'customer_return_items', [
     'id', 'customer_return_id', 'sale_item_id', 'product_id',
-    'quantity', 'unit_price_minor', 'line_total_minor',
+    'quantity', 'unit_price_minor', 'unit_cost_minor', 'line_total_minor', 'line_cost_minor',
   ]),
 ];
 
