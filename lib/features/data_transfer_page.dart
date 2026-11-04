@@ -164,7 +164,7 @@ final _legacyV10Tables = <_ExportTable>[
 ];
 
 // Version 11 adds customer returns and returned sale quantities/value tracking.
-final _tables = <_ExportTable>[
+final _legacyV11Tables = <_ExportTable>[
   ..._legacyV10Tables.where((spec) => spec.table != 'sale_items'),
   const _ExportTable('بنود الفواتير', 'sale_items', [
     'id', 'sale_id', 'product_id', 'quantity', 'returned_quantity',
@@ -177,6 +177,20 @@ final _tables = <_ExportTable>[
   const _ExportTable('بنود مرتجعات العملاء', 'customer_return_items', [
     'id', 'customer_return_id', 'sale_item_id', 'product_id',
     'quantity', 'unit_price_minor', 'unit_cost_minor', 'line_total_minor', 'line_cost_minor',
+  ]),
+];
+
+ 
+// Version 12 adds sale cancellation documents and cancellation status.
+final _tables = <_ExportTable>[
+  ..._legacyV11Tables.where((spec) => spec.table != 'sales'),
+  const _ExportTable('فواتير البيع', 'sales', [
+    'id', 'total_minor', 'paid_minor', 'warehouse_id', 'customer_id',
+    'created_at', 'cancelled_at', 'cancellation_reason',
+  ]),
+  const _ExportTable('إلغاءات فواتير البيع', 'sales_cancellations', [
+    'id', 'sale_id', 'customer_id', 'warehouse_id', 'total_minor',
+    'paid_minor', 'refunded_minor', 'reason', 'created_at',
   ]),
 ];
 
@@ -314,14 +328,16 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 11).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 12).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion >= 11
+      final restoreTables = schemaVersion >= 12
           ? _tables
-          : schemaVersion == 10
+          : schemaVersion == 11
+              ? _legacyV11Tables
+              : schemaVersion == 10
               ? _legacyV10Tables
               : schemaVersion == 9
                   ? _legacyV9Tables
@@ -398,6 +414,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
         data['inventory_movements'] = data['inventory_movements']!.map((row) => {
           ...row, 'warehouse_id': warehouseId,
         }).toList(growable: false);
+      }
+      if (schemaVersion < 12) {
+        data['sales'] = data['sales']!.map((row) => {
+          ...row, 'cancelled_at': null, 'cancellation_reason': null,
+        }).toList(growable: false);
+        data['sales_cancellations'] = [];
       }
       if (schemaVersion < 11) {
         data['sale_items'] = data['sale_items']!.map((row) => {
