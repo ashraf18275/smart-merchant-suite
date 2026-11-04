@@ -84,7 +84,7 @@ jobs:
           LANGUAGE sql STABLE
           AS $auth_uid$
             SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
-          $;
+          $auth_uid$;
           SQL
 
           for migration in backend/supabase/migrations/*.sql; do
