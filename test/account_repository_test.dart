@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/account_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
+import 'package:smart_merchant_suite/domain/payment_method.dart';
 import 'package:smart_merchant_suite/data/purchase_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -74,6 +75,28 @@ void main() {
       throwsA(isA<AppException>()),
     );
     expect(await accounts.customerBalance(customerId), 2500);
+  });
+
+  test('records electronic customer receipt without cash movement', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل بطاقة');
+    await db.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': 6000,
+      'entry_type': 'sale',
+      'created_at': '2026-01-01T10:00:00.000Z',
+    });
+    final entryId = await accounts.recordCustomerReceipt(
+      customerId: customerId,
+      amountMinor: 2000,
+      paymentMethod: PaymentMethod.card,
+    );
+    final payment = (await db.query('payment_records')).single;
+    expect(payment['source_type'], 'customer_receipt');
+    expect(payment['source_id'], entryId);
+    expect(payment['payment_method'], 'card');
+    expect(payment['direction'], 'in');
+    expect(await db.query('cash_transactions'), isEmpty);
+    expect(await accounts.customerBalance(customerId), 4000);
   });
 
   test('rejects empty customer names', () async {
