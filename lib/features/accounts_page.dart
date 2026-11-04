@@ -123,6 +123,152 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _createAccount() async {
+    final isSupplier = _isSupplier;
+    var name = '';
+    var phone = '';
+    var address = '';
+    var openingText = '0.00';
+    var direction = isSupplier ? 'we_owe_supplier' : 'customer_owes';
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<Map<String, Object?>?>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(isSupplier ? 'إضافة مورد جديد' : 'إضافة عميل جديد'),
+          content: Form(
+            key: formKey,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextFormField(
+                autofocus: true,
+                onChanged: (value) => name = value,
+                decoration: InputDecoration(
+                  labelText: isSupplier ? 'اسم المورد *' : 'اسم العميل *',
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'الاسم مطلوب'
+                    : null,
+              ),
+              TextField(
+                onChanged: (value) => phone = value,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'رقم الهاتف'),
+              ),
+              TextField(
+                onChanged: (value) => address = value,
+                decoration: const InputDecoration(labelText: 'العنوان'),
+              ),
+              TextFormField(
+                initialValue: openingText,
+                onChanged: (value) => openingText = value,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'الرصيد الافتتاحي (جنيه)',
+                  helperText: 'اتركه صفرًا إذا لم يوجد رصيد سابق',
+                ),
+                validator: (value) => _parseMoney(value ?? '') == null
+                    ? 'أدخل مبلغًا صحيحًا غير سالب'
+                    : null,
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: direction,
+                decoration: const InputDecoration(labelText: 'طبيعة الرصيد الافتتاحي'),
+                items: isSupplier
+                    ? const [
+                        DropdownMenuItem(
+                          value: 'we_owe_supplier',
+                          child: Text('نحن مدينون للمورد'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'supplier_owes_us',
+                          child: Text('المورد مدين لنا'),
+                        ),
+                      ]
+                    : const [
+                        DropdownMenuItem(
+                          value: 'customer_owes',
+                          child: Text('العميل مدين لنا'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'we_owe_customer',
+                          child: Text('نحن مدينون للعميل'),
+                        ),
+                      ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => direction = value);
+                },
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final amount = _parseMoney(openingText)!;
+                final isDebit = direction == 'customer_owes' ||
+                    direction == 'we_owe_supplier';
+                Navigator.pop(dialogContext, {
+                  'name': name.trim(),
+                  'phone': phone,
+                  'address': address,
+                  'openingBalanceMinor': amount == 0
+                      ? 0
+                      : (isDebit ? amount : -amount),
+                });
+              },
+              child: const Text('حفظ الحساب'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    try {
+      final openingBalance = result['openingBalanceMinor']! as int;
+      final id = isSupplier
+          ? await widget.purchases.addSupplier(
+              name: result['name']! as String,
+              phone: result['phone']! as String,
+              address: result['address']! as String,
+              openingBalanceMinor: openingBalance,
+            )
+          : await widget.accounts.addCustomer(
+              name: result['name']! as String,
+              phone: result['phone']! as String,
+              address: result['address']! as String,
+              openingBalanceMinor: openingBalance,
+            );
+      if (!mounted) return;
+      if (isSupplier) {
+        _supplierId = id;
+      } else {
+        _customerId = id;
+      }
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isSupplier ? 'تمت إضافة المورد ورصيده الافتتاحي' : 'تمت إضافة العميل ورصيده الافتتاحي'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(appErrorMessage(
+            error,
+            fallback: 'تعذر إضافة الحساب.',
+            operation: 'accounts.create',
+          )),
+        ),
+      );
+    }
+  }
+
   Future<void> _recordPayment() async {
     final id = _selectedId;
     if (id == null || _saving) return;
@@ -278,6 +424,12 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                       });
                       _loadLedger();
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _createAccount,
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: Text(_isSupplier ? 'إضافة مورد جديد' : 'إضافة عميل جديد'),
                   ),
                   const SizedBox(height: 12),
                   Card(
