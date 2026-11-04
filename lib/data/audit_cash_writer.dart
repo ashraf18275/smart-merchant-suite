@@ -1,8 +1,3 @@
-import 'package:sqflite_common/sqlite_api.dart';
-
-import '../domain/payment_method.dart';
-
-/// Append-only operational history. Call inside the business transaction.
 Future<void> writeAuditEvent(
   DatabaseExecutor executor, {
   required String action,
@@ -18,7 +13,7 @@ Future<void> writeAuditEvent(
     'entity_id': entityId,
     'amount_minor': amountMinor,
     'details': details,
-    'created_at': stamp,
+    'created_at': createdAt ?? DateTime.now().toUtc().toIso8601String(),
   });
 }
 
@@ -60,6 +55,6 @@ Future<void> writeCashMovement(
     'source_type': sourceType,
     'source_id': sourceId,
     'note': note,
-    'created_at': createdAt ?? DateTime.now().toUtc().toIso8601String(),
+    'created_at': stamp,
   });
 }
