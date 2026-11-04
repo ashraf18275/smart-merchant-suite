@@ -1,0 +1,47 @@
+import 'package:sqflite_common/sqlite_api.dart';
+
+/// Append-only operational history. Call inside the business transaction.
+Future<void> writeAuditEvent(
+  DatabaseExecutor executor, {
+  required String action,
+  required String entityType,
+  int? entityId,
+  int? amountMinor,
+  String? details,
+  String? createdAt,
+}) async {
+  await executor.insert('audit_events', {
+    'action': action,
+    'entity_type': entityType,
+    'entity_id': entityId,
+    'amount_minor': amountMinor,
+    'details': details,
+    'created_at': createdAt ?? DateTime.now().toUtc().toIso8601String(),
+  });
+}
+
+/// Records actual cash received or paid. Zero-value operations are omitted.
+Future<void> writeCashMovement(
+  DatabaseExecutor executor, {
+  required String direction,
+  required String category,
+  required int amountMinor,
+  required String sourceType,
+  int? sourceId,
+  String? note,
+  String? createdAt,
+}) async {
+  if (amountMinor <= 0) return;
+  if (direction != 'in' && direction != 'out') {
+    throw ArgumentError.value(direction, 'direction');
+  }
+  await executor.insert('cash_transactions', {
+    'direction': direction,
+    'category': category,
+    'amount_minor': amountMinor,
+    'source_type': sourceType,
+    'source_id': sourceId,
+    'note': note,
+    'created_at': createdAt ?? DateTime.now().toUtc().toIso8601String(),
+  });
+}
