@@ -93,7 +93,7 @@ class CloudAuthRepository {
         .single();
     final business = CloudBusiness.fromMap(row);
 
-    final metadataUsername = user.userMetadata['username'];
+    final metadataUsername = user.userMetadata?['username'];
     if (metadataUsername is String &&
         normalizeUsername(metadataUsername) != normalized) {
       throw AppException('اسم المستخدم لا يطابق الحساب المسجل');
