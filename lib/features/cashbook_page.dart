@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/cashbook_repository.dart';
+import '../domain/payment_method.dart';
 
 class CashbookPage extends StatefulWidget {
   const CashbookPage({super.key, required this.repository});
@@ -33,11 +34,13 @@ class _CashbookPageState extends State<CashbookPage>
       widget.repository.totals(),
       widget.repository.movements(),
       widget.repository.auditEvents(),
+      widget.repository.payments(),
     ]);
     return _CashbookData(
       totals: values[0] as Map<String, int>,
       movements: values[1] as List<Map<String, Object?>>,
       events: values[2] as List<Map<String, Object?>>,
+      payments: values[3] as List<Map<String, Object?>>,
     );
   }
 
@@ -165,6 +168,40 @@ class _CashbookPageState extends State<CashbookPage>
                 ),
               ),
             ),
+        const SizedBox(height: 18),
+        Text('المدفوعات غير النقدية', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        const Text('تُسجل هنا مدفوعات البطاقات والتحويلات والمحافظ، ولا تدخل في رصيد النقدية الفعلي.'),
+        const SizedBox(height: 8),
+        if (data.payments.where((row) =>
+            row['payment_method'] != PaymentMethod.cash).isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: Text('لا توجد مدفوعات إلكترونية مسجلة بعد.')),
+          )
+        else
+          for (final row in data.payments.where((row) =>
+              row['payment_method'] != PaymentMethod.cash))
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  row['direction'] == 'in' ? Icons.south_west : Icons.north_east,
+                ),
+                title: Text(PaymentMethod.labels[row['payment_method']] ??
+                    row['payment_method']! as String),
+                subtitle: Text('\${_date(row['created_at'])} • \${row['source_type']} #\${row['source_id'] ?? '—'}'
+                    '\${row['note'] == null ? '' : '\n\${row['note']}'}'),
+                isThreeLine: row['note'] != null,
+                trailing: Text(
+                  '\${row['direction'] == 'in' ? '+' : '-'}\${_money(row['amount_minor']! as int)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+      ],
+    ),
+  );
+
       ],
     ),
   );
@@ -227,8 +264,10 @@ class _CashbookData {
     required this.totals,
     required this.movements,
     required this.events,
+    required this.payments,
   });
   final Map<String, int> totals;
   final List<Map<String, Object?>> movements;
   final List<Map<String, Object?>> events;
+  final List<Map<String, Object?>> payments;
 }
