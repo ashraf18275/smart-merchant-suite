@@ -76,6 +76,7 @@ void main() {
       'quantity': 2000,
       'returned_quantity': 500,
       'returned_minor': 125,
+      'returned_cost_minor': 63,
       'unit_price_minor': 250,
       'unit_cost_minor': 125,
       'line_total_minor': 500,
@@ -96,7 +97,9 @@ void main() {
       'product_id': productId,
       'quantity': 500,
       'unit_price_minor': 250,
+      'unit_cost_minor': 125,
       'line_total_minor': 125,
+      'line_cost_minor': 63,
     });
     await database.insert('expenses', {
       'description': 'مصروف اختبار',
@@ -298,7 +301,7 @@ void main() {
     version8['supplier_account_entries'] = [];
     version8['customer_account_entries'] = [];
     version8['sale_items'] = version8['sale_items']!.map((row) => {
-      ...row, 'returned_quantity': 0, 'returned_minor': 0,
+      ...row, 'returned_quantity': 0, 'returned_minor': 0, 'returned_cost_minor': 0,
     }).toList();
     version8['purchase_items'] = version8['purchase_items']!.map((row) => {
       ...row, 'returned_quantity': 0,
