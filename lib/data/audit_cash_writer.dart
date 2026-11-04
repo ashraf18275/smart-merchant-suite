@@ -17,7 +17,8 @@ Future<void> writeAuditEvent(
   });
 }
 
-/// Records actual cash received or paid. Zero-value operations are omitted.
+/// Records a settlement method and mirrors physical cash into the drawer journal.
+/// Zero-value operations are omitted; unpaid credit is not a payment record.
 Future<void> writeCashMovement(
   DatabaseExecutor executor, {
   required String direction,
