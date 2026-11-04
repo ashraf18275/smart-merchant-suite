@@ -170,6 +170,10 @@ declare
   v_cash_closed_movement_rejected boolean := false;
   v_cash_movement_payload_rejected boolean := false;
   v_unauthorized_cash_open_rejected boolean := false;
+  v_purchase_id uuid;
+  v_purchase_retry uuid;
+  v_purchase_payload_rejected boolean := false;
+  v_purchase_stock bigint;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -1085,13 +1089,117 @@ begin
   ) then
     raise exception 'cash supplier payment was not posted to the register';
   end if;
+  -- Purchase invoice, stock receipt, supplier liability and cash payment are atomic/idempotent.
+  v_purchase_id := public.create_cloud_purchase_with_account(
+    '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    v_default_warehouse_id,
+    v_supplier_id,
+    jsonb_build_array(jsonb_build_object(
+      'product_id', '30000000-0000-0000-0000-000000000001',
+      'quantity_scaled', 1000,
+      'unit_cost_minor', 1000
+    )),
+    100,
+    'cash',
+    v_account_cash_session_id,
+    '550e8400-e29b-41d4-a716-446655440057'
+  );
+  v_purchase_retry := public.create_cloud_purchase_with_account(
+    '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    v_default_warehouse_id,
+    v_supplier_id,
+    jsonb_build_array(jsonb_build_object(
+      'product_id', '30000000-0000-0000-0000-000000000001',
+      'quantity_scaled', 1000,
+      'unit_cost_minor', 1000
+    )),
+    100,
+    'cash',
+    v_account_cash_session_id,
+    '550e8400-e29b-41d4-a716-446655440057'
+  );
+  if v_purchase_id is distinct from v_purchase_retry then
+    raise exception 'purchase idempotency failed: retry returned a different purchase';
+  end if;
+  if not exists (
+    select 1 from public.cloud_purchases
+    where id = v_purchase_id and business_id = '20000000-0000-0000-0000-000000000001'
+      and total_minor = 1000 and paid_minor = 100 and due_minor = 900
+  ) then
+    raise exception 'purchase totals failed: expected total 1000, paid 100, due 900';
+  end if;
+  if not exists (
+    select 1 from public.cloud_purchase_items
+    where purchase_id = v_purchase_id and product_id = '30000000-0000-0000-0000-000000000001'
+      and quantity_scaled = 1000 and unit_cost_minor = 1000 and line_total_minor = 1000
+  ) then
+    raise exception 'purchase item was not stored with scaled quantity and cost';
+  end if;
+  if not exists (
+    select 1 from public.cloud_inventory_movements
+    where source_type = 'purchase' and source_id = v_purchase_id
+      and quantity_delta = 1000
+  ) then
+    raise exception 'purchase stock movement was not recorded';
+  end if;
+  select quantity_scaled into v_purchase_stock
+  from public.cloud_product_warehouse_stock
+  where business_id = '20000000-0000-0000-0000-000000000001'
+    and warehouse_id = v_default_warehouse_id
+    and product_id = '30000000-0000-0000-0000-000000000001';
+  if v_purchase_stock is null or v_purchase_stock < 1000 then
+    raise exception 'purchase stock was not received into the selected warehouse';
+  end if;
+  if not exists (
+    select 1 from public.cloud_purchase_payments
+    where purchase_id = v_purchase_id and amount_minor = 100
+      and payment_method = 'cash' and cash_session_id = v_account_cash_session_id
+  ) then
+    raise exception 'cash purchase payment was not recorded against the register';
+  end if;
+  if not exists (
+    select 1 from public.cloud_cash_movements
+    where cash_session_id = v_account_cash_session_id
+      and direction = 'out' and category = 'purchase_payment'
+      and amount_minor = 100
+      and source_type = 'purchase_payment'
+      and source_id = (select id from public.cloud_purchase_payments where purchase_id = v_purchase_id)
+  ) then
+    raise exception 'cash purchase payment was not posted to the register';
+  end if;
   select coalesce(sum(amount_minor), 0) into v_supplier_balance
   from public.cloud_supplier_account_entries
   where business_id = '20000000-0000-0000-0000-000000000001'
     and supplier_id = v_supplier_id;
-  if v_supplier_balance <> 2000 then
-    raise exception 'supplier cash payment balance failed: expected 2000, got %', v_supplier_balance;
+  if v_supplier_balance <> 2900 then
+    raise exception 'purchase supplier liability failed: expected 2900, got %', v_supplier_balance;
   end if;
+  begin
+    perform public.create_cloud_purchase_with_account(
+      '20000000-0000-0000-0000-000000000001',
+      v_default_branch_id,
+      v_default_warehouse_id,
+      v_supplier_id,
+      jsonb_build_array(jsonb_build_object(
+        'product_id', '30000000-0000-0000-0000-000000000001',
+        'quantity_scaled', 2000,
+        'unit_cost_minor', 1000
+      )),
+      100,
+      'cash',
+      v_account_cash_session_id,
+      '550e8400-e29b-41d4-a716-446655440057'
+    );
+    raise exception 'purchase idempotency failed: reused key accepted a different payload';
+  exception when invalid_parameter_value then
+    v_purchase_payload_rejected := true;
+  end;
+  if not v_purchase_payload_rejected then
+    raise exception 'purchase idempotency failed: mismatched payload was not rejected';
+  end if;
+
   select coalesce(sum(amount_minor), 0) into v_customer_balance
   from public.cloud_customer_account_entries
   where business_id = '20000000-0000-0000-0000-000000000001'
@@ -1106,9 +1214,9 @@ begin
     'إقفال وردية تحصيل وسداد الحسابات',
     '550e8400-e29b-41d4-a716-446655440056'
   );
-  if (v_account_cash_close->>'expected_balance_minor')::bigint <> 200
+  if (v_account_cash_close->>'expected_balance_minor')::bigint <> 100
      or (v_account_cash_close->>'difference_minor')::bigint <> 0 then
-    raise exception 'account cash session calculation failed: expected 200, got %', v_account_cash_close;
+    raise exception 'account cash session calculation failed: expected 100 after purchase cash payment, got %', v_account_cash_close;
   end if;
   begin
     perform public.record_cloud_supplier_payment(
