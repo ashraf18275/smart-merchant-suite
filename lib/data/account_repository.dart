@@ -10,15 +10,41 @@ class AccountRepository {
   AccountRepository(this._db);
   final Database _db;
 
-  Future<int> addCustomer({required String name, String? phone, String? address}) async {
+  Future<int> addCustomer({
+    required String name,
+    String? phone,
+    String? address,
+    int openingBalanceMinor = 0,
+  }) async {
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw AppException('اسم العميل مطلوب');
-    return _db.insert('customers', {
-      'name': cleanName,
-      'phone': _optional(phone),
-      'address': _optional(address),
-      'is_active': 1,
-      'created_at': _now(),
+    return _db.transaction((txn) async {
+      final stamp = _now();
+      final customerId = await txn.insert('customers', {
+        'name': cleanName,
+        'phone': _optional(phone),
+        'address': _optional(address),
+        'is_active': 1,
+        'created_at': stamp,
+      });
+      if (openingBalanceMinor != 0) {
+        await txn.insert('customer_account_entries', {
+          'customer_id': customerId,
+          'amount_minor': openingBalanceMinor,
+          'entry_type': 'adjustment',
+          'note': 'رصيد افتتاحي عند إنشاء الحساب',
+          'created_at': stamp,
+        });
+      }
+      await writeAuditEvent(txn,
+        action: 'customer_created',
+        entityType: 'customer',
+        entityId: customerId,
+        amountMinor: openingBalanceMinor,
+        details: 'opening_balance_minor=' + openingBalanceMinor.toString(),
+        createdAt: stamp,
+      );
+      return customerId;
     });
   }
 
