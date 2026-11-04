@@ -210,6 +210,8 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     'payment' => 'سداد للمورد',
     'sale' => 'فاتورة بيع',
     'receipt' => 'تحصيل من العميل',
+    'return' => 'مرتجع بيع',
+    'refund' => 'رد نقدي للعميل',
     'adjustment' => 'تسوية حساب',
     _ => 'حركة حساب',
   };
