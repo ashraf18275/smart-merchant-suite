@@ -70,6 +70,7 @@ jobs:
   build-android:
     name: Build Android (only after Flutter CI passes)
     needs: analyze-and-test
+    timeout-minutes: 60
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-release]'))
     runs-on: ubuntu-latest
     steps:
@@ -129,6 +130,7 @@ jobs:
   build-windows:
     name: Build Windows (only after Flutter CI passes)
     needs: analyze-and-test
+    timeout-minutes: 60
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-release]'))
     runs-on: windows-latest
     steps:
