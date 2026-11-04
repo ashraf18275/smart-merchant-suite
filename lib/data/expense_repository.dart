@@ -4,6 +4,7 @@ import '../application/ports/expense_store.dart';
 import '../core/app_error.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
+import '../domain/payment_method.dart';
 import 'audit_cash_writer.dart';
 
 class ExpenseRepository implements ExpenseStore {
@@ -30,11 +31,12 @@ class ExpenseRepository implements ExpenseStore {
     return clauses.isEmpty ? '' : ' WHERE ${clauses.join(' AND ')}';
   }
 
-  Future<int> add({required String description, required String category, required int amountMinor}) async {
+  Future<int> add({required String description, required String category, required int amountMinor, String paymentMethod = PaymentMethod.cash}) async {
     final d = description.trim(), c = category.trim();
     if (d.isEmpty) throw const AppException('وصف المصروف مطلوب');
     if (c.isEmpty) throw const AppException('تصنيف المصروف مطلوب');
     if (amountMinor <= 0) throw const AppException('قيمة المصروف يجب أن تكون أكبر من صفر');
+    if (!PaymentMethod.isValid(paymentMethod)) throw const AppException('طريقة الدفع المحددة غير مدعومة');
     return _db.transaction((txn) async {
       final createdAt = DateTime.now().toUtc().toIso8601String();
       final expenseId = await txn.insert('expenses', {
@@ -57,6 +59,7 @@ class ExpenseRepository implements ExpenseStore {
         sourceId: expenseId,
         note: '$c — $d',
         createdAt: createdAt,
+        paymentMethod: paymentMethod,
       );
       return expenseId;
     });
