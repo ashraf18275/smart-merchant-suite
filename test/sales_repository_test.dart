@@ -334,6 +334,56 @@ void main() {
   });
 
 
+  test('journals sale receipts, customer refunds and invoice cancellations', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل دفتر الصندوق');
+    final saleId = await sales.createSale(
+      quantities: {productId: 2000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
+    var cash = await db.query('cash_transactions');
+    expect(cash, hasLength(1));
+    expect(cash.single['direction'], 'in');
+    expect(cash.single['amount_minor'], 1500);
+    expect((await db.query('audit_events')).single['action'], 'sale_created');
+
+    final saleItemId = (await db.query('sale_items')).single['id']! as int;
+    await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 300,
+      reason: 'رد جزء من المشتريات',
+    );
+    cash = await db.query('cash_transactions', orderBy: 'id ASC');
+    expect(cash, hasLength(2));
+    expect(cash.last['direction'], 'out');
+    expect(cash.last['category'], 'customer_return_refund');
+    expect(cash.last['amount_minor'], 300);
+    expect((await db.query('audit_events')).map((row) => row['action']),
+      ['sale_created', 'customer_return_created']);
+
+    // Cancellation is intentionally rejected after a return; verify its own
+    // cash and audit entries on a separate untouched invoice.
+    final secondSaleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 700,
+      warehouseId: warehouseId,
+      customerId: customerId,
+    );
+    await sales.cancelSale(
+      saleId: secondSaleId,
+      refundedMinor: 500,
+      reason: 'إلغاء دون مرتجع سابق',
+    );
+    cash = await db.query('cash_transactions', orderBy: 'id ASC');
+    expect(cash, hasLength(4));
+    expect(cash.last['direction'], 'out');
+    expect(cash.last['category'], 'sale_cancellation_refund');
+    expect(cash.last['amount_minor'], 500);
+    expect((await db.query('audit_events')).last['action'], 'sale_cancelled');
+  });
+
   test('cancels customer invoice once, restores stock, reverses ledger and records refund due', () async {
     final customerId = await accounts.addCustomer(name: 'عميل إلغاء');
     final saleId = await sales.createSale(
