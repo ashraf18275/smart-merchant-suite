@@ -73,7 +73,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final suppliers = await widget.purchases.suppliers(includeInactive: true);
+      final suppliers = await widget.purchases.suppliers();
       final customers = await widget.accounts.customers();
       if (!mounted) return;
       setState(() {
