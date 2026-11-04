@@ -89,7 +89,7 @@ void main() {
     await pumpDatabaseResult(tester);
 
     expect(find.text('رصيد لنا لدى المورد'), findsOneWidget);
-    expect(find.text('-45.00 ج.م'), findsOneWidget);
+    expect(find.text('-45.00 ج.م'), findsNWidgets(2));
     final paymentButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'تسجيل سداد للمورد'),
     );
