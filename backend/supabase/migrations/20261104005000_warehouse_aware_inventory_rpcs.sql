@@ -175,6 +175,12 @@ begin
     raise exception 'product unavailable' using errcode = '23514';
   end if;
 
+  insert into public.cloud_product_warehouse_stock (
+    business_id, branch_id, warehouse_id, product_id, quantity
+  ) values (
+    p_business_id, p_branch_id, p_warehouse_id, p_product_id, 0
+  ) on conflict (business_id, warehouse_id, product_id) do nothing;
+
   update public.cloud_product_warehouse_stock
   set quantity = quantity + p_quantity_delta, updated_at = now()
   where business_id = p_business_id and branch_id = p_branch_id
