@@ -19,7 +19,7 @@ declare
 begin
   if auth.uid() is null
      or p_business_id is null
-     or not public.has_business_permission(p_business_id, 'settings.edit') then
+     or not public.has_business_permission(p_business_id, 'branches.manage') then
     raise exception 'branch management is not allowed' using errcode = '42501';
   end if;
   if length(v_name) < 1 or length(v_name) > 120
@@ -79,7 +79,7 @@ begin
   if auth.uid() is null
      or p_business_id is null
      or p_branch_id is null
-     or not public.has_business_permission(p_business_id, 'settings.edit') then
+     or not public.has_business_permission(p_business_id, 'warehouses.manage') then
     raise exception 'warehouse management is not allowed' using errcode = '42501';
   end if;
   if length(v_name) < 1 or length(v_name) > 120 then
@@ -137,7 +137,7 @@ begin
      or p_business_id is null
      or p_warehouse_id is null
      or p_is_active is null
-     or not public.has_business_permission(p_business_id, 'settings.edit') then
+     or not public.has_business_permission(p_business_id, 'warehouses.manage') then
     raise exception 'warehouse management is not allowed' using errcode = '42501';
   end if;
 
@@ -215,7 +215,7 @@ begin
      or p_business_id is null
      or p_branch_id is null
      or p_is_active is null
-     or not public.has_business_permission(p_business_id, 'settings.edit') then
+     or not public.has_business_permission(p_business_id, 'branches.manage') then
     raise exception 'branch management is not allowed' using errcode = '42501';
   end if;
 
