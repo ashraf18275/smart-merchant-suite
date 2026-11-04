@@ -189,7 +189,7 @@ class _CashbookPageState extends State<CashbookPage>
                 ),
                 title: Text(PaymentMethod.labels[row['payment_method']] ??
                     row['payment_method']! as String),
-                subtitle: Text('\${_date(row['created_at'])} • \${row['source_type']} #\${row['source_id'] ?? '—'}'
+                subtitle: Text('${_date(row['created_at'])} • \${row['source_type']} #\${row['source_id'] ?? '—'}'
                     '\${row['note'] == null ? '' : '\n\${row['note']}'}'),
                 isThreeLine: row['note'] != null,
                 trailing: Text(
@@ -198,10 +198,6 @@ class _CashbookPageState extends State<CashbookPage>
                 ),
               ),
             ),
-      ],
-    ),
-  );
-
       ],
     ),
   );
