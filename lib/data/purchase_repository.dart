@@ -3,6 +3,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 import '../core/app_error.dart';
 import 'audit_cash_writer.dart';
 import '../core/quantity.dart';
+import '../domain/payment_method.dart';
 
 class PurchaseLineInput {
   const PurchaseLineInput({
@@ -57,9 +58,11 @@ class PurchaseRepository {
     required int warehouseId,
     required List<PurchaseLineInput> items,
     required int paidMinor,
+    String paymentMethod = PaymentMethod.cash,
   }) async {
     if (items.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل');
     if (paidMinor < 0) throw AppException('المبلغ المدفوع غير صحيح');
+    if (!PaymentMethod.isValid(paymentMethod)) throw AppException('طريقة الدفع المحددة غير مدعومة');
 
     return _db.transaction((txn) async {
       final suppliers = await txn.query('suppliers',
@@ -156,8 +159,9 @@ class PurchaseRepository {
         amountMinor: paidMinor,
         sourceType: 'purchase',
         sourceId: purchaseId,
-        note: 'سداد نقدي عند فاتورة مشتريات رقم $purchaseId',
+        note: 'سداد عند فاتورة مشتريات رقم $purchaseId',
         createdAt: stamp,
+        paymentMethod: paymentMethod,
       );
       for (final item in prepared) {
         final productId = item['productId']!;
