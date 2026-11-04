@@ -1,11 +1,13 @@
 import '../../domain/expense_record.dart';
 import '../../domain/profit_summary.dart';
+import '../../domain/payment_method.dart';
 
 abstract interface class ExpenseService {
   Future<int> add({
     required String description,
     required String category,
     required int amountMinor,
+    String paymentMethod = PaymentMethod.cash,
   });
 
   Future<List<ExpenseRecord>> all({DateTime? from, DateTime? to});
