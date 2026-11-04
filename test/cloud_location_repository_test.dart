@@ -72,12 +72,35 @@ void main() {
       expect(workspace.canManageWarehouses, isTrue);
     });
 
-    test('member without location view permissions is denied', () {
+    test('operational viewers can read locations for selectors without managing them', () {
+      const operationalPermissions = [
+        'inventory.view',
+        'sales.create',
+        'products.view',
+        'purchases.view',
+        'purchases.create',
+      ];
+
+      for (final permission in operationalPermissions) {
+        final workspace = CloudLocationWorkspace(
+          branches: const [],
+          warehouses: const [],
+          actorIsOwner: false,
+          permissions: {permission},
+        );
+
+        expect(workspace.canView, isTrue, reason: permission);
+        expect(workspace.canManageBranches, isFalse, reason: permission);
+        expect(workspace.canManageWarehouses, isFalse, reason: permission);
+      }
+    });
+
+    test('member without any RLS location read permission is denied', () {
       const workspace = CloudLocationWorkspace(
         branches: [],
         warehouses: [],
         actorIsOwner: false,
-        permissions: {'products.view'},
+        permissions: {'customers.view', 'reports.view'},
       );
 
       expect(workspace.canView, isFalse);
