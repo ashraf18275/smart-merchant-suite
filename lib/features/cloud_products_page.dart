@@ -5,7 +5,7 @@ import '../cloud/cloud_location_repository.dart';
 import '../cloud/cloud_product_repository.dart';
 import '../core/quantity.dart';
 
-class CloudProductsPage extends StatefulWidget {
+// Cloud catalogue presentation remains intentionally read-only until sync is verified.\nclass CloudProductsPage extends StatefulWidget {
   const CloudProductsPage({
     super.key,
     required this.client,
