@@ -11,14 +11,14 @@ void main() {
       expect(
         const CloudConfig(
           url: 'https://example.supabase.co',
-          anonKey: '',
+          publishableKey: '',
         ).isConfigured,
         isFalse,
       );
       expect(
         const CloudConfig(
           url: 'not-a-url',
-          anonKey: 'public-key',
+          publishableKey: 'public-key',
         ).isConfigured,
         isFalse,
       );
@@ -28,7 +28,7 @@ void main() {
       expect(
         const CloudConfig(
           url: 'https://example.supabase.co',
-          anonKey: 'public-anon-key',
+          publishableKey: 'public-anon-key',
         ).isConfigured,
         isTrue,
       );
@@ -38,14 +38,14 @@ void main() {
       expect(
         const CloudConfig(
           url: 'http://localhost:54321',
-          anonKey: 'public-anon-key',
+          publishableKey: 'public-anon-key',
         ).isConfigured,
         isTrue,
       );
       expect(
         const CloudConfig(
           url: 'http://192.168.1.20:54321',
-          anonKey: 'public-anon-key',
+          publishableKey: 'public-anon-key',
         ).isConfigured,
         isFalse,
       );
