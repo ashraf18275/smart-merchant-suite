@@ -875,7 +875,7 @@ begin
   begin
     perform public.record_cloud_customer_receipt(
       '20000000-0000-0000-0000-000000000001', v_customer_id, 1600,
-      'cash', 'تحصيل أكبر من الرصيد', '50000000-0000-0000-0000-000000000035'
+      'cash', 'تحصيل أكبر من الرصيد', '550e8400-e29b-41d4-a716-446655440035'
     );
     raise exception 'customer balance regression: overpayment was accepted';
   exception when check_violation then
@@ -887,7 +887,7 @@ begin
 
   v_supplier_payment_id := public.record_cloud_supplier_payment(
     '20000000-0000-0000-0000-000000000001', v_supplier_id, 1500,
-    'bank_transfer', 'سداد تحويل', '50000000-0000-0000-0000-000000000036'
+    'bank_transfer', 'سداد تحويل', '550e8400-e29b-41d4-a716-446655440036'
   );
   select coalesce(sum(amount_minor), 0) into v_supplier_balance
   from public.cloud_supplier_account_entries
@@ -907,7 +907,7 @@ begin
   begin
     perform public.record_cloud_supplier_payment(
       '20000000-0000-0000-0000-000000000001', v_supplier_id, 3000,
-      'cash', 'سداد أكبر من الرصيد', '50000000-0000-0000-0000-000000000037'
+      'cash', 'سداد أكبر من الرصيد', '550e8400-e29b-41d4-a716-446655440037'
     );
     raise exception 'supplier balance regression: overpayment was accepted';
   exception when check_violation then
@@ -922,7 +922,7 @@ begin
   v_customer_b_id := public.create_cloud_customer(
     '20000000-0000-0000-0000-000000000002',
     'عميل النشاط الثاني', null, null, 0,
-    '50000000-0000-0000-0000-000000000038'
+    '550e8400-e29b-41d4-a716-446655440038'
   );
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
   select count(*) into v_count from public.cloud_customers;
