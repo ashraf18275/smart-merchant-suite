@@ -132,6 +132,24 @@ void main() {
       'reason': 'طلب إلغاء تجريبي',
       'created_at': stamp,
     });
+    await database.insert('audit_events', {
+      'action': 'sale_created',
+      'entity_type': 'sale',
+      'entity_id': saleId,
+      'amount_minor': 500,
+      'details': 'اختبار استعادة',
+      'actor_label': 'النظام المحلي',
+      'created_at': stamp,
+    });
+    await database.insert('cash_transactions', {
+      'direction': 'in',
+      'category': 'sale_receipt',
+      'amount_minor': 200,
+      'source_type': 'sale',
+      'source_id': saleId,
+      'note': 'تحصيل تجريبي',
+      'created_at': stamp,
+    });
     await database.insert('expenses', {
       'description': 'مصروف اختبار',
       'category': 'تشغيل',
