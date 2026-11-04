@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
+import 'package:smart_merchant_suite/domain/payment_method.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -44,6 +45,21 @@ void main() {
     expect(audit['action'], 'expense_recorded');
     expect(audit['entity_id'], id);
     expect(audit['amount_minor'], 25000);
+  });
+
+  test('records wallet expense payment without cash outflow', () async {
+    final id = await expenses.add(
+      description: 'شراء إلكتروني',
+      category: 'تشغيل',
+      amountMinor: 2500,
+      paymentMethod: PaymentMethod.wallet,
+    );
+    final payment = (await db.query('payment_records')).single;
+    expect(payment['source_type'], 'expense');
+    expect(payment['source_id'], id);
+    expect(payment['payment_method'], 'wallet');
+    expect(payment['direction'], 'out');
+    expect(await db.query('cash_transactions'), isEmpty);
   });
 
   test('rolls back expense and audit when cash journal write fails', () async {
