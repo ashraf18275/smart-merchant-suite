@@ -69,10 +69,25 @@ void main() {
     expect(await db.query('customer_account_entries'), isEmpty);
   });
 
+  test('rejects unpaid sale without a customer and preserves stock', () async {
+    await expectLater(
+      sales.createSale(
+        quantities: {productId: 1000},
+        paidMinor: 0,
+        warehouseId: warehouseId,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('sales'), isEmpty);
+    expect(await db.query('sale_items'), isEmpty);
+    expect(await db.query('customer_account_entries'), isEmpty);
+    expect((await products.all()).single.stockQuantity, 5000);
+  });
+
   test('records card settlement without adding a cash drawer movement', () async {
     final saleId = await sales.createSale(
       quantities: {productId: 1000},
-      paidMinor: 500,
+      paidMinor: 1500,
       warehouseId: warehouseId,
       paymentMethod: PaymentMethod.card,
     );
@@ -482,10 +497,12 @@ void main() {
   });
 
   test('rejects cancellation refund above amount collected', () async {
+    final customerId = await accounts.addCustomer(name: 'عميل اختبار رد مبلغ');
     final saleId = await sales.createSale(
       quantities: {productId: 1000},
       paidMinor: 1000,
       warehouseId: warehouseId,
+      customerId: customerId,
     );
     await expectLater(
       sales.cancelSale(
