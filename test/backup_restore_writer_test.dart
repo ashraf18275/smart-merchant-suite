@@ -150,6 +150,15 @@ void main() {
       'note': 'تحصيل تجريبي',
       'created_at': stamp,
     });
+    await database.insert('payment_records', {
+      'direction': 'in',
+      'payment_method': 'card',
+      'amount_minor': 200,
+      'source_type': 'sale',
+      'source_id': saleId,
+      'note': 'بطاقة تجريبية',
+      'created_at': stamp,
+    });
     await database.insert('expenses', {
       'description': 'مصروف اختبار',
       'category': 'تشغيل',
