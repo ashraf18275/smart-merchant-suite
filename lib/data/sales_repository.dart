@@ -6,6 +6,7 @@ import '../core/app_error.dart';
 import '../domain/sale_record.dart';
 import '../core/quantity.dart';
 import '../domain/sale_return_line.dart';
+import '../domain/payment_method.dart';
 
 class SalesRepository implements SalesStore {
   SalesRepository(this._db);
@@ -18,6 +19,7 @@ class SalesRepository implements SalesStore {
     required int paidMinor,
     required int warehouseId,
     int? customerId,
+    String paymentMethod = PaymentMethod.cash,
   }) async {
     // Keep core invariants enforced at the persistence boundary as well as
     // in the application service; repositories may be called by other flows.
@@ -26,6 +28,7 @@ class SalesRepository implements SalesStore {
       throw AppException('كمية البيع يجب أن تكون أكبر من صفر');
     }
     if (paidMinor < 0) throw AppException('المبلغ المدفوع لا يمكن أن يكون سالبًا');
+    if (!PaymentMethod.isValid(paymentMethod)) throw AppException('طريقة الدفع المحددة غير مدعومة');
 
     return _db.transaction((txn) async {
       if (customerId != null) {
@@ -133,8 +136,9 @@ class SalesRepository implements SalesStore {
         amountMinor: paidMinor,
         sourceType: 'sale',
         sourceId: saleId,
-        note: 'تحصيل نقدي لفاتورة بيع رقم $saleId',
+        note: 'تحصيل لفاتورة بيع رقم $saleId',
         createdAt: createdAt,
+        paymentMethod: paymentMethod,
       );
       for (final item in items) {
         final productId = item['productId']!;
