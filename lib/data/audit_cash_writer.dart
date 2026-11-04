@@ -1,3 +1,7 @@
+import 'package:sqflite_common/sqlite_api.dart';
+
+import '../domain/payment_method.dart';
+
 Future<void> writeAuditEvent(
   DatabaseExecutor executor, {
   required String action,
