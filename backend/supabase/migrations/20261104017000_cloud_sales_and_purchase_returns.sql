@@ -1,34 +1,13 @@
 -- Tenant-scoped sales/purchase returns with stock reversal, account credits and tender refunds.
 -- Returns are append-only and every operation is idempotent.
 
--- Composite unique indexes allow every return line to enforce same-tenant source references.
-create unique index if not exists cloud_sale_items_id_business_unique
-  on public.cloud_sale_items(id, business_id);
-create unique index if not exists cloud_purchase_items_id_business_unique
-  on public.cloud_purchase_items(id, business_id);
+-- Composite unique constraints allow return lines to reference source invoice lines
+-- while enforcing tenant consistency. This migration runs once on each database.
+alter table public.cloud_sale_items
+  add constraint cloud_sale_items_id_business_key unique (id, business_id);
+alter table public.cloud_purchase_items
+  add constraint cloud_purchase_items_id_business_key unique (id, business_id);
 
--- PostgreSQL foreign keys require an explicit unique constraint (not merely
--- a same-named pre-existing standalone index) for the referenced column pair.
-do $block$
-begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'cloud_sale_items_id_business_key'
-      and conrelid = 'public.cloud_sale_items'::regclass
-  ) then
-    alter table public.cloud_sale_items
-      add constraint cloud_sale_items_id_business_key unique (id, business_id);
-  end if;
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'cloud_purchase_items_id_business_key'
-      and conrelid = 'public.cloud_purchase_items'::regclass
-  ) then
-    alter table public.cloud_purchase_items
-      add constraint cloud_purchase_items_id_business_key unique (id, business_id);
-  end if;
-end;
-$block$;;
 create table if not exists public.cloud_sale_returns (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
