@@ -28,6 +28,24 @@ void main() {
     expect(row['amount_minor'], 12500);
   });
 
+  test('records expense in audit trail and cash outflow atomically', () async {
+    final id = await expenses.add(
+      description: 'إيجار المحل',
+      category: 'إيجار',
+      amountMinor: 25000,
+    );
+    final cash = (await db.query('cash_transactions')).single;
+    expect(cash['direction'], 'out');
+    expect(cash['category'], 'expense');
+    expect(cash['amount_minor'], 25000);
+    expect(cash['source_type'], 'expense');
+    expect(cash['source_id'], id);
+    final audit = (await db.query('audit_events')).single;
+    expect(audit['action'], 'expense_recorded');
+    expect(audit['entity_id'], id);
+    expect(audit['amount_minor'], 25000);
+  });
+
   test('rejects blank description, blank category, and non-positive amount', () async {
     final invalidInputs = <Map<String, Object>>[
       {'description': ' ', 'category': 'مرافق', 'amount': 100},
