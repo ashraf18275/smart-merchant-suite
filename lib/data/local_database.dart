@@ -56,7 +56,7 @@ Future<sqflite.Database> openLocalDatabase() async {
   return databaseFactoryFfi.openDatabase(
     databasePath,
     options: OpenDatabaseOptions(
-      version: 14,
+      version: 15,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
@@ -72,6 +72,7 @@ Future<sqflite.Database> openLocalDatabase() async {
         if (oldVersion < 12) await createSalesCancellationSchema(db);
         if (oldVersion < 13) await createAuditCashSchema(db);
         if (oldVersion < 14) await createPaymentMethodsSchema(db);
+        if (oldVersion < 15) await createCashSessionsSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
