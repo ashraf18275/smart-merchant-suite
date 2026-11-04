@@ -94,6 +94,14 @@ void main() {
       lessThan(BackupSchema.restoreInsertOrder.indexOf('sales_cancellations')),
     );
     expect(
+      BackupSchema.restoreDeleteOrder.indexOf('cash_transactions'),
+      lessThan(BackupSchema.restoreDeleteOrder.indexOf('cash_sessions')),
+    );
+    expect(
+      BackupSchema.restoreInsertOrder.indexOf('cash_sessions'),
+      lessThan(BackupSchema.restoreInsertOrder.indexOf('cash_transactions')),
+    );
+    expect(
       BackupSchema.restoreInsertOrder.indexOf('sales'),
       lessThan(BackupSchema.restoreInsertOrder.indexOf('customer_returns')),
     );
