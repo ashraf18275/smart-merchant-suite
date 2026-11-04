@@ -304,4 +304,33 @@ void main() {
     expect((await products.all()).single.stockQuantity, 5000);
   });
 
+
+  test('customer return restores stock using the original sale cost in weighted average', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 2000},
+      paidMinor: 3000,
+      warehouseId: warehouseId,
+    );
+    final saleItemId = (await db.query('sale_items')).single['id']! as int;
+    await db.update('products', {'cost_minor': 900},
+      where: 'id = ?', whereArgs: [productId]);
+
+    final returnId = await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 0,
+      reason: 'إرجاع جزء من البضاعة',
+    );
+
+    final product = (await products.all()).single;
+    expect(product.stockQuantity, 4000);
+    expect(product.costMinor, 850);
+    final saleLine = (await db.query('sale_items')).single;
+    expect(saleLine['returned_cost_minor'], 700);
+    final returnLine = (await db.query('customer_return_items',
+      where: 'customer_return_id = ?', whereArgs: [returnId])).single;
+    expect(returnLine['unit_cost_minor'], 700);
+    expect(returnLine['line_cost_minor'], 700);
+  });
+
 }
