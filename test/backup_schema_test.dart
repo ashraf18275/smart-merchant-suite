@@ -7,7 +7,7 @@ void main() {
       expect(BackupSchema.supports(version), isTrue, reason: 'version $version');
     }
     expect(BackupSchema.supports(2), isFalse);
-    expect(BackupSchema.supports(14), isFalse);
+    expect(BackupSchema.supports(15), isFalse);
   });
 
   test('maps purchase and account data to the schema versions that introduced them', () {
@@ -24,6 +24,8 @@ void main() {
     expect(BackupSchema.hasSalesCancellationData(12), isTrue);
     expect(BackupSchema.hasAuditCashData(12), isFalse);
     expect(BackupSchema.hasAuditCashData(13), isTrue);
+    expect(BackupSchema.hasPaymentData(13), isFalse);
+    expect(BackupSchema.hasPaymentData(14), isTrue);
   });
 
   test('restore ordering covers every current business table', () {
