@@ -64,14 +64,16 @@ class PurchaseRepository {
             'created_at': stamp,
           });
         }
-        await writeAuditEvent(txn,
-          action: 'supplier_created',
-          entityType: 'supplier',
-          entityId: supplierId,
-          amountMinor: openingBalanceMinor,
-          details: 'opening_balance_minor=' + openingBalanceMinor.toString(),
-          createdAt: stamp,
-        );
+        if (openingBalanceMinor != 0) {
+          await writeAuditEvent(txn,
+            action: 'supplier_opening_balance_set',
+            entityType: 'supplier',
+            entityId: supplierId,
+            amountMinor: openingBalanceMinor,
+            details: 'opening_balance_minor=' + openingBalanceMinor.toString(),
+            createdAt: stamp,
+          );
+        }
         return supplierId;
       });
     } catch (error) {
