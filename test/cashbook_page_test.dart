@@ -11,6 +11,9 @@ void main() {
   late CashbookRepository repository;
 
   setUpAll(sqfliteFfiInit);
+
+  Future<void> settle(WidgetTester tester) =>
+      tester.pumpAndSettle(timeout: const Duration(seconds: 3));
   setUp(() async {
     db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(db);
@@ -22,7 +25,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: CashbookPage(repository: repository),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(find.text('لا توجد وردية صندوق مفتوحة.'), findsOneWidget);
     await tester.tap(find.text('فتح وردية وتسجيل الرصيد الافتتاحي'));
