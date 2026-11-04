@@ -177,6 +177,7 @@ void main() {
     await createFractionalQuantitiesSchema(database);
     await createPurchaseSchema(database);
     await createAccountSchema(database);
+    await createSupplierReturnsSchema(database);
     await createSalesSchema(database);
     await createExpensesSchema(database);
 
@@ -185,7 +186,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     final migratedProduct = (await database.query('products')).single;
     expect(migratedProduct['stock_quantity'], 6000);
     expect(migratedProduct['unit_id'], isNotNull);
