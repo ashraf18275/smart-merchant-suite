@@ -363,9 +363,162 @@ class SalesRepository implements SalesStore {
     });
   }
 
+
+  /// Cancels an untouched invoice, restoring its original stock and reversing
+  /// its customer ledger entries in one transaction. Any existing return blocks
+  /// cancellation to avoid double reversal.
+  Future<int> cancelSale({
+    required int saleId,
+    required int refundedMinor,
+    required String reason,
+  }) async {
+    if (saleId <= 0) throw AppException('فاتورة البيع المحددة غير صالحة');
+    if (refundedMinor < 0) throw AppException('المبلغ المسترد لا يمكن أن يكون سالبًا');
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) throw AppException('سبب الإلغاء مطلوب');
+
+    return _db.transaction((txn) async {
+      final sales = await txn.query('sales',
+        where: 'id = ?', whereArgs: [saleId], limit: 1);
+      if (sales.isEmpty) throw AppException('فاتورة البيع غير موجودة');
+      final sale = sales.single;
+      if (sale['cancelled_at'] != null) {
+        throw AppException('تم إلغاء هذه الفاتورة من قبل');
+      }
+      final priorReturns = await txn.query('customer_returns',
+        columns: ['id'], where: 'sale_id = ?', whereArgs: [saleId], limit: 1);
+      if (priorReturns.isNotEmpty) {
+        throw AppException('لا يمكن إلغاء فاتورة لها مرتجعات مسجلة؛ راجع حركة المرتجعات أولًا');
+      }
+
+      final totalMinor = sale['total_minor']! as int;
+      final paidMinor = sale['paid_minor']! as int;
+      if (refundedMinor > paidMinor) {
+        throw AppException('المبلغ المسترد نقدًا لا يمكن أن يتجاوز ما تم تحصيله في الفاتورة');
+      }
+      final warehouseId = sale['warehouse_id'] as int?;
+      if (warehouseId == null) {
+        throw AppException('لا يمكن إلغاء فاتورة قديمة لا يحتوي سجلها على مخزن محدد');
+      }
+      final customerId = sale['customer_id'] as int?;
+      final lines = await txn.query('sale_items',
+        where: 'sale_id = ?', whereArgs: [saleId], orderBy: 'id ASC');
+      if (lines.isEmpty) throw AppException('لا يمكن إلغاء فاتورة بلا بنود');
+
+      final createdAt = DateTime.now().toUtc().toIso8601String();
+      final cancellationId = await txn.insert('sales_cancellations', {
+        'sale_id': saleId,
+        'customer_id': customerId,
+        'warehouse_id': warehouseId,
+        'total_minor': totalMinor,
+        'paid_minor': paidMinor,
+        'refunded_minor': refundedMinor,
+        'reason': cleanReason,
+        'created_at': createdAt,
+      });
+
+      for (final line in lines) {
+        final productId = line['product_id']! as int;
+        final quantity = line['quantity']! as int;
+        final unitCost = line['unit_cost_minor']! as int;
+        final balances = await txn.query('product_warehouse_stock',
+          columns: ['quantity'],
+          where: 'product_id = ? AND warehouse_id = ?',
+          whereArgs: [productId, warehouseId], limit: 1);
+        final oldWarehouseStock = balances.isEmpty
+            ? 0
+            : balances.single['quantity']! as int;
+        final productRows = await txn.query('products',
+          columns: ['stock_quantity', 'cost_minor'],
+          where: 'id = ?', whereArgs: [productId], limit: 1);
+        if (productRows.isEmpty) {
+          throw AppException('أحد منتجات الفاتورة لم يعد موجودًا؛ لم يتم إلغاء الفاتورة');
+        }
+        final oldTotalStock = productRows.single['stock_quantity']! as int;
+        final oldAverageCost = productRows.single['cost_minor']! as int;
+        final newWarehouseStock = oldWarehouseStock + quantity;
+        final newTotalStock = oldTotalStock + quantity;
+        final weightedNumerator = oldTotalStock * oldAverageCost +
+            quantity * unitCost;
+        final newAverageCost = newTotalStock == 0
+            ? unitCost
+            : (weightedNumerator + newTotalStock ~/ 2) ~/ newTotalStock;
+
+        if (balances.isEmpty) {
+          await txn.insert('product_warehouse_stock', {
+            'product_id': productId,
+            'warehouse_id': warehouseId,
+            'quantity': newWarehouseStock,
+            'updated_at': createdAt,
+          });
+        } else {
+          await txn.update('product_warehouse_stock', {
+            'quantity': newWarehouseStock,
+            'updated_at': createdAt,
+          }, where: 'product_id = ? AND warehouse_id = ?',
+            whereArgs: [productId, warehouseId]);
+        }
+        final aggregate = await txn.rawQuery(
+          'SELECT COALESCE(SUM(quantity), 0) AS total FROM product_warehouse_stock WHERE product_id = ?',
+          [productId],
+        );
+        await txn.update('products', {
+          'stock_quantity': aggregate.single['total'],
+          'cost_minor': newAverageCost,
+        }, where: 'id = ?', whereArgs: [productId]);
+        await txn.insert('inventory_movements', {
+          'product_id': productId,
+          'warehouse_id': warehouseId,
+          'quantity_delta': quantity,
+          'reason': 'إلغاء فاتورة بيع رقم $saleId',
+          'created_at': createdAt,
+        });
+      }
+
+      if (customerId != null) {
+        await txn.insert('customer_account_entries', {
+          'customer_id': customerId,
+          'amount_minor': -totalMinor,
+          'entry_type': 'sale_cancel',
+          'reference_id': cancellationId,
+          'note': 'عكس فاتورة البيع الملغاة رقم $saleId',
+          'created_at': createdAt,
+        });
+        if (paidMinor > 0) {
+          await txn.insert('customer_account_entries', {
+            'customer_id': customerId,
+            'amount_minor': paidMinor,
+            'entry_type': 'receipt_reversal',
+            'reference_id': cancellationId,
+            'note': 'عكس تحصيل فاتورة البيع الملغاة رقم $saleId',
+            'created_at': createdAt,
+          });
+        }
+        final refundDue = paidMinor - refundedMinor;
+        if (refundDue > 0) {
+          await txn.insert('customer_account_entries', {
+            'customer_id': customerId,
+            'amount_minor': -refundDue,
+            'entry_type': 'refund_due',
+            'reference_id': cancellationId,
+            'note': 'مبلغ مستحق رده للعميل عن إلغاء فاتورة رقم $saleId',
+            'created_at': createdAt,
+          });
+        }
+      }
+
+      await txn.update('sales', {
+        'cancelled_at': createdAt,
+        'cancellation_reason': cleanReason,
+      }, where: 'id = ?', whereArgs: [saleId]);
+      return cancellationId;
+    });
+  }
+
   Future<List<SaleRecord>> all() async {
     final rows = await _db.rawQuery('''
       SELECT s.id, s.total_minor, s.paid_minor, s.created_at,
+             s.cancelled_at, s.cancellation_reason,
              COUNT(i.id) AS item_count,
              w.name AS warehouse_name, b.name AS branch_name
       FROM sales s
@@ -381,6 +534,9 @@ class SalesRepository implements SalesStore {
       paidMinor: row['paid_minor']! as int,
       createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
       itemCount: row['item_count']! as int,
+      cancelledAt: row['cancelled_at'] == null
+          ? null : DateTime.parse(row['cancelled_at']! as String).toLocal(),
+      cancellationReason: row['cancellation_reason'] as String?,
       warehouseName: row['warehouse_name'] as String?,
       branchName: row['branch_name'] as String?,
     )).toList(growable: false);
