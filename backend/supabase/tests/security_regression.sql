@@ -71,7 +71,10 @@ insert into public.member_permissions (
    'accounts.view', true),
   ('20000000-0000-0000-0000-000000000001',
    '21000000-0000-0000-0000-000000000006',
-   'users.edit', true)
+   'users.edit', true),
+  ('20000000-0000-0000-0000-000000000001',
+   '21000000-0000-0000-0000-000000000006',
+   'branches.manage', true)
 on conflict (member_id, permission_key) do nothing;
 
 insert into public.cloud_products (
@@ -126,6 +129,7 @@ declare
   v_created_branch uuid;
   v_created_default_warehouse uuid;
   v_created_second_warehouse uuid;
+  v_delegated_branch uuid;
   v_location_operation uuid;
   v_location_rejected boolean := false;
 begin
@@ -353,6 +357,30 @@ begin
   end;
   if not v_location_rejected then
     raise exception 'location security regression: branch creation without settings.edit was not rejected';
+  end if;
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+
+  -- Delegated branch managers may create branches but not warehouses without the separate grant.
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006', true);
+  v_delegated_branch := public.create_cloud_branch(
+    '20000000-0000-0000-0000-000000000001',
+    'Delegated managed branch',
+    null,
+    null
+  );
+  v_location_rejected := false;
+  begin
+    perform public.create_cloud_warehouse(
+      '20000000-0000-0000-0000-000000000001',
+      v_delegated_branch,
+      'Unauthorized extra warehouse'
+    );
+    raise exception 'location security regression: branch manager created warehouse without warehouses.manage';
+  exception when insufficient_privilege then
+    v_location_rejected := true;
+  end;
+  if not v_location_rejected then
+    raise exception 'location security regression: warehouse creation without warehouses.manage was not rejected';
   end if;
   perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 
