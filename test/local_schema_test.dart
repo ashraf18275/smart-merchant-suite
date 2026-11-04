@@ -24,7 +24,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -35,7 +35,7 @@ void main() {
     final saleItemColumns = await database.rawQuery('PRAGMA table_info(sale_items)');
     expect(saleItemColumns.map((row) => row['name']), containsAll(['returned_quantity', 'returned_minor', 'returned_cost_minor']));
     expect(saleColumns.map((row) => row['name']), containsAll(['warehouse_id', 'customer_id']));
-    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries', 'supplier_returns', 'supplier_return_items', 'customer_returns', 'customer_return_items', 'sales_cancellations']));
+    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries', 'supplier_returns', 'supplier_return_items', 'customer_returns', 'customer_return_items', 'sales_cancellations', 'cash_sessions']));
     final units = await database.query('product_units');
     expect(units, hasLength(1));
     expect(units.single['name'], 'قطعة');
@@ -253,6 +253,19 @@ void main() {
       where: 'version = ?', whereArgs: [13]), hasLength(1));
     expect(await database.query('schema_migrations',
       where: 'version = ?', whereArgs: [14]), hasLength(1));
+  });
+
+  test('cash session migration creates one-open-shift index and preserves old cash history unassigned', () async {
+    await createLocalSchema(database);
+    final cashColumns = await database.rawQuery('PRAGMA table_info(cash_transactions)');
+    expect(cashColumns.map((row) => row['name']), contains('cash_session_id'));
+    expect(await database.query('cash_sessions'), isEmpty);
+    final index = await database.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_cash_sessions_single_open'",
+    );
+    expect(index, hasLength(1));
+    expect(await database.query('schema_migrations',
+      where: 'version = ?', whereArgs: [15]), hasLength(1));
   });
 
   test('payment migration backfills existing cash movements once', () async {
