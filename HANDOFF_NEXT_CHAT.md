@@ -486,3 +486,25 @@ Workflow: `.github/workflows/flutter-ci.yml`
 - Supabase/PostgreSQL run #105: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41916396842 — success.
 - نجح تطبيق جميع الهجرات، واختبارات PostgreSQL، وترحيل الكميات القديمة، وفحص Edge Functions.
 - آخر commit مختبر: `0eac4d2565ef2a5031c94ad6a0775e091f9cfe15`.
+
+
+### تحديث إضافي — تسجيل الدخول السحابي وتهيئة المالك في Flutter (4 نوفمبر 2026)
+
+- أضيفت `supabase_flutter 2.18.3`، وتم تحديث الحد الأدنى لـ Dart إلى `3.9.0`.
+- أضيفت ملفات `lib/cloud/cloud_config.dart`, `cloud_business.dart`, `cloud_auth_repository.dart` وشاشة `lib/features/cloud_login_page.dart`.
+- `main.dart` يهيئ Supabase فقط عند توفير `SUPABASE_URL` و`SUPABASE_PUBLISHABLE_KEY` عبر build defines؛ وإلا يفتح التطبيق المحلي دون تعطيل.
+- تسجيل الدخول باسم المستخدم/كلمة المرور يستخدم النطاق الداخلي `.invalid` الموجود في سياسة المشروع.
+- تسجيل المالك ينشئ حساب Auth ثم النشاط؛ triggers قاعدة البيانات تنشئ عضوية المالك والفرع والمخزن الرئيسيين.
+- أضيفت سياسة RLS/منح صلاحية لإدراج اسم دخول المالك في عضويته فقط، مع السماح بقراءة الأسماء وفق صلاحيات RLS. اختبارات PostgreSQL تثبت رفض الموظف محاولة إدراج اسم المالك.
+- معالجة تعدد أنشطة المالك لا تكرر اسم الدخول العالمي على كل عضوية.
+- شاشة الحساب تعرض قائمة الأنشطة، لكنها لا تبدّل مصدر بيانات الشاشات بعد؛ SQLite لا يزال مصدر التشغيل المحلي. لا توجد مزامنة فعلية بعد.
+- يلزم تعطيل تأكيد البريد الإلكتروني في إعدادات Supabase Auth قبل تفعيل تسجيل المالك؛ عنوان `.invalid` غير قابل لاستقبال رسالة تأكيد.
+- لا يوجد أي مفتاح service-role داخل التطبيق.
+
+**نتائج التحقق:**
+- Flutter CI run #610: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41917807534 — Analyze success، 160 tests passed.
+- Supabase/PostgreSQL run #110: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41917228779 — migrations, security regression, legacy quantity migration, Edge Function type-check: success.
+- Commit الكود المختبر: `7714cb4f4cb019adcc54d3f95fe6bd4e305123db`.
+- artifact `resolved-engineering-inputs` رقم 13365631764 يتضمن pubspec.lock الذي حله CI؛ يجب حفظه في المستودع قبل الإصدارات النهائية.
+
+**المرحلة التالية:** واجهة إدارة الموظفين والصلاحيات وربطها بـ `create-member`، ثم اختيار النشاط/الفرع/المخزن داخل جلسة التطبيق، وبعدها ربط عمليات المنتجات والمبيعات والمشتريات والحسابات والصندوق بـ RPCs السحابية. يلي ذلك Outbox محلي ومزامنة آمنة وإدارة تعارضات واختبارات جهازين.
