@@ -37,18 +37,45 @@ class PurchaseRepository {
         where: includeInactive ? null : 'is_active = 1',
         orderBy: 'name COLLATE NOCASE');
 
-  Future<int> addSupplier({required String name, String? phone, String? address}) async {
+  Future<int> addSupplier({
+    required String name,
+    String? phone,
+    String? address,
+    int openingBalanceMinor = 0,
+  }) async {
     final value = name.trim();
     if (value.isEmpty) throw AppException('اسم المورد مطلوب');
     try {
-      return await _db.insert('suppliers', {
-        'name': value,
-        'phone': _optional(phone),
-        'address': _optional(address),
-        'is_active': 1,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
+      return await _db.transaction((txn) async {
+        final stamp = DateTime.now().toUtc().toIso8601String();
+        final supplierId = await txn.insert('suppliers', {
+          'name': value,
+          'phone': _optional(phone),
+          'address': _optional(address),
+          'is_active': 1,
+          'created_at': stamp,
+        });
+        if (openingBalanceMinor != 0) {
+          await txn.insert('supplier_account_entries', {
+            'supplier_id': supplierId,
+            'amount_minor': openingBalanceMinor,
+            'entry_type': 'adjustment',
+            'note': 'رصيد افتتاحي عند إنشاء الحساب',
+            'created_at': stamp,
+          });
+        }
+        await writeAuditEvent(txn,
+          action: 'supplier_created',
+          entityType: 'supplier',
+          entityId: supplierId,
+          amountMinor: openingBalanceMinor,
+          details: 'opening_balance_minor=' + openingBalanceMinor.toString(),
+          createdAt: stamp,
+        );
+        return supplierId;
       });
-    } catch (_) {
+    } catch (error) {
+      if (error is AppException) rethrow;
       throw AppException('تعذر حفظ المورد');
     }
   }
