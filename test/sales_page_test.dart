@@ -120,4 +120,42 @@ void main() {
     expect(find.textContaining('تم حفظ مرتجع العميل رقم'), findsOneWidget);
   });
 
+
+  testWidgets('cancels a sale from the sales screen and shows its status', (tester) async {
+    final productId = (await productStore.all()).single.id!;
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: (await warehouses.warehouses()).single.id,
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: SalesPage(
+          products: products,
+          sales: sales,
+          warehouseStore: warehouses,
+          accountRepository: accounts,
+        ),
+      ),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.byTooltip('إلغاء الفاتورة'));
+    await pumpDatabaseResult(tester);
+    expect(find.text('إلغاء فاتورة رقم $saleId'), findsOneWidget);
+    final reason = find.byWidgetPredicate((widget) =>
+      widget is TextField && widget.decoration?.labelText == 'سبب الإلغاء *');
+    await tester.enterText(reason, 'إلغاء من شاشة المبيعات');
+    await tester.tap(find.text('تأكيد الإلغاء'));
+    await pumpDatabaseResult(tester);
+
+    expect((await database.query('sales')).single['cancelled_at'], isNotNull);
+    expect((await database.query('sales_cancellations')).single['reason'],
+      'إلغاء من شاشة المبيعات');
+    expect(find.text('ملغاة'), findsOneWidget);
+    expect(find.byTooltip('إلغاء الفاتورة'), findsNothing);
+  });
+
 }
