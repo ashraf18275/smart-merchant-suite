@@ -41,7 +41,7 @@ Future<void> main() async {
 }
 
 class SmartMerchantApp extends StatelessWidget {
-  const SmartMerchantApp({super.key, required this.cloudEnabled});
+  const SmartMerchantApp({super.key, this.cloudEnabled = false});
 
   final bool cloudEnabled;
 
@@ -89,7 +89,7 @@ class SmartMerchantApp extends StatelessWidget {
 }
 
 class HomeDashboard extends StatelessWidget {
-  const HomeDashboard({super.key, required this.cloudEnabled});
+  const HomeDashboard({super.key, this.cloudEnabled = false});
 
   final bool cloudEnabled;
 
