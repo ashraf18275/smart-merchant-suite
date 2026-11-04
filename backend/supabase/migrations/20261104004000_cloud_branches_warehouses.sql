@@ -131,14 +131,6 @@ alter table public.cloud_products
     foreign key (default_warehouse_id, business_id, default_branch_id)
     references public.cloud_warehouses(id, business_id, branch_id) on delete restrict;
 
-alter table public.cloud_products
-  add constraint cloud_products_default_branch_fk
-    foreign key (default_branch_id, business_id)
-    references public.cloud_branches(id, business_id) on delete restrict,
-  add constraint cloud_products_default_warehouse_fk
-    foreign key (default_warehouse_id, business_id, default_branch_id)
-    references public.cloud_warehouses(id, business_id, branch_id) on delete restrict;
-
 create table if not exists public.cloud_product_warehouse_stock (
   business_id uuid not null,
   branch_id uuid not null,
