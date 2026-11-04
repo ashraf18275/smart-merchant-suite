@@ -268,4 +268,40 @@ void main() {
     expect((await db.query('customer_returns')).single['refunded_minor'], 1500);
   });
 
+
+  test('multiple partial customer returns cannot exceed the original sale line', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 2000},
+      paidMinor: 3000,
+      warehouseId: warehouseId,
+    );
+    final saleItemId = (await db.query('sale_items')).single['id']! as int;
+
+    await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 0,
+      reason: 'الدفعة الأولى',
+    );
+    await expectLater(
+      sales.createCustomerReturn(
+        saleId: saleId,
+        items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1001)],
+        refundedMinor: 0,
+        reason: 'تجاوز المتبقي',
+      ),
+      throwsA(isA<AppException>()),
+    );
+    await sales.createCustomerReturn(
+      saleId: saleId,
+      items: [SaleReturnLineInput(saleItemId: saleItemId, quantity: 1000)],
+      refundedMinor: 0,
+      reason: 'الدفعة الأخيرة',
+    );
+
+    expect((await db.query('sale_items')).single['returned_quantity'], 2000);
+    expect((await db.query('customer_returns')), hasLength(2));
+    expect((await products.all()).single.stockQuantity, 5000);
+  });
+
 }
