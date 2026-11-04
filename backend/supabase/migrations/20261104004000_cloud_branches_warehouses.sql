@@ -102,7 +102,7 @@ create table if not exists public.cloud_product_warehouse_stock (
   branch_id uuid not null,
   warehouse_id uuid not null,
   product_id uuid not null,
-  quantity_scaled bigint not null default 0 check (quantity_scaled >= 0),
+  quantity bigint not null default 0 check (quantity >= 0),
   updated_at timestamptz not null default now(),
   primary key (business_id, warehouse_id, product_id),
   foreign key (branch_id, business_id)
@@ -114,7 +114,7 @@ create table if not exists public.cloud_product_warehouse_stock (
 );
 
 insert into public.cloud_product_warehouse_stock (
-  business_id, branch_id, warehouse_id, product_id, quantity_scaled
+  business_id, branch_id, warehouse_id, product_id, quantity
 )
 select p.business_id, p.default_branch_id, p.default_warehouse_id, p.id, p.stock_quantity
 from public.cloud_products p
