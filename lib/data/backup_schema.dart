@@ -24,7 +24,6 @@ abstract final class BackupSchema {
     'sales',
     'sales_cancellations',
     'audit_events',
-    'cash_sessions',
     'cash_transactions',
     'payment_records',
     'cash_sessions',
@@ -95,6 +94,7 @@ abstract final class BackupSchema {
     'supplier_account_entries',
     'customer_account_entries',
     'audit_events',
+    'cash_sessions',
     'cash_transactions',
     'payment_records',
   ];
