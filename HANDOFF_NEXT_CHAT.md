@@ -508,3 +508,22 @@ Workflow: `.github/workflows/flutter-ci.yml`
 - artifact `resolved-engineering-inputs` رقم 13365631764 يتضمن pubspec.lock الذي حله CI؛ يجب حفظه في المستودع قبل الإصدارات النهائية.
 
 **المرحلة التالية:** واجهة إدارة الموظفين والصلاحيات وربطها بـ `create-member`، ثم اختيار النشاط/الفرع/المخزن داخل جلسة التطبيق، وبعدها ربط عمليات المنتجات والمبيعات والمشتريات والحسابات والصندوق بـ RPCs السحابية. يلي ذلك Outbox محلي ومزامنة آمنة وإدارة تعارضات واختبارات جهازين.
+
+
+### نسخ رجوع احتياطية فعلية — Android وWindows (4 نوفمبر 2026)
+
+**اكتمل البناء والتحقق، ويمكن الرجوع لهذه النسخ إذا حدث خلل لاحقًا.**
+
+- Workflow run #611: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41918137684 — Analyze/Tests success، Android build success، Windows build success.
+- Commit المصدر المبني: `46b4684ce5449a032f89da514b9121d26bc1c464`.
+- Android artifact ID: `13365264245`, الاسم `smart-merchant-suite-android-debug-apks`, يحتوي:
+  - `app-arm64-v8a-debug.apk` — SHA-256: `881825d8a0201672a5f80773c0182a26fc7f90ac59f22263bd2df002bd59dea8`
+  - `app-armeabi-v7a-debug.apk` — SHA-256: `193f3dfe5b93ccbe5742b4c914eec3b5099c5616d2992229dc2e80de0d17fd24`
+  - `app-x86_64-debug.apk` — SHA-256: `086800dce2c4d4069001d0d837649d727de2e56bc1d1f79d6ece327c6fb1bfe3`
+  - BUILD_INFO يثبت Android debug وFlutter 3.47.9 وcommit/run الصحيحين.
+- Windows artifact ID: `13365967144`, الاسم `smart-merchant-suite-windows-x64`, يحتوي تطبيق Windows x64 Release.
+  - SHA-256 للحزمة الداخلية `smart-merchant-suite-windows-x64.zip`: `a71bc8cc5eec04ed1f2dc9f885862d3d0a83773791fb3cb27ab0b8f0ae5ea5ca`
+  - BUILD_INFO يثبت Windows Release وx64 وFlutter 3.47.9 وcommit/run الصحيحين.
+- تم تنزيل الأرشيفين وفكهما وفحص الملفات. نجحت `sha256sum -c SHA256SUMS.txt` لكل ملفات APK ولحزمة Windows، كما تأكد وجود `smart_merchant_suite.exe` وDLLs المطلوبة داخل حزمة Windows.
+- Android artifact صالح لمدة 14 يومًا من وقت رفعه، وWindows artifact لمدة 30 يومًا. احتفظ بنسخ الملفات خارج GitHub Actions إذا أردت استخدامها بعد انتهاء الاحتفاظ.
+- ملاحظة: Android ملفات Debug وليست إصدارًا موقّعًا للتوزيع التجاري. Windows حزمة Release. هذه نسخ رجوع وليست إعلان اكتمال المشروع.
