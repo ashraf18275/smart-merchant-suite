@@ -24,6 +24,28 @@ void main() {
   });
   tearDown(() async => db.close());
 
+  test('records paid purchase amounts in cash journal and audit trail', () async {
+    final productId = await products.add(const Product(
+      name: 'سكر', costMinor: 1000, priceMinor: 1500, stockQuantity: 0,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد السكر');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    final purchaseId = await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(productId: productId, quantity: 1000, unitCostMinor: 1000)],
+      paidMinor: 600,
+    );
+    final cash = (await db.query('cash_transactions')).single;
+    expect(cash['direction'], 'out');
+    expect(cash['category'], 'purchase_payment');
+    expect(cash['amount_minor'], 600);
+    expect(cash['source_id'], purchaseId);
+    final audit = (await db.query('audit_events')).single;
+    expect(audit['action'], 'purchase_created');
+    expect(audit['entity_id'], purchaseId);
+  });
+
   test('receives purchase atomically and updates moving weighted average cost', () async {
     final productId = await products.add(const Product(
       name: 'أرز', costMinor: 1000, priceMinor: 1500, stockQuantity: 2000,
