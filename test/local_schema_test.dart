@@ -228,4 +228,74 @@ void main() {
     expect((await database.query('products')).single['stock_quantity'], 6000);
     expect(await database.query('expenses'), isEmpty);
   });
+
+  test('customer return migration preserves existing customer ledger and is idempotent', () async {
+    await createLocalSchema(database);
+    final customerId = await database.insert('customers', {
+      'name': 'عميل قديم',
+      'is_active': 1,
+      'created_at': DateTime.utc(2026).toIso8601String(),
+    });
+    await database.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': 2500,
+      'entry_type': 'sale',
+      'reference_id': 1,
+      'note': 'رصيد سابق',
+      'created_at': DateTime.utc(2026).toIso8601String(),
+    });
+
+    await database.execute('''
+      CREATE TABLE customer_account_entries_legacy (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+        entry_type TEXT NOT NULL CHECK (entry_type IN ('sale', 'receipt', 'adjustment')),
+        reference_id INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    ''');
+    await database.execute('''
+      INSERT INTO customer_account_entries_legacy
+        (id, customer_id, amount_minor, entry_type, reference_id, note, created_at)
+      SELECT id, customer_id, amount_minor, entry_type, reference_id, note, created_at
+      FROM customer_account_entries
+    ''');
+    await database.execute('DROP TABLE customer_account_entries');
+    await database.execute(
+      'ALTER TABLE customer_account_entries_legacy RENAME TO customer_account_entries',
+    );
+    await database.delete('schema_migrations', where: 'version = ?', whereArgs: [11]);
+
+    await createCustomerReturnsSchema(database);
+    await createCustomerReturnsSchema(database);
+
+    final entries = await database.query('customer_account_entries', orderBy: 'id ASC');
+    expect(entries, hasLength(1));
+    expect(entries.single['amount_minor'], 2500);
+    await database.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': -500,
+      'entry_type': 'return',
+      'reference_id': 1,
+      'note': 'مرتجع',
+      'created_at': DateTime.utc(2026).toIso8601String(),
+    });
+    await database.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': 200,
+      'entry_type': 'refund',
+      'reference_id': 1,
+      'note': 'رد نقدي',
+      'created_at': DateTime.utc(2026).toIso8601String(),
+    });
+    expect(await database.query('customer_account_entries'), hasLength(3));
+    expect(
+      (await database.query('schema_migrations', where: 'version = ?', whereArgs: [11])),
+      hasLength(1),
+    );
+  });
+
 }
