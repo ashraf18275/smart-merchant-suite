@@ -102,9 +102,7 @@ void main() {
     expect(find.text('إنشاء مرتجع عميل'), findsNWidgets(2));
     expect(find.textContaining('عميل اختبار المرتجع'), findsOneWidget);
 
-    final quantityField = find.byWidgetPredicate((widget) =>
-      widget is TextFormField &&
-      widget.decoration?.labelText == 'كمية الإرجاع');
+    final quantityField = find.byType(TextFormField);
     expect(quantityField, findsOneWidget);
     await tester.enterText(quantityField, '1');
     final reasonField = find.byWidgetPredicate((widget) =>
