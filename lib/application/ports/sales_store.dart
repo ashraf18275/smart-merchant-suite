@@ -28,5 +28,6 @@ abstract interface class SalesStore {
     required List<SaleReturnLineInput> items,
     required int refundedMinor,
     required String reason,
+    String refundMethod = PaymentMethod.cash,
   });
 }
