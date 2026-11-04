@@ -150,6 +150,17 @@ declare
   v_unauthorized_supplier_payment_rejected boolean := false;
   v_customer_b_id uuid;
   v_credit_without_customer_rejected boolean := false;
+  v_cash_session_id uuid;
+  v_cash_session_retry uuid;
+  v_cash_movement_id uuid;
+  v_cash_movement_retry uuid;
+  v_cash_close_summary jsonb;
+  v_cash_close_retry jsonb;
+  v_cash_open_rejected boolean := false;
+  v_cash_branch_deactivation_rejected boolean := false;
+  v_cash_closed_movement_rejected boolean := false;
+  v_cash_movement_payload_rejected boolean := false;
+  v_unauthorized_cash_open_rejected boolean := false;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
