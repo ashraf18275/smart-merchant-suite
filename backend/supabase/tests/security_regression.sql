@@ -104,6 +104,9 @@ declare
   v_count integer;
   v_sale_one uuid;
   v_sale_two uuid;
+  v_fractional_sale_one uuid;
+  v_fractional_sale_two uuid;
+  v_line_total bigint;
   v_movement_one uuid;
   v_movement_two uuid;
   v_stock bigint;
