@@ -53,12 +53,21 @@ Future<void> writeCashMovement(
   });
   // Only physical cash belongs in the cash drawer journal.
   if (paymentMethod != PaymentMethod.cash) return;
+  final activeSessions = await executor.query(
+    'cash_sessions',
+    columns: ['id'],
+    where: "status = 'open'",
+    limit: 1,
+  );
+  final cashSessionId =
+      activeSessions.isEmpty ? null : activeSessions.single['id'];
   await executor.insert('cash_transactions', {
     'direction': direction,
     'category': category,
     'amount_minor': amountMinor,
     'source_type': sourceType,
     'source_id': sourceId,
+    'cash_session_id': cashSessionId,
     'note': note,
     'created_at': stamp,
   });
