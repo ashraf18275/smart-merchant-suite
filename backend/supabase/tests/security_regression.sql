@@ -582,20 +582,45 @@ begin
     select 1 from public.cloud_sale_payments
     where business_id = '20000000-0000-0000-0000-000000000001'
       and sale_id = v_sale_one and amount_minor = 100 and payment_method = 'cash'
+      and cash_session_id = v_sale_cash_session_id
   ) then
     raise exception 'sale payment record failed';
+  end if;
+  if not exists (
+    select 1 from public.cloud_cash_movements
+    where business_id = '20000000-0000-0000-0000-000000000001'
+      and cash_session_id = v_sale_cash_session_id
+      and direction = 'in' and category = 'sale_receipt'
+      and amount_minor = 100 and source_type = 'sale_payment'
+      and source_id = (select id from public.cloud_sale_payments where sale_id = v_sale_one)
+  ) then
+    raise exception 'cash sale integration failed: no incoming movement was posted';
+  end if;
+  v_sale_cash_close := public.close_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_sale_cash_session_id,
+    1100,
+    'إقفال وردية تحصيل البيع',
+    '550e8400-e29b-41d4-a716-446655440051'
+  );
+  if (v_sale_cash_close->>'expected_balance_minor')::bigint <> 1100
+     or (v_sale_cash_close->>'difference_minor')::bigint <> 0 then
+    raise exception 'cash sale integration failed: expected 1100, got %', v_sale_cash_close;
   end if;
 
   begin
     perform public.create_cloud_sale_with_account(
       '20000000-0000-0000-0000-000000000001',
+      v_default_branch_id,
+      v_default_warehouse_id,
       jsonb_build_array(jsonb_build_object(
         'product_id', '30000000-0000-0000-0000-000000000001',
-        'quantity', 1
+        'quantity_scaled', 1000
       )),
       0,
       null,
       'cash',
+      null,
       '550e8400-e29b-41d4-a716-446655440039'
     );
     raise exception 'credit sale regression: unpaid sale without customer was accepted';
@@ -617,13 +642,16 @@ begin
   begin
     perform public.create_cloud_sale_with_account(
       '20000000-0000-0000-0000-000000000001',
+      v_default_branch_id,
+      v_default_warehouse_id,
       jsonb_build_array(jsonb_build_object(
         'product_id', '30000000-0000-0000-0000-000000000001',
-        'quantity', 1
+        'quantity_scaled', 1000
       )),
       100,
       v_customer_id,
       'cash',
+      v_sale_cash_session_id,
       '50000000-0000-0000-0000-000000000001'
     );
     raise exception 'idempotency failed: reused sale key accepted a different payload';
