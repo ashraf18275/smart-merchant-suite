@@ -339,6 +339,7 @@ void main() {
     }).toList();
     version8['customer_returns'] = [];
     version8['customer_return_items'] = [];
+    version8['sales_cancellations'] = [];
     version8['supplier_returns'] = [];
     version8['supplier_return_items'] = [];
     version8['sales'] = version8['sales']!.map((row) {
