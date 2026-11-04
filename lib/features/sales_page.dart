@@ -123,12 +123,12 @@ class _SalesPageState extends State<SalesPage> {
             key: key,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Align(alignment: Alignment.centerRight, child: Text('العميل (اختياري)')),
+                const Align(alignment: Alignment.centerRight, child: Text('العميل (مطلوب إذا كان هناك مبلغ آجل)')),
                 DropdownButtonFormField<int?>(
                   initialValue: null,
-                  decoration: const InputDecoration(labelText: 'بيع نقدي بدون عميل أو اختر عميلًا'),
+                  decoration: const InputDecoration(labelText: 'اختر عميلًا عند ترك رصيد آجل'),
                   items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('بيع نقدي — بدون عميل')),
+                    const DropdownMenuItem<int?>(value: null, child: Text('بدون عميل — سداد كامل الفاتورة')),
                     for (final customer in _customers)
                       DropdownMenuItem<int?>(
                         value: customer['id'] as int,
