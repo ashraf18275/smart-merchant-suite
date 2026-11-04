@@ -150,6 +150,10 @@ declare
   v_unauthorized_supplier_payment_rejected boolean := false;
   v_customer_b_id uuid;
   v_credit_without_customer_rejected boolean := false;
+  v_default_branch_id uuid;
+  v_default_warehouse_id uuid;
+  v_sale_cash_session_id uuid;
+  v_sale_cash_close jsonb;
   v_cash_session_id uuid;
   v_cash_session_retry uuid;
   v_cash_movement_id uuid;
@@ -507,27 +511,51 @@ begin
     '50000000-0000-0000-0000-000000000040'
   );
 
+  select b.id, w.id into v_default_branch_id, v_default_warehouse_id
+  from public.cloud_branches b
+  join public.cloud_warehouses w
+    on w.business_id = b.business_id and w.branch_id = b.id
+  where b.business_id = '20000000-0000-0000-0000-000000000001'
+    and b.is_active and w.is_active
+  order by b.created_at, w.created_at
+  limit 1;
+
+  v_sale_cash_session_id := public.open_cloud_cash_session(
+    '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    'sales-register',
+    1000,
+    'رصيد افتتاحي لاختبار تحصيل البيع',
+    '550e8400-e29b-41d4-a716-446655440050'
+  );
+
   v_sale_one := public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    v_default_warehouse_id,
     jsonb_build_array(jsonb_build_object(
       'product_id', '30000000-0000-0000-0000-000000000001',
-      'quantity', 2
+      'quantity_scaled', 2000
     )),
     100,
     v_customer_id,
     'cash',
+    v_sale_cash_session_id,
     '50000000-0000-0000-0000-000000000001'
   );
 
   v_sale_two := public.create_cloud_sale_with_account(
     '20000000-0000-0000-0000-000000000001',
+    v_default_branch_id,
+    v_default_warehouse_id,
     jsonb_build_array(jsonb_build_object(
       'product_id', '30000000-0000-0000-0000-000000000001',
-      'quantity', 2
+      'quantity_scaled', 2000
     )),
     100,
     v_customer_id,
     'cash',
+    v_sale_cash_session_id,
     '50000000-0000-0000-0000-000000000001'
   );
 
