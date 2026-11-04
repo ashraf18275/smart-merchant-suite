@@ -232,6 +232,69 @@ void main() {
     expect(await database.query('expenses'), isEmpty);
   });
 
+  test('sale cancellation migration preserves customer ledger and allows reversal entries', () async {
+    await createLocalSchema(database);
+    final customerId = await database.insert('customers', {
+      'name': 'عميل قبل الإلغاء',
+      'is_active': 1,
+      'created_at': DateTime.utc(2026).toIso8601String(),
+    });
+    await database.insert('customer_account_entries', {
+      'customer_id': customerId,
+      'amount_minor': 1250,
+      'entry_type': 'sale',
+      'reference_id': 77,
+      'note': 'قيد قديم',
+      'created_at': DateTime.utc(2026).toIso8601String(),
+    });
+    await database.execute('''
+      CREATE TABLE customer_account_entries_v11_test (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+        entry_type TEXT NOT NULL CHECK (entry_type IN (
+          'sale', 'receipt', 'adjustment', 'return', 'refund'
+        )),
+        reference_id INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    ''');
+    await database.execute('''
+      INSERT INTO customer_account_entries_v11_test
+        (id, customer_id, amount_minor, entry_type, reference_id, note, created_at)
+      SELECT id, customer_id, amount_minor, entry_type, reference_id, note, created_at
+      FROM customer_account_entries
+    ''');
+    await database.execute('DROP TABLE customer_account_entries');
+    await database.execute(
+      'ALTER TABLE customer_account_entries_v11_test RENAME TO customer_account_entries',
+    );
+    await database.delete('schema_migrations', where: 'version = ?', whereArgs: [12]);
+
+    await createSalesCancellationSchema(database);
+    await createSalesCancellationSchema(database);
+
+    final entries = await database.query('customer_account_entries');
+    expect(entries, hasLength(1));
+    expect(entries.single['amount_minor'], 1250);
+    for (final type in ['sale_cancel', 'receipt_reversal', 'refund_due']) {
+      await database.insert('customer_account_entries', {
+        'customer_id': customerId,
+        'amount_minor': -10,
+        'entry_type': type,
+        'reference_id': 77,
+        'note': 'اختبار ترحيل',
+        'created_at': DateTime.utc(2026).toIso8601String(),
+      });
+    }
+    expect(await database.query('customer_account_entries'), hasLength(4));
+    expect(await database.query('sales_cancellations'), isEmpty);
+    expect(await database.query('schema_migrations',
+      where: 'version = ?', whereArgs: [12]), hasLength(1));
+  });
+
   test('customer return migration preserves existing customer ledger and is idempotent', () async {
     await createLocalSchema(database);
     final customerId = await database.insert('customers', {
