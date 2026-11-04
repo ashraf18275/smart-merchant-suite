@@ -23,7 +23,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -31,7 +31,7 @@ void main() {
     final names = tables.map((row) => row['name']).toSet();
     final saleColumns = await database.rawQuery('PRAGMA table_info(sales)');
     expect(saleColumns.map((row) => row['name']), containsAll(['warehouse_id', 'customer_id']));
-    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries']));
+    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries', 'supplier_returns', 'supplier_return_items']));
     final units = await database.query('product_units');
     expect(units, hasLength(1));
     expect(units.single['name'], 'قطعة');
