@@ -20,6 +20,29 @@ void main() {
   });
   tearDown(() async => db.close());
 
+  test('creates customer opening balances as signed ledger entries without cash movement', () async {
+    final debitCustomer = await accounts.addCustomer(
+      name: 'عميل رصيد مدين',
+      openingBalanceMinor: 12500,
+    );
+    final creditCustomer = await accounts.addCustomer(
+      name: 'عميل رصيد دائن',
+      openingBalanceMinor: -3500,
+    );
+    expect(await accounts.customerBalance(debitCustomer), 12500);
+    expect(await accounts.customerBalance(creditCustomer), -3500);
+    final entries = await db.query('customer_account_entries',
+      orderBy: 'id ASC');
+    expect(entries.map((row) => row['amount_minor']), [12500, -3500]);
+    expect(entries.every((row) => row['entry_type'] == 'adjustment'), isTrue);
+    expect(entries.every((row) => row['note'] == 'رصيد افتتاحي عند إنشاء الحساب'), isTrue);
+    expect(await db.query('cash_transactions'), isEmpty);
+    expect(await db.query('payment_records'), isEmpty);
+    final events = await db.query('audit_events',
+      where: "action = 'customer_created'");
+    expect(events, hasLength(2));
+  });
+
   test('lists only active customers alphabetically for sales selection', () async {
     final zed = await accounts.addCustomer(name: 'زيد');
     final ahmed = await accounts.addCustomer(name: 'أحمد');
