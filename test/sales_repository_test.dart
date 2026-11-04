@@ -461,6 +461,22 @@ void main() {
     expect(await accounts.customerBalance(customerId), 0);
   });
 
+  test('cancels cash sale and stores refund without creating customer ledger entries', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+    );
+    await sales.cancelSale(
+      saleId: saleId,
+      refundedMinor: 1000,
+      reason: 'رد جزء من المبلغ',
+    );
+    expect(await db.query('customer_account_entries'), isEmpty);
+    expect((await db.query('sales_cancellations')).single['refunded_minor'], 1000);
+    expect((await products.all()).single.stockQuantity, 5000);
+  });
+
   test('cancellation restores inventory at the original sale cost', () async {
     final saleId = await sales.createSale(
       quantities: {productId: 2000},
