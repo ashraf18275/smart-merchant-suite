@@ -64,6 +64,8 @@ jobs:
       - name: Run tests
         run: flutter test
 
+  # Explicit branch builds use the [build-release] commit marker; both packages
+  # remain private workflow artifacts and are not published to any store.
   build-android:
     name: Build Android (only after Flutter CI passes)
     needs: analyze-and-test
