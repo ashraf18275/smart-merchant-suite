@@ -39,7 +39,7 @@ void main() {
     expect(await db.query('cash_transactions'), isEmpty);
     expect(await db.query('payment_records'), isEmpty);
     final events = await db.query('audit_events',
-      where: "action = 'customer_created'");
+      where: "action = 'customer_opening_balance_set'");
     expect(events, hasLength(2));
   });
 
@@ -73,7 +73,7 @@ void main() {
     expect(await db.query('cash_transactions'), isEmpty);
     expect(await db.query('payment_records'), isEmpty);
     final events = await db.query('audit_events',
-      where: "action = 'supplier_created'");
+      where: "action = 'supplier_opening_balance_set'");
     expect(events, hasLength(2));
   });
 
