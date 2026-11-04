@@ -60,3 +60,27 @@ The initial permission list has been expanded to cover the retail modules that a
 - Data import: `data.import`.
 
 These keys are now aligned across the Dart permission catalogue, the member-creation Edge Function, the database constraint, and the audited `replace_member_permissions` RPC. Existing grants are preserved by the migration. The permission checklist UI and enforcement at every local/cloud operation are still pending; the presence of a key in the catalogue does not mean the corresponding feature is already secured end-to-end.
+
+
+## تحديث التنفيذ — توصيل تسجيل الدخول السحابي وتهيئة المالك (4 نوفمبر 2026)
+
+- أضيفت تبعية `supabase_flutter 2.18.x` مع Dart SDK `>=3.9.0`.
+- أضيفت `CloudConfig` لقراءة `SUPABASE_URL` و`SUPABASE_PUBLISHABLE_KEY` من build-time defines؛ لا يوجد service-role key في تطبيق Flutter.
+- عند غياب إعدادات السحابة أو فشل تهيئتها، يظل التطبيق المحلي متاحًا.
+- أضيفت شاشة الحساب السحابي لتسجيل الدخول باسم المستخدم وكلمة المرور، وتسجيل حساب مالك جديد، وعرض الأنشطة المتاحة، وإنشاء نشاط إضافي.
+- اسم المستخدم يحول إلى البريد الداخلي المحجوز `.invalid` وفق سياسة تسجيل الدخول الحالية؛ لا يُطلب من المستخدم بريد حقيقي ولا ترسل دعوات.
+- تسجيل المالك ينشئ صف النشاط؛ مشغلات قاعدة البيانات تنشئ عضوية المالك والفرع والمخزن الرئيسيين تلقائيًا.
+- أضيفت سياسة تسمح للمالك المسجل فقط بربط اسم دخوله بعضويته؛ القراءة متاحة وفق RLS. لا يستطيع الموظف انتحال اسم المالك.
+- أُخذ في الاعتبار أن مالكًا واحدًا قد يملك عدة أنشطة: اسم الدخول العالمي يرتبط مرة واحدة بحساب Auth ولا يتكرر لكل نشاط.
+- شاشة السحابة تعرض صراحة أن بيانات SQLite لا تزال محلية وأن مزامنة الأجهزة لم تُفعّل بعد.
+
+**إعداد المشروع قبل استخدام تسجيل المالك:**
+- تمرير `SUPABASE_URL` و`SUPABASE_PUBLISHABLE_KEY` وقت البناء باستخدام `--dart-define`.
+- لأن أسماء الدخول تستخدم نطاق `.invalid` لا يمكنه استقبال رسالة تأكيد، يجب تعطيل تأكيد البريد الإلكتروني في إعدادات Auth بالمشروع؛ وإلا سيُنشأ المستخدم دون جلسة فورية ولن تكتمل تهيئة النشاط من الشاشة.
+- لا تضع مفتاح `service_role` في التطبيق أو في build defines.
+
+**التحقق:**
+- Flutter CI run #610: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41917807534 — Analyze success و**160 اختبارًا ناجحًا**.
+- Supabase/PostgreSQL run #110: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41917228779 — جميع الهجرات واختبارات الأمان وترحيل الكميات القديمة وDeno checks: success.
+- Flutter lockfile المحدّث جرى حله داخل CI وأُرفق مع artifact `resolved-engineering-inputs`; يجب حفظ النسخة المقفلة في المستودع قبل التسليم النهائي.
+- هذه الخطوة لا تعني اكتمال مزامنة البيانات أو صلاحيات واجهات التطبيق؛ إنها تأسيس اتصال الهوية وتهيئة المالك فقط.
