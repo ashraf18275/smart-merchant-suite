@@ -8,7 +8,7 @@ create policy login_names_insert_owner_self on public.member_login_names
       select 1
       from public.business_members m
       where m.id = member_id
-        and m.business_id = business_id
+        and m.business_id = member_login_names.business_id
         and m.user_id = (select auth.uid())
         and m.is_owner = true
         and m.is_active = true
