@@ -63,6 +63,17 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     return value < 0 ? '-$formatted ج.م' : '$formatted ج.م';
   }
 
+  String get _balanceTitle {
+    if (_isSupplier) {
+      if (_balance > 0) return 'مستحق للمورد';
+      if (_balance < 0) return 'رصيد لنا لدى المورد';
+      return 'حساب المورد متوازن';
+    }
+    if (_balance > 0) return 'مديونية العميل';
+    if (_balance < 0) return 'رصيد مستحق للعميل';
+    return 'حساب العميل متوازن';
+  }
+
   int? _parseMoney(String value) {
     final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?$').firstMatch(value.trim());
     if (match == null) return null;
@@ -437,7 +448,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                       padding: const EdgeInsets.all(16),
                       child: Row(children: [
                         Expanded(child: Text(
-                          _isSupplier ? 'المبلغ المستحق للمورد' : 'مديونية العميل',
+                          _balanceTitle,
                           style: Theme.of(context).textTheme.titleMedium,
                         )),
                         Text(_money(_balance),
