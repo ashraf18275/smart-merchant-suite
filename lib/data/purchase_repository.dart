@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
+import 'audit_cash_writer.dart';
 import '../core/quantity.dart';
 
 class PurchaseLineInput {
@@ -141,6 +142,23 @@ class PurchaseRepository {
         });
       }
 
+      await writeAuditEvent(txn,
+        action: 'purchase_created',
+        entityType: 'purchase',
+        entityId: purchaseId,
+        amountMinor: total,
+        details: 'supplier_id=$supplierId; warehouse_id=$warehouseId; paid_minor=$paidMinor',
+        createdAt: stamp,
+      );
+      await writeCashMovement(txn,
+        direction: 'out',
+        category: 'purchase_payment',
+        amountMinor: paidMinor,
+        sourceType: 'purchase',
+        sourceId: purchaseId,
+        note: 'سداد نقدي عند فاتورة مشتريات رقم $purchaseId',
+        createdAt: stamp,
+      );
       for (final item in prepared) {
         final productId = item['productId']!;
         final quantity = item['quantity']!;
@@ -322,6 +340,14 @@ class PurchaseRepository {
         });
       }
 
+      await writeAuditEvent(txn,
+        action: 'supplier_return_created',
+        entityType: 'supplier_return',
+        entityId: returnId,
+        amountMinor: total,
+        details: 'purchase_id=$purchaseId; reason=$cleanReason',
+        createdAt: stamp,
+      );
       await txn.insert('supplier_account_entries', {
         'supplier_id': supplierId,
         'amount_minor': -total,
