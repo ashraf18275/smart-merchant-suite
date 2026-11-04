@@ -1,6 +1,7 @@
 import '../../core/app_error.dart';
 import '../../domain/sale_record.dart';
 import '../../domain/sale_return_line.dart';
+import '../../domain/payment_method.dart';
 import '../ports/sales_service.dart';
 import '../ports/sales_store.dart';
 
@@ -15,6 +16,7 @@ class SalesApplicationService implements SalesService {
     required int paidMinor,
     required int warehouseId,
     int? customerId,
+    String paymentMethod = PaymentMethod.cash,
   }) async {
     if (quantities.isEmpty) throw AppException('أضف صنفًا واحدًا على الأقل');
     if (quantities.values.any((quantity) => quantity <= 0)) {
@@ -22,6 +24,9 @@ class SalesApplicationService implements SalesService {
     }
     if (paidMinor < 0) {
       throw AppException('المبلغ المدفوع لا يمكن أن يكون سالبًا');
+    }
+    if (!PaymentMethod.isValid(paymentMethod)) {
+      throw AppException('طريقة الدفع المحددة غير مدعومة');
     }
     if (customerId != null && customerId <= 0) {
       throw AppException('العميل المحدد غير صالح');
@@ -31,6 +36,7 @@ class SalesApplicationService implements SalesService {
       paidMinor: paidMinor,
       warehouseId: warehouseId,
       customerId: customerId,
+      paymentMethod: paymentMethod,
     );
   }
 
