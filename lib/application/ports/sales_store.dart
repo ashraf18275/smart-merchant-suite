@@ -18,6 +18,7 @@ abstract interface class SalesStore {
     required int saleId,
     required int refundedMinor,
     required String reason,
+    String refundMethod = PaymentMethod.cash,
   });
 
   Future<List<Map<String, Object?>>> returnableSales();
