@@ -59,9 +59,19 @@ class CloudLocationWorkspace {
   final bool actorIsOwner;
   final Set<String> permissions;
 
+  // Keep client visibility aligned with cloud_branches/cloud_warehouses RLS.
+  // Operational permissions may read locations for their selectors even when
+  // the member cannot manage the location records themselves.
   bool get canView => actorIsOwner ||
-      permissions.contains('branches.view') ||
-      permissions.contains('warehouses.view');
+      const {
+        'branches.view',
+        'warehouses.view',
+        'inventory.view',
+        'sales.create',
+        'products.view',
+        'purchases.view',
+        'purchases.create',
+      }.intersection(permissions).isNotEmpty;
   bool get canManageBranches =>
       actorIsOwner || permissions.contains('branches.manage');
   bool get canManageWarehouses =>
