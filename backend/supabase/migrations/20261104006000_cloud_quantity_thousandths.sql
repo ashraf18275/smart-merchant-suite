@@ -343,7 +343,7 @@ begin
     raise exception 'product unavailable' using errcode = '23514';
   end if;
 
-  select sum(((p.price_minor::numeric * x.quantity_scaled) + 500) / 1000)
+  select sum(floor((p.price_minor::numeric * x.quantity_scaled + 500) / 1000))
   into v_total
   from jsonb_to_recordset(p_items) as x(product_id uuid, quantity_scaled bigint)
   join public.cloud_products p
@@ -388,7 +388,7 @@ begin
       raise exception 'insufficient warehouse stock' using errcode = '23514';
     end if;
 
-    v_line_total := (((v_item.price_minor::numeric * v_item.quantity_scaled) + 500) / 1000)::bigint;
+    v_line_total := floor((v_item.price_minor::numeric * v_item.quantity_scaled + 500) / 1000)::bigint;
 
     update public.cloud_product_warehouse_stock
     set quantity_scaled = quantity_scaled - v_item.quantity_scaled,
