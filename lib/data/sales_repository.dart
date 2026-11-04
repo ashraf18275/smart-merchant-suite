@@ -220,9 +220,12 @@ class SalesRepository implements SalesStore {
 
       for (final input in items) {
         final rows = await txn.rawQuery('''
-          SELECT i.product_id, i.quantity, i.unit_price_minor, i.line_total_minor,
+          SELECT i.product_id, i.quantity, i.unit_price_minor, i.unit_cost_minor,
+                 i.line_total_minor, p.cost_minor AS current_cost_minor,
+                 p.stock_quantity AS current_stock_quantity,
                  COALESCE(i.returned_quantity, 0) AS returned_quantity,
                  COALESCE(i.returned_minor, 0) AS returned_minor,
+                 COALESCE(i.returned_cost_minor, 0) AS returned_cost_minor,
                  COALESCE(u.allows_fraction, 0) AS allows_fraction
           FROM sale_items i
           JOIN products p ON p.id = i.product_id
@@ -241,6 +244,17 @@ class SalesRepository implements SalesStore {
           throw AppException('وحدة قياس أحد الأصناف لا تقبل الكميات الكسرية');
         }
         final unitPrice = line['unit_price_minor']! as int;
+        final unitCost = line['unit_cost_minor']! as int;
+        final remainingCost = Quantity.lineTotalMinor(
+          unitPriceMinor: unitCost,
+          quantityScaled: soldQuantity,
+        ) - (line['returned_cost_minor']! as int);
+        final returnCost = input.quantity == remainingQuantity
+            ? remainingCost
+            : Quantity.lineTotalMinor(
+                unitPriceMinor: unitCost,
+                quantityScaled: input.quantity,
+              ).clamp(0, remainingCost).toInt();
         final remainingValue = (line['line_total_minor']! as int) -
             (line['returned_minor']! as int);
         final lineValue = input.quantity == remainingQuantity
@@ -257,7 +271,12 @@ class SalesRepository implements SalesStore {
           'quantity': input.quantity,
           'newReturnedQuantity': alreadyReturned + input.quantity,
           'newReturnedMinor': (line['returned_minor']! as int) + lineValue,
+          'newReturnedCostMinor': (line['returned_cost_minor']! as int) + returnCost,
           'unitPrice': unitPrice,
+          'unitCost': unitCost,
+          'lineCost': returnCost,
+          'currentCost': line['current_cost_minor']! as int,
+          'currentStock': line['current_stock_quantity']! as int,
           'lineTotal': lineValue,
           'stock': stock,
         });
@@ -280,11 +299,14 @@ class SalesRepository implements SalesStore {
           'product_id': line['productId'],
           'quantity': line['quantity'],
           'unit_price_minor': line['unitPrice'],
+          'unit_cost_minor': line['unitCost'],
           'line_total_minor': line['lineTotal'],
+          'line_cost_minor': line['lineCost'],
         });
         await txn.update('sale_items', {
           'returned_quantity': line['newReturnedQuantity'],
           'returned_minor': line['newReturnedMinor'],
+          'returned_cost_minor': line['newReturnedCostMinor'],
         }, where: 'id = ?', whereArgs: [line['saleItemId']]);
 
         final newStock = line['stock']! + line['quantity']!;
@@ -305,8 +327,16 @@ class SalesRepository implements SalesStore {
         final totals = await txn.rawQuery(
           'SELECT COALESCE(SUM(quantity), 0) AS total FROM product_warehouse_stock WHERE product_id = ?',
           [line['productId']]);
-        await txn.update('products', {'stock_quantity': totals.single['total']},
-          where: 'id = ?', whereArgs: [line['productId']]);
+        final newTotalQuantity = line['currentStock']! + line['quantity']!;
+        final weightedNumerator = line['currentStock']! * line['currentCost']! +
+            line['quantity']! * line['unitCost']!;
+        final newAverageCost = newTotalQuantity == 0
+            ? line['unitCost']!
+            : (weightedNumerator + newTotalQuantity ~/ 2) ~/ newTotalQuantity;
+        await txn.update('products', {
+          'stock_quantity': totals.single['total'],
+          'cost_minor': newAverageCost,
+        }, where: 'id = ?', whereArgs: [line['productId']]);
         await txn.insert('inventory_movements', {
           'product_id': line['productId'], 'warehouse_id': warehouseId,
           'quantity_delta': line['quantity'],
