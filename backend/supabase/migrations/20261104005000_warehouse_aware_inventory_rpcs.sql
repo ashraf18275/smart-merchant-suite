@@ -41,6 +41,8 @@ begin
     join public.cloud_warehouses w
       on w.business_id = b.business_id and w.branch_id = b.id
     where b.business_id = new.business_id and b.is_active and w.is_active
+      and (new.default_branch_id is null or b.id = new.default_branch_id)
+      and (new.default_warehouse_id is null or w.id = new.default_warehouse_id)
     order by b.created_at, w.created_at
     limit 1;
     new.default_branch_id := coalesce(new.default_branch_id, v_branch_id);
