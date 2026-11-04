@@ -136,4 +136,61 @@ void main() {
     expect(find.text('أضف موردًا واختر مخزنًا نشطًا أولًا.'), findsOneWidget);
     expect(await database.query('purchases'), isEmpty);
   });
+  testWidgets('creates a supplier return from the purchases screen', (tester) async {
+    final productId = await products.add(const Product(
+      name: 'صنف مرتجع من الواجهة',
+      costMinor: 1000,
+      priceMinor: 1500,
+    ));
+    final supplierId = await purchases.addSupplier(name: 'مورد اختبار الواجهة');
+    final warehouseId = (await warehouses.warehouses()).single.id;
+    await purchases.createPurchase(
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      items: [PurchaseLineInput(
+        productId: productId,
+        quantity: 3000,
+        unitCostMinor: 2000,
+      )],
+      paidMinor: 0,
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: PurchasesPage(
+          purchases: purchases,
+          products: products,
+          warehouses: warehouses,
+        ),
+      ),
+    ));
+    await pumpDatabaseResult(tester);
+
+    await tester.tap(find.text('إنشاء مرتجع مورد'));
+    await pumpDatabaseResult(tester);
+    expect(find.text('إنشاء مرتجع مورد'), findsOneWidget);
+    expect(find.textContaining('مورد اختبار الواجهة'), findsOneWidget);
+    expect(find.text('صنف مرتجع من الواجهة'), findsOneWidget);
+
+    final quantityField = find.byWidgetPredicate((widget) =>
+      widget is TextField &&
+      widget.decoration?.labelText?.startsWith('الكمية المرتجعة') == true);
+    expect(quantityField, findsOneWidget);
+    await tester.enterText(quantityField, '1');
+    final reasonField = find.byWidgetPredicate((widget) =>
+      widget is TextField && widget.decoration?.labelText == 'سبب المرتجع *');
+    await tester.enterText(reasonField, 'بضاعة تالفة');
+    await tester.tap(find.text('حفظ المرتجع'));
+    await pumpDatabaseResult(tester);
+
+    expect(await database.query('supplier_returns'), hasLength(1));
+    expect((await database.query('supplier_returns')).single['total_minor'], 2000);
+    expect((await products.all()).single.stockQuantity, 2000);
+    expect((await database.query('purchase_items')).single['returned_quantity'], 1000);
+    expect((await database.query('supplier_account_entries', orderBy: 'id DESC'))
+        .first['entry_type'], 'return');
+    expect(find.textContaining('تم حفظ مرتجع المورد رقم'), findsOneWidget);
+  });
+
 }
