@@ -6,6 +6,7 @@ import 'package:smart_merchant_suite/data/product_repository.dart';
 import 'package:smart_merchant_suite/data/sales_repository.dart';
 import 'package:smart_merchant_suite/data/warehouse_repository.dart';
 import 'package:smart_merchant_suite/domain/product.dart';
+import 'package:smart_merchant_suite/domain/payment_method.dart';
 import 'package:smart_merchant_suite/domain/sale_return_line.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -66,6 +67,21 @@ void main() {
     final invoice = (await db.query('sales')).single;
     expect(invoice['customer_id'], isNull);
     expect(await db.query('customer_account_entries'), isEmpty);
+  });
+
+  test('records card settlement without adding a cash drawer movement', () async {
+    final saleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 500,
+      warehouseId: warehouseId,
+      paymentMethod: PaymentMethod.card,
+    );
+    final payment = (await db.query('payment_records')).single;
+    expect(payment['source_type'], 'sale');
+    expect(payment['source_id'], saleId);
+    expect(payment['payment_method'], 'card');
+    expect(payment['amount_minor'], 500);
+    expect(await db.query('cash_transactions'), isEmpty);
   });
 
   test('rejects payment above invoice total without changing stock or ledger', () async {
