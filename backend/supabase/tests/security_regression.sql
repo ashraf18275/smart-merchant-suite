@@ -128,6 +128,7 @@ declare
   v_count_audit integer;
   v_delegated_escalation_rejected boolean := false;
   v_owner_change_rejected boolean := false;
+  v_owner_login_insert_rejected boolean := false;
   v_other_business_adjustment_rejected boolean := false;
   v_created_branch uuid;
   v_created_default_warehouse uuid;
@@ -1726,6 +1727,38 @@ begin
   where business_id = '20000000-0000-0000-0000-000000000001'
     and user_id = '10000000-0000-0000-0000-000000000001'
     and is_owner = true;
+
+  insert into public.member_login_names (business_id, member_id, username)
+  values (
+    '20000000-0000-0000-0000-000000000001',
+    v_owner_member_id,
+    'owner-regression-test'
+  );
+  if not exists (
+    select 1 from public.member_login_names
+    where business_id = '20000000-0000-0000-0000-000000000001'
+      and member_id = v_owner_member_id
+      and username = 'owner-regression-test'
+  ) then
+    raise exception 'owner username onboarding failed';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  begin
+    insert into public.member_login_names (business_id, member_id, username)
+    values (
+      '20000000-0000-0000-0000-000000000001',
+      v_owner_member_id,
+      'owner-spoof-regression'
+    );
+    raise exception 'username onboarding security regression: non-owner assigned the owner login';
+  exception when insufficient_privilege then
+    v_owner_login_insert_rejected := true;
+  end;
+  if not v_owner_login_insert_rejected then
+    raise exception 'username onboarding security regression: non-owner insert was not rejected';
+  end if;
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 
   begin
     perform public.replace_member_permissions(
