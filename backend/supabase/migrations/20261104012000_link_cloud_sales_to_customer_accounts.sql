@@ -222,6 +222,45 @@ begin
 end;
 $$;
 
+create or replace function public.create_cloud_sale_with_account(
+  p_business_id uuid,
+  p_items jsonb,
+  p_paid_minor bigint,
+  p_customer_id uuid,
+  p_payment_method text,
+  p_operation_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_branch_id uuid;
+  v_warehouse_id uuid;
+  v_scaled_items jsonb;
+begin
+  select b.id, w.id into v_branch_id, v_warehouse_id
+  from public.cloud_branches b
+  join public.cloud_warehouses w
+    on w.business_id = b.business_id and w.branch_id = b.id
+  where b.business_id = p_business_id and b.is_active and w.is_active
+  order by b.created_at, w.created_at limit 1;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'product_id', x.product_id,
+    'quantity_scaled', x.quantity::bigint * 1000
+  )), '[]'::jsonb)
+  into v_scaled_items
+  from jsonb_to_recordset(p_items) as x(product_id uuid, quantity integer);
+
+  return public.create_cloud_sale_with_account(
+    p_business_id, v_branch_id, v_warehouse_id, v_scaled_items,
+    p_paid_minor, p_customer_id, p_payment_method, p_operation_id
+  );
+end;
+$;
+
 create or replace function public.create_cloud_sale(
   p_business_id uuid,
   p_branch_id uuid,
@@ -280,11 +319,15 @@ $$;
 
 revoke all on function public.create_cloud_sale_with_account(uuid, uuid, uuid, jsonb, bigint, uuid, text, uuid)
   from public, anon;
+revoke all on function public.create_cloud_sale_with_account(uuid, jsonb, bigint, uuid, text, uuid)
+  from public, anon;
 revoke all on function public.create_cloud_sale(uuid, uuid, uuid, jsonb, bigint, uuid)
   from public, anon;
 revoke all on function public.create_cloud_sale(uuid, jsonb, bigint, uuid)
   from public, anon;
 grant execute on function public.create_cloud_sale_with_account(uuid, uuid, uuid, jsonb, bigint, uuid, text, uuid)
+  to authenticated;
+grant execute on function public.create_cloud_sale_with_account(uuid, jsonb, bigint, uuid, text, uuid)
   to authenticated;
 grant execute on function public.create_cloud_sale(uuid, uuid, uuid, jsonb, bigint, uuid)
   to authenticated;
