@@ -31,7 +31,7 @@ Future<void> main() async {
   var cloudEnabled = false;
   if (config.isConfigured) {
     try {
-      await Supabase.initialize(url: config.url, anonKey: config.anonKey);
+      await Supabase.initialize(url: config.url, publishableKey: config.publishableKey);
       cloudEnabled = true;
     } catch (_) {
       // Local-first operation remains available if cloud setup is unavailable.
