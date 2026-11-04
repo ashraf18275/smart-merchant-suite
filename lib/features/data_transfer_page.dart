@@ -168,7 +168,7 @@ final _tables = <_ExportTable>[
   ..._legacyV10Tables.where((spec) => spec.table != 'sale_items'),
   const _ExportTable('بنود الفواتير', 'sale_items', [
     'id', 'sale_id', 'product_id', 'quantity', 'returned_quantity',
-    'returned_minor', 'unit_price_minor', 'unit_cost_minor', 'line_total_minor',
+    'returned_minor', 'returned_cost_minor', 'unit_price_minor', 'unit_cost_minor', 'line_total_minor',
   ]),
   const _ExportTable('مرتجعات العملاء', 'customer_returns', [
     'id', 'sale_id', 'customer_id', 'warehouse_id', 'total_minor',
@@ -401,7 +401,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
       }
       if (schemaVersion < 11) {
         data['sale_items'] = data['sale_items']!.map((row) => {
-          ...row, 'returned_quantity': 0, 'returned_minor': 0,
+          ...row, 'returned_quantity': 0, 'returned_minor': 0, 'returned_cost_minor': 0,
         }).toList(growable: false);
       }
       if (!BackupSchema.hasPurchaseData(schemaVersion)) {
