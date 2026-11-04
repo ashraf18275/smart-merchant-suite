@@ -216,7 +216,7 @@ declare
 begin
   if auth.uid() is null or p_business_id is null or p_cash_session_id is null
      or p_operation_id is null or p_amount_minor is null or p_amount_minor <= 0
-     or p_direction not in ('in', 'out')
+     or p_direction is null or p_direction not in ('in', 'out')
      or length(v_category) < 1 or length(v_category) > 80
      or length(coalesce(v_note, '')) > 500 then
     raise exception 'invalid cash movement details' using errcode = '22023';
