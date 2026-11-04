@@ -82,7 +82,7 @@ jobs:
           CREATE TABLE auth.users (id uuid PRIMARY KEY);
           CREATE FUNCTION auth.uid() RETURNS uuid
           LANGUAGE sql STABLE
-          AS $
+          AS $auth_uid$
             SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
           $;
           SQL
