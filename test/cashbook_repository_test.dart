@@ -106,8 +106,8 @@ void main() {
       )),
       throwsArgumentError,
     );
-    expect(await cashbook.payments(), isEmpty);
-    expect(await cashbook.movements(), isEmpty);
+    expect(await cashbook.payments(branchId: branchId), isEmpty);
+    expect(await cashbook.movements(branchId: branchId, cashDrawerId: drawerId), isEmpty);
   });
 
   test('opens and closes a cash session with a reconciled physical count', () async {
@@ -118,7 +118,7 @@ void main() {
       note: 'فكة بداية الوردية',
     );
     await expectLater(
-      cashbook.openSession(openingBalanceMinor: 5000),
+      cashbook.openSession(branchId: branchId, cashDrawerId: drawerId, openingBalanceMinor: 5000),
       throwsStateError,
     );
 
@@ -230,7 +230,7 @@ void main() {
       throwsStateError,
     );
     await expectLater(
-      cashbook.openSession(openingBalanceMinor: -1),
+      cashbook.openSession(branchId: branchId, cashDrawerId: drawerId, openingBalanceMinor: -1),
       throwsArgumentError,
     );
     await cashbook.openSession(branchId: branchId, cashDrawerId: drawerId, openingBalanceMinor: 0);
