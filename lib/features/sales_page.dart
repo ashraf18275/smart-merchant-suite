@@ -20,12 +20,14 @@ class SalesPage extends StatefulWidget {
     required this.sales,
     required this.warehouseStore,
     required this.accountRepository,
+    this.initialWarehouseId,
   });
 
   final ProductCatalog products;
   final SalesService sales;
   final BranchWarehouseStore warehouseStore;
   final AccountRepository accountRepository;
+  final int? initialWarehouseId;
 
   @override
   State<SalesPage> createState() => _SalesPageState();
@@ -43,7 +45,11 @@ class _SalesPageState extends State<SalesPage> {
   String? _error;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _selectedWarehouseId = widget.initialWarehouseId;
+    _load();
+  }
 
   String _quantity(int scaled) => Quantity.format(scaled);
 
