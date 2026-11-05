@@ -116,13 +116,11 @@ Future<void> writeCashMovement(
   });
   // Only physical cash belongs in the cash drawer journal.
   if (paymentMethod != PaymentMethod.cash) return;
-  Map<String, Object?>? drawer;
-  var resolvedDrawerId = cashDrawerId;
-  drawer = await ensureCashDrawerForCurrentDevice(
+  final drawer = await ensureCashDrawerForCurrentDevice(
     executor,
     branchId: branchId,
   );
-  resolvedDrawerId ??= drawer['id']! as int;
+  final resolvedDrawerId = cashDrawerId ?? drawer['id']! as int;
   if (drawer['id'] != resolvedDrawerId) {
     throw StateError('cash_drawer_device_mismatch');
   }
@@ -143,11 +141,10 @@ Future<void> writeCashMovement(
     if (session['branch_id'] != branchId) {
       throw StateError('cash_session_branch_mismatch');
     }
-    if (resolvedDrawerId != null &&
-        session['cash_drawer_id'] != resolvedDrawerId) {
+    if (session['cash_drawer_id'] != resolvedDrawerId) {
       throw StateError('cash_session_drawer_mismatch');
     }
-  } else if (resolvedDrawerId != null) {
+  } else {
     final sessions = await executor.query(
       'cash_sessions',
       columns: ['id'],
@@ -168,7 +165,7 @@ Future<void> writeCashMovement(
     'source_id': sourceId,
     'cash_session_id': resolvedSessionId,
     'branch_id': branchId,
-    'cash_drawer_id': resolvedDrawerId ?? session?['cash_drawer_id'] as int?,
+    'cash_drawer_id': resolvedDrawerId,
     'note': note,
     'created_at': stamp,
   });
