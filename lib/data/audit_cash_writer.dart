@@ -34,6 +34,8 @@ Future<void> writeCashMovement(
   String? createdAt,
   String paymentMethod = PaymentMethod.cash,
   int? branchId,
+  int? cashSessionId,
+  int? cashDrawerId,
 }) async {
   if (amountMinor <= 0) return;
   if (direction != 'in' && direction != 'out') {
@@ -54,16 +56,34 @@ Future<void> writeCashMovement(
   });
   // Only physical cash belongs in the cash drawer journal.
   if (paymentMethod != PaymentMethod.cash) return;
-  // Never guess which open drawer owns a movement. If the caller has not
-  // supplied an explicit session context, leave it unassigned for reconciliation.
+  Map<String, Object?>? session;
+  if (cashSessionId != null) {
+    final sessions = await executor.query(
+      'cash_sessions',
+      where: "id = ? AND status = 'open'",
+      whereArgs: [cashSessionId],
+      limit: 1,
+    );
+    if (sessions.isEmpty) {
+      throw StateError('cash_session_not_open_or_missing');
+    }
+    session = sessions.single;
+    if (branchId != null && session['branch_id'] != branchId) {
+      throw StateError('cash_session_branch_mismatch');
+    }
+    if (cashDrawerId != null && session['cash_drawer_id'] != cashDrawerId) {
+      throw StateError('cash_session_drawer_mismatch');
+    }
+  }
   await executor.insert('cash_transactions', {
     'direction': direction,
     'category': category,
     'amount_minor': amountMinor,
     'source_type': sourceType,
     'source_id': sourceId,
-    'cash_session_id': null,
-    'branch_id': branchId,
+    'cash_session_id': cashSessionId,
+    'branch_id': branchId ?? session?['branch_id'] as int?,
+    'cash_drawer_id': cashDrawerId ?? session?['cash_drawer_id'] as int?,
     'note': note,
     'created_at': stamp,
   });
