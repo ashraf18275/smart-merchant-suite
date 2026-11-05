@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/cashbook_repository.dart';
+import '../domain/branch.dart';
 import '../domain/payment_method.dart';
 
 class CashbookPage extends StatefulWidget {
@@ -15,6 +16,7 @@ class _CashbookPageState extends State<CashbookPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   late Future<_CashbookData> _data;
+  int? _selectedBranchId;
 
   @override
   void initState() {
@@ -30,14 +32,47 @@ class _CashbookPageState extends State<CashbookPage>
   }
 
   Future<_CashbookData> _load() async {
+    // One cash drawer belongs to this installation on the selected branch.
+    final branches = await widget.repository.branches();
+    var branchId = _selectedBranchId;
+    if (branchId != null && !branches.any((branch) => branch.id == branchId)) {
+      branchId = null;
+    }
+    if (branchId == null && branches.length == 1) {
+      branchId = branches.single.id;
+    }
+    if (branchId == null) {
+      return _CashbookData(
+        branches: branches,
+        branchId: null,
+        cashDrawerId: null,
+        drawerLabel: null,
+        totals: const {'incoming': 0, 'outgoing': 0, 'balance': 0},
+        movements: const [],
+        events: await widget.repository.auditEvents(),
+        payments: const [],
+        currentSession: null,
+        sessions: const [],
+      );
+    }
+    final drawer = await widget.repository.ensureDrawer(branchId: branchId);
+    final drawerId = drawer['id']! as int;
     // Use sequential reads: all repositories share one local SQLite connection.
-    final totals = await widget.repository.totals();
-    final movements = await widget.repository.movements();
+    final totals = await widget.repository.totals(
+      branchId: branchId, cashDrawerId: drawerId);
+    final movements = await widget.repository.movements(
+      branchId: branchId, cashDrawerId: drawerId);
     final events = await widget.repository.auditEvents();
-    final payments = await widget.repository.payments();
-    final currentSession = await widget.repository.currentSession();
-    final sessions = await widget.repository.sessionHistory();
+    final payments = await widget.repository.payments(branchId: branchId);
+    final currentSession = await widget.repository.currentSession(
+      branchId: branchId, cashDrawerId: drawerId);
+    final sessions = await widget.repository.sessionHistory(
+      branchId: branchId, cashDrawerId: drawerId);
     return _CashbookData(
+      branches: branches,
+      branchId: branchId,
+      cashDrawerId: drawerId,
+      drawerLabel: drawer['label']! as String,
       totals: totals,
       movements: movements,
       events: events,
@@ -82,7 +117,10 @@ class _CashbookPageState extends State<CashbookPage>
         two(date.day) + '  ' + two(date.hour) + ':' + two(date.minute);
   }
 
-  Future<void> _openSession() async {
+  Future<void> _openSession(_CashbookData data) async {
+    final branchId = data.branchId;
+    final drawerId = data.cashDrawerId;
+    if (branchId == null || drawerId == null) return;
     final opening = TextEditingController(text: '0.00');
     final note = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -133,6 +171,8 @@ class _CashbookPageState extends State<CashbookPage>
     if (result == null) return;
     try {
       await widget.repository.openSession(
+        branchId: branchId,
+        cashDrawerId: drawerId,
         openingBalanceMinor: result['amount']! as int,
         note: result['note']! as String,
       );
@@ -147,7 +187,10 @@ class _CashbookPageState extends State<CashbookPage>
     }
   }
 
-  Future<void> _closeSession(Map<String, Object?> session) async {
+  Future<void> _closeSession(_CashbookData data, Map<String, Object?> session) async {
+    final branchId = data.branchId;
+    final drawerId = data.cashDrawerId;
+    if (branchId == null || drawerId == null) return;
     final expected =
         (session['live_expected_balance_minor'] as num).toInt();
     final counted = TextEditingController(
@@ -205,6 +248,9 @@ class _CashbookPageState extends State<CashbookPage>
     if (result == null) return;
     try {
       final closing = await widget.repository.closeSession(
+        branchId: branchId,
+        cashDrawerId: drawerId,
+        sessionId: session['id']! as int,
         countedBalanceMinor: result['amount']! as int,
         note: result['note']! as String,
       );
@@ -241,7 +287,7 @@ class _CashbookPageState extends State<CashbookPage>
               const Text('لا توجد وردية صندوق مفتوحة.'),
               const SizedBox(height: 8),
               FilledButton.icon(
-                onPressed: _openSession,
+                onPressed: () => _openSession(data),
                 icon: const Icon(Icons.lock_open),
                 label: const Text('فتح وردية وتسجيل الرصيد الافتتاحي'),
               ),
@@ -267,7 +313,7 @@ class _CashbookPageState extends State<CashbookPage>
             Text('الرصيد المتوقع حاليًا: ' + _money(expected)),
             const SizedBox(height: 8),
             FilledButton.icon(
-              onPressed: () => _closeSession(session),
+              onPressed: () => _closeSession(data, session),
               icon: const Icon(Icons.lock),
               label: const Text('عد النقدية وإقفال الوردية'),
             ),
@@ -566,6 +612,10 @@ class _CashbookPageState extends State<CashbookPage>
 
 class _CashbookData {
   const _CashbookData({
+    required this.branches,
+    required this.branchId,
+    required this.cashDrawerId,
+    required this.drawerLabel,
     required this.totals,
     required this.movements,
     required this.events,
@@ -574,6 +624,10 @@ class _CashbookData {
     required this.sessions,
   });
 
+  final List<Branch> branches;
+  final int? branchId;
+  final int? cashDrawerId;
+  final String? drawerLabel;
   final Map<String, int> totals;
   final List<Map<String, Object?>> movements;
   final List<Map<String, Object?>> events;
