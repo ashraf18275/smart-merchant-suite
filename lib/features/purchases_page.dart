@@ -15,11 +15,13 @@ class PurchasesPage extends StatefulWidget {
     required this.purchases,
     required this.products,
     required this.warehouses,
+    this.initialWarehouseId,
   });
 
   final PurchaseRepository purchases;
   final ProductRepository products;
   final WarehouseRepository warehouses;
+  final int? initialWarehouseId;
 
   @override
   State<PurchasesPage> createState() => _PurchasesPageState();
@@ -52,6 +54,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
   @override
   void initState() {
     super.initState();
+    _warehouseId = widget.initialWarehouseId;
     _load();
   }
 
