@@ -4,8 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../cloud/cloud_auth_repository.dart';
 import '../cloud/cloud_business.dart';
 import 'cloud_members_page.dart';
-import 'cloud_products_page.dart';
-import 'cloud_locations_page.dart';
+import 'cloud_workspace_page.dart';
 
 class CloudLoginPage extends StatefulWidget {
   const CloudLoginPage({super.key, required this.client});
@@ -247,36 +246,17 @@ class _CloudLoginPageState extends State<CloudLoginPage> {
                         leading: const Icon(Icons.store_outlined),
                         title: Text(business.name),
                         subtitle: Text(business.id),
-                        trailing: Wrap(
-                          spacing: 4,
-                          children: [
-                            IconButton(
-                              tooltip: 'المنتجات والمخزون السحابي',
-                              icon: const Icon(Icons.inventory_2_outlined),
-                              onPressed: () {
-                                Navigator.of(context).push(MaterialPageRoute<void>(
-                                  builder: (_) => CloudProductsPage(
-                                    client: widget.client,
-                                    businessId: business.id,
-                                    businessName: business.name,
-                                  ),
-                                ));
-                              },
-                            ),
-                            IconButton(
-                              tooltip: 'الفروع والمخازن',
-                              icon: const Icon(Icons.warehouse_outlined),
-                              onPressed: () {
-                                Navigator.of(context).push(MaterialPageRoute<void>(
-                                  builder: (_) => CloudLocationsPage(
-                                    client: widget.client,
-                                    businessId: business.id,
-                                    businessName: business.name,
-                                  ),
-                                ));
-                              },
-                            ),
-                          ],
+                        trailing: IconButton(
+                          tooltip: 'فتح مساحة النشاط وتحديد الفرع والمخزن',
+                          icon: const Icon(Icons.dashboard_customize_outlined),
+                          onPressed: () {
+                            Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => CloudWorkspacePage(
+                                client: widget.client,
+                                business: business,
+                              ),
+                            ));
+                          },
                         ),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute<void>(

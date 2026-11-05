@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloud_location_repository.dart';
 import '../cloud/cloud_product_repository.dart';
+import '../cloud/cloud_workspace_context.dart';
 import '../core/quantity.dart';
 
 // Cloud catalogue presentation remains intentionally read-only until sync is verified.
@@ -12,10 +13,16 @@ class CloudProductsPage extends StatefulWidget {
     required this.client,
     required this.businessId,
     required this.businessName,
+    this.initialBranchId,
+    this.initialWarehouseId,
+    this.onContextChanged,
   });
   final SupabaseClient client;
   final String businessId;
   final String businessName;
+  final String? initialBranchId;
+  final String? initialWarehouseId;
+  final ValueChanged<CloudWorkspaceContext>? onContextChanged;
 
   @override
   State<CloudProductsPage> createState() => _CloudProductsPageState();
@@ -42,14 +49,16 @@ class _CloudProductsPageState extends State<CloudProductsPage> {
     try {
       final workspace = await _locations.load(widget.businessId);
       final activeBranches = workspace.branches.where((item) => item.isActive);
-      final branchId = activeBranches.any((item) => item.id == _branchId)
-          ? _branchId
+      final preferredBranchId = _branchId ?? widget.initialBranchId;
+      final branchId = activeBranches.any((item) => item.id == preferredBranchId)
+          ? preferredBranchId
           : activeBranches.firstOrNull?.id;
       final activeWarehouses = workspace.warehouses.where(
         (item) => item.branchId == branchId && item.isActive,
       );
-      final warehouseId = activeWarehouses.any((item) => item.id == _warehouseId)
-          ? _warehouseId
+      final preferredWarehouseId = _warehouseId ?? widget.initialWarehouseId;
+      final warehouseId = activeWarehouses.any((item) => item.id == preferredWarehouseId)
+          ? preferredWarehouseId
           : activeWarehouses.firstOrNull?.id;
       if (!mounted) return;
       setState(() {
@@ -96,6 +105,11 @@ class _CloudProductsPageState extends State<CloudProductsPage> {
       _loading = true;
       _error = null;
     });
+    widget.onContextChanged?.call(CloudWorkspaceContext(
+      businessId: widget.businessId,
+      branchId: value,
+      warehouseId: warehouse?.id,
+    ));
     try { await _loadProducts(); } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -109,6 +123,11 @@ class _CloudProductsPageState extends State<CloudProductsPage> {
       _loading = true;
       _error = null;
     });
+    widget.onContextChanged?.call(CloudWorkspaceContext(
+      businessId: widget.businessId,
+      branchId: _branchId!,
+      warehouseId: value,
+    ));
     try { await _loadProducts(); } finally {
       if (mounted) setState(() => _loading = false);
     }

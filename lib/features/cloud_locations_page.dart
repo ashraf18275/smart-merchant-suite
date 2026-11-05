@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../cloud/cloud_location_repository.dart';
+import '../cloud/cloud_workspace_context.dart';
 
 class CloudLocationsPage extends StatefulWidget {
   const CloudLocationsPage({
@@ -9,11 +10,17 @@ class CloudLocationsPage extends StatefulWidget {
     required this.client,
     required this.businessId,
     required this.businessName,
+    this.initialBranchId,
+    this.initialWarehouseId,
+    this.onContextChanged,
   });
 
   final SupabaseClient client;
   final String businessId;
   final String businessName;
+  final String? initialBranchId;
+  final String? initialWarehouseId;
+  final ValueChanged<CloudWorkspaceContext>? onContextChanged;
 
   @override
   State<CloudLocationsPage> createState() => _CloudLocationsPageState();
@@ -24,6 +31,7 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
       CloudLocationRepository(widget.client);
   CloudLocationWorkspace? _workspace;
   String? _branchId;
+  String? _warehouseId;
   bool _loading = true;
   String? _error;
 
@@ -37,10 +45,26 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
     setState(() { _loading = true; _error = null; });
     try {
       final data = await _repository.load(widget.businessId);
-      final branchId = data.branches.any((b) => b.id == _branchId)
-          ? _branchId
-          : data.branches.where((b) => b.isActive).firstOrNull?.id;
-      if (mounted) setState(() { _workspace = data; _branchId = branchId; });
+      final activeBranches = data.branches.where((b) => b.isActive);
+      final preferredBranchId = _branchId ?? widget.initialBranchId;
+      final branchId = activeBranches.any((b) => b.id == preferredBranchId)
+          ? preferredBranchId
+          : activeBranches.firstOrNull?.id;
+      final activeWarehouses = data.warehouses.where(
+        (w) => w.branchId == branchId && w.isActive,
+      );
+      final preferredWarehouseId = _warehouseId ?? widget.initialWarehouseId;
+      final warehouseId = activeWarehouses.any((w) => w.id == preferredWarehouseId)
+          ? preferredWarehouseId
+          : activeWarehouses.firstOrNull?.id;
+      if (mounted) {
+        setState(() {
+          _workspace = data;
+          _branchId = branchId;
+          _warehouseId = warehouseId;
+        });
+        _notifyContext();
+      }
     } catch (error) {
       if (mounted) setState(() => _error = _friendlyError(error));
     } finally {
@@ -103,11 +127,12 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
     final name = await _askName('إضافة مخزن');
     if (name == null) return;
     try {
-      await _repository.createWarehouse(
+      final warehouseId = await _repository.createWarehouse(
         businessId: widget.businessId,
         branchId: branchId,
         name: name,
       );
+      _warehouseId = warehouseId;
       await _reload();
       if (mounted) _notice('تم إنشاء المخزن.');
     } catch (error) { if (mounted) _notice(_friendlyError(error)); }
@@ -120,6 +145,8 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
         branchId: branch.id,
         isActive: !branch.isActive,
       );
+      _branchId = null;
+      _warehouseId = null;
       await _reload();
     } catch (error) { if (mounted) _notice(_friendlyError(error)); }
   }
@@ -131,12 +158,48 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
         warehouseId: warehouse.id,
         isActive: !warehouse.isActive,
       );
+      _warehouseId = warehouse.isActive ? null : warehouse.id;
       await _reload();
     } catch (error) { if (mounted) _notice(_friendlyError(error)); }
   }
 
   void _notice(String message) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(message)));
+
+  void _notifyContext() {
+    final branchId = _branchId;
+    if (branchId == null) return;
+    widget.onContextChanged?.call(CloudWorkspaceContext(
+      businessId: widget.businessId,
+      branchId: branchId,
+      warehouseId: _warehouseId,
+    ));
+  }
+
+  void _selectBranch(String? value) {
+    if (value == null || value == _branchId) return;
+    final warehouse = _workspace?.warehouses.where(
+      (item) => item.branchId == value && item.isActive,
+    ).firstOrNull;
+    setState(() {
+      _branchId = value;
+      _warehouseId = warehouse?.id;
+    });
+    _notifyContext();
+  }
+
+  void _selectWarehouse(String? value) {
+    if (value == null || value == _warehouseId) return;
+    final warehouse = _workspace?.warehouses.where(
+      (item) => item.id == value && item.isActive,
+    ).firstOrNull;
+    if (warehouse == null) return;
+    setState(() {
+      _branchId = warehouse.branchId;
+      _warehouseId = warehouse.id;
+    });
+    _notifyContext();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +247,7 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
                               value: b.id,
                               child: Text('${b.name}${b.isActive ? '' : ' — متوقف'}'),
                             )).toList(),
-                            onChanged: (value) => setState(() => _branchId = value),
+                            onChanged: _loading ? null : _selectBranch,
                           ),
                           if (branch != null && data.canManageBranches)
                             Align(
@@ -194,6 +257,21 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
                                 child: Text(branch.isActive ? 'إيقاف الفرع' : 'تفعيل الفرع'),
                               ),
                             ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            key: ValueKey('selected-cloud-warehouse-' + (_warehouseId ?? 'none')),
+                            initialValue: data.warehouses.any((w) => w.id == _warehouseId && w.isActive) ? _warehouseId : null,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'المخزن المحدد للسياق الحالي',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: data.warehouses
+                                .where((w) => w.branchId == _branchId && w.isActive)
+                                .map((w) => DropdownMenuItem(value: w.id, child: Text(w.name)))
+                                .toList(),
+                            onChanged: _loading ? null : _selectWarehouse,
+                          ),
                           const SizedBox(height: 12),
                           Row(
                             children: [
