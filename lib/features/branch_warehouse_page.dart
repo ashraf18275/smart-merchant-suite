@@ -8,8 +8,15 @@ import '../domain/warehouse_stock.dart';
 import '../core/quantity.dart';
 
 class BranchWarehousePage extends StatefulWidget {
-  const BranchWarehousePage({super.key, required this.store});
+  const BranchWarehousePage({
+    super.key,
+    required this.store,
+    this.initialBranchId,
+    this.initialWarehouseId,
+  });
   final BranchWarehouseStore store;
+  final int? initialBranchId;
+  final int? initialWarehouseId;
 
   @override
   State<BranchWarehousePage> createState() => _BranchWarehousePageState();
@@ -27,6 +34,8 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
   @override
   void initState() {
     super.initState();
+    _branchId = widget.initialBranchId;
+    _warehouseId = widget.initialWarehouseId;
     _load();
   }
 
