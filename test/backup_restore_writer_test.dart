@@ -35,7 +35,17 @@ void main() {
     final warehouse = (await database.query('warehouses')).single;
     final unit = (await database.query('product_units')).single;
 
+    final cashDrawerId = await database.insert('cash_drawers', {
+      'branch_id': branch['id'],
+      'device_id': 'backup-device',
+      'label': 'درج النسخ الاحتياطي',
+      'created_at': stamp,
+    });
     final cashSessionId = await database.insert('cash_sessions', {
+      'branch_id': branch['id'],
+      'cash_drawer_id': cashDrawerId,
+      'device_id': 'backup-device',
+      'opened_by_user_id': 'backup-user',
       'opened_at': stamp,
       'opening_balance_minor': 5000,
       'opening_note': 'وردية النسخ الاحتياطي',
@@ -156,6 +166,8 @@ void main() {
       'source_type': 'sale',
       'source_id': saleId,
       'cash_session_id': cashSessionId,
+      'branch_id': branch['id'],
+      'cash_drawer_id': cashDrawerId,
       'note': 'تحصيل تجريبي',
       'created_at': stamp,
     });
@@ -171,6 +183,7 @@ void main() {
     await database.insert('expenses', {
       'description': 'مصروف اختبار',
       'category': 'تشغيل',
+      'branch_id': branch['id'],
       'amount_minor': 75,
       'created_at': stamp,
     });
