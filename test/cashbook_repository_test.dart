@@ -122,6 +122,7 @@ void main() {
         amountMinor: 5000,
         sourceType: 'sale',
         sourceId: 20,
+        cashSessionId: sessionId,
         createdAt: stamp,
       );
       await writeCashMovement(
@@ -131,6 +132,7 @@ void main() {
         amountMinor: 2000,
         sourceType: 'expense',
         sourceId: 20,
+        cashSessionId: sessionId,
         createdAt: stamp,
       );
       await writeCashMovement(
