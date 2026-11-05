@@ -25,7 +25,7 @@ void main() {
       whereArgs: [17],
     );
 
-    await upgradeLocalDatabaseSchema(database, 16);
+    await upgradeLocalDatabaseSchema(database, 16, 18);
 
     final columns = await database.rawQuery('PRAGMA table_info(sync_outbox)');
     expect(columns.map((row) => row['name']), contains('depends_on_event_id'));
@@ -45,7 +45,7 @@ void main() {
     expect(versions.map((row) => row['version']), [17, 18]);
 
     // Re-running the upgrade is safe and does not duplicate migration markers.
-    await upgradeLocalDatabaseSchema(database, 16);
+    await upgradeLocalDatabaseSchema(database, 16, 18);
     expect(
       await database.query(
         'schema_migrations',
