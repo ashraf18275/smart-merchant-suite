@@ -9,11 +9,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'business_database_identity.dart';
 import 'local_database_path.dart';
 import 'migrations/local_schema.dart';
-import 'migrations/payment_methods_schema.dart';
-import 'migrations/cash_sessions_schema.dart';
-import 'migrations/sync_outbox_schema.dart';
-import 'migrations/sync_outbox_dependencies_schema.dart';
-import 'migrations/sync_outbox_dependency_edges_schema.dart';
+import 'migrations/local_database_upgrade.dart';
 
 /// Opens the app's private local database on Android and desktop.
 /// Desktop uses SQLite FFI; mobile uses the platform SQLite plugin.
@@ -37,27 +33,7 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
       databasePath,
       version: 18,
       onCreate: (db, version) => createLocalSchema(db),
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) await createSalesSchema(db);
-        if (oldVersion < 3) await createExpensesSchema(db);
-        if (oldVersion < 4) await createCatalogSchema(db);
-        if (oldVersion < 5) await createBranchWarehouseSchema(db);
-        if (oldVersion < 6) await createSaleWarehouseSchema(db);
-        if (oldVersion < 7) await createFractionalQuantitiesSchema(db);
-        if (oldVersion < 8) await createPurchaseSchema(db);
-        if (oldVersion < 9) await createAccountSchema(db);
-        if (oldVersion < 10) await createSupplierReturnsSchema(db);
-        if (oldVersion < 11) await createCustomerReturnsSchema(db);
-        if (oldVersion < 12) await createSalesCancellationSchema(db);
-        if (oldVersion < 13) await createAuditCashSchema(db);
-        if (oldVersion < 14) await createPaymentMethodsSchema(db);
-        if (oldVersion < 15) await createCashSessionsSchema(db);
-        if (oldVersion < 16) await createSyncOutboxSchema(db);
-        if (oldVersion < 17) await createSyncOutboxDependenciesSchema(db);
-        if (oldVersion < 18) await createSyncOutboxDependencyEdgesSchema(db);
-        if (oldVersion < 18) await createSyncOutboxDependencyEdgesSchema(db);
-        if (oldVersion < 17) await createSyncOutboxDependenciesSchema(db);
-      },
+      onUpgrade: upgradeLocalDatabaseSchema,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -73,7 +49,6 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
     return database;
   }
 
-  // Flutter web is not a supported target for this SQLite implementation.
   if (kIsWeb) {
     throw UnsupportedError('قاعدة البيانات المحلية لا تدعم نسخة الويب حاليًا');
   }
@@ -85,23 +60,7 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
     options: OpenDatabaseOptions(
       version: 18,
       onCreate: (db, version) => createLocalSchema(db),
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) await createSalesSchema(db);
-        if (oldVersion < 3) await createExpensesSchema(db);
-        if (oldVersion < 4) await createCatalogSchema(db);
-        if (oldVersion < 5) await createBranchWarehouseSchema(db);
-        if (oldVersion < 6) await createSaleWarehouseSchema(db);
-        if (oldVersion < 7) await createFractionalQuantitiesSchema(db);
-        if (oldVersion < 8) await createPurchaseSchema(db);
-        if (oldVersion < 9) await createAccountSchema(db);
-        if (oldVersion < 10) await createSupplierReturnsSchema(db);
-        if (oldVersion < 11) await createCustomerReturnsSchema(db);
-        if (oldVersion < 12) await createSalesCancellationSchema(db);
-        if (oldVersion < 13) await createAuditCashSchema(db);
-        if (oldVersion < 14) await createPaymentMethodsSchema(db);
-        if (oldVersion < 15) await createCashSessionsSchema(db);
-        if (oldVersion < 16) await createSyncOutboxSchema(db);
-      },
+      onUpgrade: upgradeLocalDatabaseSchema,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
