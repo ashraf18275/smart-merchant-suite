@@ -7,6 +7,7 @@ import 'sync_outbox_dependencies_schema.dart';
 import 'sync_outbox_dependency_edges_schema.dart';
 import 'sync_outbox_retry_schedule_schema.dart';
 import 'branch_cash_drawers_schema.dart';
+import 'branch_scoped_payments_schema.dart';
 
 /// Creates the current local schema for a new database.
 Future<void> createLocalSchema(Database db) async {
@@ -64,6 +65,7 @@ Future<void> createLocalSchema(Database db) async {
   await createSyncOutboxDependencyEdgesSchema(db);
   await createSyncOutboxRetryScheduleSchema(db);
   await createBranchCashDrawersSchema(db);
+  await createBranchScopedPaymentsSchema(db);
 }
 
 
