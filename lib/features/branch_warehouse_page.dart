@@ -320,7 +320,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         initialValue: _branchId,
         decoration: const InputDecoration(labelText: 'تصفية حسب الفرع'),
         items: [for (final b in _branches.where((x) => x.isActive)) DropdownMenuItem(value: b.id, child: Text(b.name))],
-        onChanged: (v) async {
+        onChanged: widget.initialWarehouseId != null ? null : (v) async {
           _branchId = v;
           _warehouseId = null;
           await _load();
@@ -348,7 +348,7 @@ class _BranchWarehousePageState extends State<BranchWarehousePage> {
         initialValue: _warehouseId,
         decoration: const InputDecoration(labelText: 'المخزن المحدد'),
         items: [for (final w in _warehouses.where((x) => x.isActive)) DropdownMenuItem(value: w.id, child: Text(w.branchName + ' — ' + w.name))],
-        onChanged: (v) async {
+        onChanged: widget.initialWarehouseId != null ? null : (v) async {
           _warehouseId = v;
           final selected = _warehouses.where((x) => x.id == v);
           if (selected.isNotEmpty) _branchId = selected.first.branchId;
