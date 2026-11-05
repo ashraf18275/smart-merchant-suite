@@ -400,7 +400,7 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 20).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 21).',
         );
       }
 
