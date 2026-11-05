@@ -312,6 +312,7 @@ class ProductRepository implements ProductStore, CatalogStore {
   Future<List<Product>> all({
     String search = '',
     bool includeInactive = false,
+    int? warehouseId,
   }) async {
     final normalized = search.trim();
     final conditions = <String>[];
@@ -321,6 +322,13 @@ class ProductRepository implements ProductStore, CatalogStore {
       conditions.add('(p.name LIKE ? OR p.sku LIKE ?)');
       args.addAll(['%$normalized%', '%$normalized%']);
     }
+    final locationCondition = warehouseId == null
+        ? "w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'"
+        : 's.warehouse_id = ?';
+    final queryArgs = <Object?>[
+      if (warehouseId != null) warehouseId,
+      ...args,
+    ];
     final rows = await _db.rawQuery('''
       SELECT p.*, COALESCE(u.allows_fraction, 0) AS unit_allows_fraction,
         COALESCE((
@@ -329,15 +337,14 @@ class ProductRepository implements ProductStore, CatalogStore {
           JOIN warehouses w ON w.id = s.warehouse_id
           JOIN branches b ON b.id = w.branch_id
           WHERE s.product_id = p.id
-            AND w.name = 'المخزن الرئيسي'
-            AND b.name = 'الفرع الرئيسي'
+            AND $locationCondition
           LIMIT 1
         ), 0) AS default_warehouse_stock
       FROM products p
       LEFT JOIN product_units u ON u.id = p.unit_id
       ${conditions.isEmpty ? '' : 'WHERE ${conditions.join(' AND ')}'}
       ORDER BY p.name COLLATE NOCASE ASC
-    ''', args);
+    ''', queryArgs);
     return rows.map(_productFromRow).toList(growable: false);
   }
 
@@ -347,6 +354,7 @@ class ProductRepository implements ProductStore, CatalogStore {
     required int productId,
     required int quantityDelta,
     required String reason,
+    int? warehouseId,
   }) async {
     await _db.transaction((txn) async {
       final products = await txn.rawQuery('''
@@ -359,14 +367,27 @@ class ProductRepository implements ProductStore, CatalogStore {
           quantityDelta % Quantity.scale != 0) {
         throw AppException('وحدة قياس المنتج لا تقبل الكميات الكسرية');
       }
-      final warehouses = await txn.rawQuery('''
-        SELECT w.id FROM warehouses w
-        JOIN branches b ON b.id = w.branch_id
-        WHERE w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'
-          AND w.is_active = 1 AND b.is_active = 1
-        LIMIT 1
-      ''');
-      if (warehouses.isEmpty) throw AppException('المخزن الرئيسي الافتراضي غير موجود');
+      final warehouses = warehouseId == null
+          ? await txn.rawQuery('''
+              SELECT w.id FROM warehouses w
+              JOIN branches b ON b.id = w.branch_id
+              WHERE w.name = 'المخزن الرئيسي' AND b.name = 'الفرع الرئيسي'
+                AND w.is_active = 1 AND b.is_active = 1
+              LIMIT 1
+            ''')
+          : await txn.rawQuery('''
+              SELECT w.id FROM warehouses w
+              JOIN branches b ON b.id = w.branch_id
+              WHERE w.id = ? AND w.is_active = 1 AND b.is_active = 1
+              LIMIT 1
+            ''', [warehouseId]);
+      if (warehouses.isEmpty) {
+        throw AppException(
+          warehouseId == null
+              ? 'المخزن الرئيسي الافتراضي غير موجود'
+              : 'المخزن المحدد غير موجود أو غير نشط',
+        );
+      }
       final warehouseId = warehouses.single['id']! as int;
       final balances = await txn.query(
         'product_warehouse_stock',
