@@ -10,6 +10,7 @@ void main() {
   late Database db;
   late AccountRepository accounts;
   late PurchaseRepository purchases;
+  late int branchId;
 
   setUpAll(sqfliteFfiInit);
   setUp(() async {
@@ -17,6 +18,7 @@ void main() {
     await createLocalSchema(db);
     accounts = AccountRepository(db);
     purchases = PurchaseRepository(db);
+    branchId = (await accounts.branches()).first.id;
   });
   tearDown(() async => db.close());
 
@@ -85,7 +87,7 @@ void main() {
       'entry_type': 'purchase',
       'created_at': '2026-01-01T10:00:00.000Z',
     });
-    await accounts.recordSupplierPayment(supplierId: supplierId, amountMinor: 2500);
+    await accounts.recordSupplierPayment(supplierId: supplierId, amountMinor: 2500, branchId: branchId);
     expect(await accounts.supplierBalance(supplierId), 7500);
     final statement = await accounts.supplierStatement(supplierId);
     expect(statement.map((row) => row['running_balance_minor']), [10000, 7500]);
@@ -105,7 +107,7 @@ void main() {
       'entry_type': 'sale',
       'created_at': '2026-01-01T10:00:00.000Z',
     });
-    await accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 1500);
+    await accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 1500, branchId: branchId);
     expect(await accounts.customerBalance(customerId), 2500);
     final cash = (await db.query('cash_transactions')).single;
     expect(cash['direction'], 'in');
@@ -113,11 +115,11 @@ void main() {
     expect(cash['amount_minor'], 1500);
     expect((await db.query('audit_events')).single['action'], 'customer_receipt_recorded');
     await expectLater(
-      accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 2501),
+      accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 2501, branchId: branchId),
       throwsA(isA<AppException>()),
     );
     await expectLater(
-      accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 0),
+      accounts.recordCustomerReceipt(customerId: customerId, amountMinor: 0, branchId: branchId),
       throwsA(isA<AppException>()),
     );
     expect(await accounts.customerBalance(customerId), 2500);
@@ -134,6 +136,7 @@ void main() {
     final entryId = await accounts.recordCustomerReceipt(
       customerId: customerId,
       amountMinor: 2000,
+      branchId: branchId,
       paymentMethod: PaymentMethod.card,
     );
     final payment = (await db.query('payment_records')).single;
