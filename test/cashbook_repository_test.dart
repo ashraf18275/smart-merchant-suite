@@ -103,6 +103,7 @@ void main() {
         sourceType: 'sale',
         sourceId: 99,
         paymentMethod: 'crypto',
+        branchId: branchId,
       )),
       throwsArgumentError,
     );
@@ -144,6 +145,8 @@ void main() {
         sourceType: 'expense',
         sourceId: 20,
         cashSessionId: sessionId,
+        branchId: branchId,
+        cashDrawerId: drawerId,
         createdAt: stamp,
       );
       await writeCashMovement(
@@ -154,6 +157,7 @@ void main() {
         sourceType: 'sale',
         sourceId: 21,
         paymentMethod: PaymentMethod.card,
+        branchId: branchId,
         createdAt: stamp,
       );
     });
@@ -239,6 +243,55 @@ void main() {
       throwsArgumentError,
     );
     expect(await cashbook.currentSession(branchId: branchId, cashDrawerId: drawerId), isNotNull);
+  });
+
+
+  test('rejects cash movement context from a different drawer atomically', () async {
+    final otherDrawer = await db.insert('cash_drawers', {
+      'branch_id': branchId,
+      'device_id': 'other-device',
+      'label': 'درج آخر',
+      'is_active': 1,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    final otherSession = await cashbook.openSession(
+      branchId: branchId,
+      cashDrawerId: otherDrawer,
+      openingBalanceMinor: 500,
+    );
+    await expectLater(
+      db.transaction((txn) => writeCashMovement(
+        txn,
+        direction: 'in',
+        category: 'sale_receipt',
+        amountMinor: 100,
+        sourceType: 'sale',
+        sourceId: 700,
+        branchId: branchId,
+        cashSessionId: otherSession,
+        cashDrawerId: drawerId,
+      )),
+      throwsStateError,
+    );
+    expect(await cashbook.payments(branchId: branchId), isEmpty);
+    expect(await cashbook.movements(branchId: branchId, cashDrawerId: drawerId), isEmpty);
+  });
+
+  test('rejects missing or inactive branch before writing a settlement', () async {
+    await expectLater(
+      db.transaction((txn) => writeCashMovement(
+        txn,
+        direction: 'in',
+        category: 'sale_receipt',
+        amountMinor: 100,
+        sourceType: 'sale',
+        sourceId: 701,
+        branchId: 999999,
+      )),
+      throwsStateError,
+    );
+    expect(await db.query('payment_records'), isEmpty);
+    expect(await db.query('cash_transactions'), isEmpty);
   });
 
   test('lists latest cash movements and audit events first', () async {
