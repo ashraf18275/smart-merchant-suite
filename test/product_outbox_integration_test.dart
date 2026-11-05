@@ -61,6 +61,7 @@ void main() {
     expect(productPayload, isNot(contains('"unit_id"')));
     expect(events[1]['entity_type'], 'inventory_movement');
     expect(events[1]['action'], 'adjust');
+    expect(events[1]['depends_on_event_id'], events[0]['event_id']);
     final stockPayload = events[1]['payload_json'] as String;
     expect(stockPayload, contains('"local_product_id":"$id"'));
     expect(stockPayload, contains('"local_warehouse_id"'));
@@ -100,7 +101,7 @@ void main() {
       costMinor: 100,
       priceMinor: 150,
     ));
-    await database.delete('sync_outbox');
+    final parent = (await database.query('sync_outbox')).single;
 
     await products.changeStock(
       productId: id,
@@ -108,7 +109,10 @@ void main() {
       reason: 'جرد',
     );
 
-    final event = (await database.query('sync_outbox')).single;
+    final events = await database.query('sync_outbox', orderBy: 'created_at ASC, rowid ASC');
+    final event = events.last;
+    expect(events, hasLength(2));
+    expect(event['depends_on_event_id'], parent['event_id']);
     expect(event['business_id'], businessId);
     expect(event['entity_type'], 'inventory_movement');
     expect(event['action'], 'adjust');

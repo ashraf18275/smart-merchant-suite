@@ -12,6 +12,7 @@ import 'migrations/local_schema.dart';
 import 'migrations/payment_methods_schema.dart';
 import 'migrations/cash_sessions_schema.dart';
 import 'migrations/sync_outbox_schema.dart';
+import 'migrations/sync_outbox_dependencies_schema.dart';
 
 /// Opens the app's private local database on Android and desktop.
 /// Desktop uses SQLite FFI; mobile uses the platform SQLite plugin.
@@ -33,7 +34,7 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
   if (isMobile) {
     final database = await sqflite.openDatabase(
       databasePath,
-      version: 16,
+      version: 17,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);
@@ -51,6 +52,8 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
         if (oldVersion < 14) await createPaymentMethodsSchema(db);
         if (oldVersion < 15) await createCashSessionsSchema(db);
         if (oldVersion < 16) await createSyncOutboxSchema(db);
+        if (oldVersion < 17) await createSyncOutboxDependenciesSchema(db);
+        if (oldVersion < 17) await createSyncOutboxDependenciesSchema(db);
       },
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
@@ -77,7 +80,7 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
   final database = await databaseFactoryFfi.openDatabase(
     databasePath,
     options: OpenDatabaseOptions(
-      version: 16,
+      version: 17,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await createSalesSchema(db);

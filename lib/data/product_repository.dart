@@ -54,11 +54,17 @@ class ProductRepository implements ProductStore, CatalogStore {
     required Map<String, dynamic> base,
     required Map<String, dynamic> record,
   }) async {
+    final dependency = await _outbox.latestUnfinishedEventIdForCurrentBusiness(
+      executor: txn,
+      entityType: 'product',
+      localEntityId: localProductId,
+    );
     await _outbox.enqueueForCurrentBusiness(
       executor: txn,
       entityType: 'product',
       localEntityId: localProductId,
       action: action,
+      dependsOnEventId: dependency,
       payload: {
         'payload_schema_version': 1,
         'base': base,
@@ -75,11 +81,17 @@ class ProductRepository implements ProductStore, CatalogStore {
     required int quantityDelta,
     required String reason,
   }) async {
+    final dependency = await _outbox.latestUnfinishedEventIdForCurrentBusiness(
+      executor: txn,
+      entityType: 'product',
+      localEntityId: productId.toString(),
+    );
     await _outbox.enqueueForCurrentBusiness(
       executor: txn,
       entityType: 'inventory_movement',
       localEntityId: movementId.toString(),
       action: 'adjust',
+      dependsOnEventId: dependency,
       payload: {
         'payload_schema_version': 1,
         'local_product_id': productId.toString(),

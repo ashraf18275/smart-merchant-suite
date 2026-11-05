@@ -83,6 +83,92 @@ void main() {
     expect(otherTenant.single.eventId, secondEventId);
   });
 
+  test('dependent events are not claimable until their parent is synced', () async {
+    final parentId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: '42',
+      action: 'create',
+      payload: {'name': 'قلم'},
+    );
+    final childId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'inventory_movement',
+      localEntityId: 'movement-1',
+      action: 'adjust',
+      payload: {'local_product_id': '42'},
+      dependsOnEventId: parentId,
+    );
+
+    final firstBatch = await outbox.claimPendingBatch(businessId: 'business-a');
+    expect(firstBatch, hasLength(1));
+    expect(firstBatch.single.eventId, parentId);
+
+    await outbox.markSynced(parentId, remoteEntityId: 'remote-product-42');
+    final secondBatch = await outbox.claimPendingBatch(businessId: 'business-a');
+    expect(secondBatch, hasLength(1));
+    expect(secondBatch.single.eventId, childId);
+    expect(secondBatch.single.dependsOnEventId, parentId);
+  });
+
+  test('a failed parent blocks its dependent event while parent retry remains pending', () async {
+    final parentId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: '43',
+      action: 'create',
+      payload: {'name': 'مسطرة'},
+    );
+    final childId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'inventory_movement',
+      localEntityId: 'movement-2',
+      action: 'adjust',
+      payload: {'local_product_id': '43'},
+      dependsOnEventId: parentId,
+    );
+
+    final parent = (await outbox.claimPendingBatch(businessId: 'business-a')).single;
+    await outbox.markFailed(parent.eventId, StateError('temporary failure'));
+    final retryBatch = await outbox.claimPendingBatch(businessId: 'business-a');
+    expect(retryBatch, hasLength(1));
+    expect(retryBatch.single.eventId, parentId);
+    expect(retryBatch.any((event) => event.eventId == childId), isFalse);
+  });
+
+  test('dependency cannot cross tenant boundaries or point to a missing event', () async {
+    final parentId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: '44',
+      action: 'create',
+      payload: {'name': 'دفتر'},
+    );
+
+    await expectLater(
+      outbox.enqueue(
+        businessId: 'business-b',
+        entityType: 'inventory_movement',
+        localEntityId: 'movement-3',
+        action: 'adjust',
+        payload: {'local_product_id': '44'},
+        dependsOnEventId: parentId,
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      outbox.enqueue(
+        businessId: 'business-a',
+        entityType: 'inventory_movement',
+        localEntityId: 'movement-4',
+        action: 'adjust',
+        payload: {'local_product_id': '44'},
+        dependsOnEventId: 'missing-event',
+      ),
+      throwsStateError,
+    );
+  });
+
   test('an event cannot be rebound to a different business', () async {
     final eventId = await outbox.enqueue(
       businessId: 'business-a',
