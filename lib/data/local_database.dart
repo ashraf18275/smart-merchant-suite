@@ -31,7 +31,7 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
   if (isMobile) {
     final database = await sqflite.openDatabase(
       databasePath,
-      version: 18,
+      version: 19,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: upgradeLocalDatabaseSchema,
       onConfigure: (db) async {
@@ -58,7 +58,7 @@ Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
   final database = await databaseFactoryFfi.openDatabase(
     databasePath,
     options: OpenDatabaseOptions(
-      version: 18,
+      version: 19,
       onCreate: (db, version) => createLocalSchema(db),
       onUpgrade: upgradeLocalDatabaseSchema,
       onConfigure: (db) async {
