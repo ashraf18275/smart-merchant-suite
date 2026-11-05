@@ -167,6 +167,7 @@ void main() {
 
   test('requires the dependent product event to be synced before inventory RPC', () async {
     await addMappings();
+    await database.delete('sync_outbox');
     final parentId = await outbox.enqueue(
       businessId: _businessId,
       entityType: 'product',
