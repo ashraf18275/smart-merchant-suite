@@ -613,3 +613,24 @@ Workflow: `.github/workflows/flutter-ci.yml`
 - لا تزال المزامنة الفعلية معطلة؛ لا Push ولا Pull ولا نقل بيانات.
 
 **التحقق المطلوب قبل تسليم المرحلة:** Flutter Analyze، الاختبارات، Android APKs، Windows x64 ZIP، واختبارات عزل قواعد البيانات واستعادة النسخ الاحتياطية.
+
+
+### نتيجة المرحلة — عزل SQLite لكل نشاط وبناء النسختين (5 نوفمبر 2026)
+
+- قرار المالك معتمد: قاعدة SQLite مستقلة لكل نشاط سحابي.
+- ملف الوضع المحلي القديم `smart_merchant_suite.db` بقي كما هو ولم تُنسخ بياناته أو تُرحّل.
+- لكل نشاط ملف `businesses/business_<business_uuid>.db` مع تحقق UUID وتثبيت `database_business_id` ورفض إعادة استخدام الملف لهوية نشاط مختلفة.
+- تمت إضافة مدخل «فتح بيانات هذا النشاط على الجهاز» من مساحة النشاط إلى لوحة الوحدات التي تفتح قاعدة النشاط المحددة.
+- استعادة النسخة الاحتياطية تمسح Outbox والخرائط والمؤشرات والتعارضات القديمة ذريًا، وتحتفظ ببيانات metadata الخاصة بقاعدة النشاط.
+- تم تصحيح توافق النسخ الاحتياطية إلى SQLite schema v16.
+- Flutter CI run #651: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41947191793 — Analyze ناجح، **199 اختبارًا ناجحًا**، وبناء Android وWindows ناجح.
+- Commit المصدر الذي تم اختباره وبناؤه: `eb0c0e10c7dbeab0a80340f48ad4af93e666b9ef`.
+- Android Debug APKs (arm64-v8a, armeabi-v7a, x86_64): Artifact ID `13379192939`, SHA-256 للـ ZIP: `58d356253f22bede219ac431ce2daf14b5fc209522ec77225d30f908ccb19830`.
+  https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41947191793/artifacts/13379192939
+- Windows x64 Release ZIP: Artifact ID `13379406500`, SHA-256 للـ ZIP: `6a063bcd3c2aeff8f60a582f06d7827772b7d706c5c640680876f207275838d2`.
+  https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41947191793/artifacts/13379406500
+- انتهت صلاحية Android artifact في 19 نوفمبر 2026، وWindows artifact في 5 ديسمبر 2026.
+- هذه APKs Debug وليست نسخة Android موقعة للنشر. Windows هو Release.
+- لم يتم دمج أي شيء إلى `main` ولم يحدث نشر أو نقل بيانات حقيقية.
+- لا تزال المزامنة الفعلية معطلة. ربط الفرع/المخزن المحلي بمعرفه السحابي UUID لم ينفذ بعد؛ لا تستخدم مطابقة الأسماء أو التخمين.
+- لم تتم إضافة أداة استيراد بيانات القاعدة المحلية القديمة. هذه مرحلة منفصلة تتطلب معاينة وتأكيدًا صريحًا قبل أي نقل.
