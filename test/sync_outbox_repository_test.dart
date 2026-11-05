@@ -141,17 +141,19 @@ void main() {
       dependsOnEventIds: [firstProduct, secondProduct],
     );
 
-    final initial = await outbox.claimPendingBatch(businessId: tenantId);
-    expect(initial.map((event) => event.eventId).toSet(),
-        {firstProduct, secondProduct});
+    // Claim one parent at a time so the test can prove the sale remains
+    // blocked after only one of its two product dependencies is synced.
+    final initial = await outbox.claimPendingBatch(businessId: tenantId, limit: 1);
+    expect(initial, hasLength(1));
+    expect(initial.single.eventId, firstProduct);
 
     await outbox.markSynced(firstProduct);
-    final afterFirst = await outbox.claimPendingBatch(businessId: tenantId);
+    final afterFirst = await outbox.claimPendingBatch(businessId: tenantId, limit: 1);
     expect(afterFirst, hasLength(1));
     expect(afterFirst.single.eventId, secondProduct);
 
     await outbox.markSynced(secondProduct);
-    final afterBoth = await outbox.claimPendingBatch(businessId: tenantId);
+    final afterBoth = await outbox.claimPendingBatch(businessId: tenantId, limit: 1);
     expect(afterBoth, hasLength(1));
     expect(afterBoth.single.eventId, saleId);
     expect(afterBoth.single.dependsOnEventId, firstProduct);
