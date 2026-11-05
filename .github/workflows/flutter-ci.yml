@@ -66,13 +66,13 @@ jobs:
       - name: Run tests
         run: flutter test
 
-  # Explicit branch builds use the [build-release] commit marker; both packages
-  # remain private workflow artifacts and are not published to any store.
+  # Feature-branch pushes build both private rollback packages after the quality gate.
+  # Artifacts stay private; no store publishing or release creation occurs.
   build-android:
     name: Build Android (only after Flutter CI passes)
     needs: analyze-and-test
     timeout-minutes: 60
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-release]'))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
