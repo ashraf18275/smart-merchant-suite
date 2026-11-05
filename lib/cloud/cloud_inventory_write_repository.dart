@@ -50,7 +50,7 @@ class CloudInventoryWriteRepository {
     }
     final businessId = _requireUuid(event.businessId, 'business_id');
     final operationId = _requireUuid(event.operationId, 'operation_id');
-    final movementId = _parseLocalId(event.localEntityId, 'movement_id');
+    _parseLocalId(event.localEntityId, 'movement_id');
     final productLocalId =
         _parseLocalId(event.payload['local_product_id'], 'local_product_id');
     final warehouseLocalId =
