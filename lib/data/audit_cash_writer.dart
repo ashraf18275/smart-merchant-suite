@@ -33,6 +33,7 @@ Future<void> writeCashMovement(
   String? note,
   String? createdAt,
   String paymentMethod = PaymentMethod.cash,
+  int? branchId,
 }) async {
   if (amountMinor <= 0) return;
   if (direction != 'in' && direction != 'out') {
@@ -53,21 +54,16 @@ Future<void> writeCashMovement(
   });
   // Only physical cash belongs in the cash drawer journal.
   if (paymentMethod != PaymentMethod.cash) return;
-  final activeSessions = await executor.query(
-    'cash_sessions',
-    columns: ['id'],
-    where: "status = 'open'",
-    limit: 1,
-  );
-  final cashSessionId =
-      activeSessions.isEmpty ? null : activeSessions.single['id'];
+  // Never guess which open drawer owns a movement. If the caller has not
+  // supplied an explicit session context, leave it unassigned for reconciliation.
   await executor.insert('cash_transactions', {
     'direction': direction,
     'category': category,
     'amount_minor': amountMinor,
     'source_type': sourceType,
     'source_id': sourceId,
-    'cash_session_id': cashSessionId,
+    'cash_session_id': null,
+    'branch_id': branchId,
     'note': note,
     'created_at': stamp,
   });
