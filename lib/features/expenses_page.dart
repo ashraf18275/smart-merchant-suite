@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../application/ports/expense_service.dart';
 import '../core/app_error.dart';
+import '../domain/branch.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
 import '../domain/payment_method.dart';
@@ -16,6 +17,8 @@ class ExpensesPage extends StatefulWidget {
 
 class _ExpensesPageState extends State<ExpensesPage> {
   ExpenseService get _repo => widget.repository;
+  List<Branch> _branches = [];
+  int? _branchId;
   List<ExpenseRecord> _items = [];
   ProfitSummary _summary = const ProfitSummary(salesMinor: 0, costOfGoodsMinor: 0, expensesMinor: 0);
   bool _loading = true;
@@ -43,12 +46,39 @@ class _ExpensesPageState extends State<ExpensesPage> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
+      final branches = await _repo.branches();
+      var selectedBranchId = _branchId;
+      if (selectedBranchId != null &&
+          !branches.any((branch) => branch.id == selectedBranchId)) {
+        selectedBranchId = null;
+      }
+      if (selectedBranchId == null && branches.length == 1) {
+        selectedBranchId = branches.single.id;
+      }
+      if (selectedBranchId == null) {
+        if (!mounted) return;
+        setState(() {
+          _branches = branches;
+          _branchId = null;
+          _items = [];
+          _summary = const ProfitSummary(
+            salesMinor: 0, costOfGoodsMinor: 0, expensesMinor: 0);
+          _loading = false;
+        });
+        return;
+      }
       final v = await Future.wait([
-        _repo.all(from: _from, to: _to),
-        _repo.summary(from: _from, to: _to),
+        _repo.all(branchId: selectedBranchId, from: _from, to: _to),
+        _repo.summary(branchId: selectedBranchId, from: _from, to: _to),
       ]);
       if (!mounted) return;
-      setState(() { _items = v[0] as List<ExpenseRecord>; _summary = v[1] as ProfitSummary; _loading = false; });
+      setState(() {
+        _branches = branches;
+        _branchId = selectedBranchId;
+        _items = v[0] as List<ExpenseRecord>;
+        _summary = v[1] as ProfitSummary;
+        _loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() { _loading = false; _error = appErrorMessage(e, fallback: 'تعذر تحميل التقرير.', operation: 'expenses.load'); });
@@ -131,8 +161,14 @@ class _ExpensesPageState extends State<ExpensesPage> {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     desc.dispose(); amount.dispose();
     if (result == null) return;
+    final branchId = _branchId;
+    if (branchId == null) return;
     try {
-      await _repo.add(description: result['description']! as String, category: result['category']! as String, amountMinor: result['amount']! as int, paymentMethod: result['paymentMethod']! as String);
+      await _repo.add(description: result['description']! as String,
+        category: result['category']! as String,
+        amountMinor: result['amount']! as int,
+        branchId: branchId,
+        paymentMethod: result['paymentMethod']! as String);
       await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المصروف')));
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appErrorMessage(e, fallback: 'تعذر حفظ المصروف.', operation: 'expenses.create')))); }
@@ -146,10 +182,35 @@ class _ExpensesPageState extends State<ExpensesPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('المصروفات والأرباح')),
-    floatingActionButton: FloatingActionButton.extended(onPressed: _add, icon: const Icon(Icons.add), label: const Text('إضافة مصروف')),
+    floatingActionButton: FloatingActionButton.extended(onPressed: _branchId == null ? null : _add, icon: const Icon(Icons.add), label: const Text('إضافة مصروف')),
     body: _loading ? const Center(child: CircularProgressIndicator())
       : _error != null ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!), OutlinedButton(onPressed: _load, child: const Text('إعادة المحاولة'))]))
       : ListView(padding: const EdgeInsets.all(16), children: [
+        Text('الفرع', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<int>(
+          initialValue: _branchId,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(), hintText: 'اختر الفرع لعرض بياناته'),
+          items: _branches.map((branch) => DropdownMenuItem<int>(
+            value: branch.id, child: Text(branch.name))).toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => _branchId = value);
+            _load();
+          },
+        ),
+        if (_branches.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Text('لا توجد فروع نشطة لعرض المصروفات.'),
+          )
+        else if (_branchId == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Text('اختر الفرع أولًا. لا يتم دمج المصروفات أو الأرباح بين الفروع تلقائيًا.'),
+          ),
+        if (_branchId != null) ...[
         Text('تحديد فترة التقرير', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -171,6 +232,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
         ..._items.map((e) => Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.receipt_outlined)),
           title: Text(e.description), subtitle: Text('${e.category} • ${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')}'),
           trailing: Text(_money(e.amountMinor))))),
+        ],
       ]),
   );
 }
