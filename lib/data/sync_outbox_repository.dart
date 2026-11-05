@@ -96,6 +96,7 @@ class SyncOutboxRepository {
     required String action,
     required Map<String, dynamic> payload,
     String? dependsOnEventId,
+    List<String> dependsOnEventIds = const [],
   }) async {
     final rows = await executor.query(
       'sync_metadata',
@@ -120,6 +121,7 @@ class SyncOutboxRepository {
       action: action,
       payload: payload,
       dependsOnEventId: dependsOnEventId,
+      dependsOnEventIds: dependsOnEventIds,
     );
   }
 
@@ -155,6 +157,44 @@ class SyncOutboxRepository {
     return rows.isEmpty ? null : rows.single['event_id'] as String;
   }
 
+  /// Returns the latest unfinished event for each requested local entity.
+  /// The result can be attached to one transaction that depends on many products.
+  Future<List<String>> latestUnfinishedEventIdsForCurrentBusiness({
+    required DatabaseExecutor executor,
+    required String entityType,
+    required List<String> localEntityIds,
+  }) async {
+    if (localEntityIds.isEmpty) return const [];
+    final identityRows = await executor.query(
+      'sync_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['database_business_id'],
+      limit: 1,
+    );
+    if (identityRows.isEmpty) return const [];
+    final businessId = (identityRows.single['value']! as String).trim().toLowerCase();
+    if (!RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    ).hasMatch(businessId)) {
+      throw StateError('invalid_database_business_identity');
+    }
+    final ids = localEntityIds.toSet().toList(growable: false);
+    final placeholders = List.filled(ids.length, '?').join(', ');
+    final rows = await executor.query(
+      'sync_outbox',
+      columns: ['event_id', 'local_entity_id'],
+      where: "business_id = ? AND entity_type = ? AND local_entity_id IN ($placeholders) AND status IN ('pending', 'processing', 'failed', 'conflict')",
+      whereArgs: [businessId, entityType, ...ids],
+      orderBy: 'local_entity_id ASC, created_at DESC, event_id DESC',
+    );
+    final seen = <String>{};
+    return rows
+        .where((row) => seen.add(row['local_entity_id']! as String))
+        .map((row) => row['event_id']! as String)
+        .toList(growable: false);
+  }
+
   /// Low-level enqueue API for controlled migrations and isolated queue tests.
   /// Production business repositories should use enqueueForCurrentBusiness.
   Future<String> enqueue({
@@ -165,6 +205,7 @@ class SyncOutboxRepository {
     required String action,
     required Map<String, dynamic> payload,
     String? dependsOnEventId,
+    List<String> dependsOnEventIds = const [],
   }) async {
     if (entityType.trim().isEmpty || localEntityId.trim().isEmpty) {
       throw ArgumentError('entityType and localEntityId are required');
@@ -173,16 +214,38 @@ class SyncOutboxRepository {
       throw ArgumentError.value(action, 'action', 'Unsupported sync action');
     }
 
-    final db = executor ?? _db;
-    if (dependsOnEventId != null) {
-      if (businessId == null || businessId.trim().isEmpty) {
-        throw ArgumentError('A dependent event must be tenant-scoped');
+    if (executor == null) {
+      return _db.transaction((txn) => enqueue(
+        executor: txn,
+        businessId: businessId,
+        entityType: entityType,
+        localEntityId: localEntityId,
+        action: action,
+        payload: payload,
+        dependsOnEventId: dependsOnEventId,
+        dependsOnEventIds: dependsOnEventIds,
+      ));
+    }
+    final db = executor;
+    final dependencies = <String>{
+      if (dependsOnEventId != null) dependsOnEventId,
+      ...dependsOnEventIds,
+    };
+    if (dependencies.isNotEmpty && (businessId == null || businessId.trim().isEmpty)) {
+      throw ArgumentError('A dependent event must be tenant-scoped');
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    final operationId = _uuid.v4();
+    final eventId = _uuid.v4();
+    for (final dependencyId in dependencies) {
+      if (dependencyId.trim().isEmpty || dependencyId == eventId) {
+        throw ArgumentError('Invalid Outbox dependency');
       }
       final parents = await db.query(
         'sync_outbox',
-        columns: ['business_id', 'status'],
+        columns: ['business_id'],
         where: 'event_id = ?',
-        whereArgs: [dependsOnEventId],
+        whereArgs: [dependencyId],
         limit: 1,
       );
       if (parents.isEmpty) throw StateError('Outbox dependency does not exist');
@@ -190,9 +253,8 @@ class SyncOutboxRepository {
         throw StateError('Outbox dependency belongs to another business');
       }
     }
-    final now = DateTime.now().toUtc().toIso8601String();
-    final operationId = _uuid.v4();
-    final eventId = _uuid.v4();
+    final primaryDependency = dependsOnEventId ??
+        (dependencies.isEmpty ? null : dependencies.first);
     await db.insert('sync_outbox', {
       'event_id': eventId,
       'operation_id': operationId,
@@ -201,12 +263,19 @@ class SyncOutboxRepository {
       'local_entity_id': localEntityId,
       'action': action,
       'payload_json': jsonEncode(payload),
-      'depends_on_event_id': dependsOnEventId,
+      'depends_on_event_id': primaryDependency,
       'status': 'pending',
       'attempts': 0,
       'created_at': now,
       'updated_at': now,
     });
+    for (final dependencyId in dependencies) {
+      await db.insert('sync_outbox_dependencies', {
+        'event_id': eventId,
+        'depends_on_event_id': dependencyId,
+        'created_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
     return eventId;
   }
 
@@ -284,7 +353,7 @@ class SyncOutboxRepository {
 
       final rows = await txn.query(
         'sync_outbox',
-        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id = ? AND (depends_on_event_id IS NULL OR EXISTS (SELECT 1 FROM sync_outbox parent WHERE parent.event_id = sync_outbox.depends_on_event_id AND parent.business_id = sync_outbox.business_id AND parent.status = 'synced'))",
+        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id = ? AND NOT EXISTS (SELECT 1 FROM sync_outbox_dependencies dependency JOIN sync_outbox parent ON parent.event_id = dependency.depends_on_event_id WHERE dependency.event_id = sync_outbox.event_id AND (parent.business_id IS NOT sync_outbox.business_id OR parent.status <> 'synced'))",
         whereArgs: [maxAttempts, businessId],
         orderBy: 'created_at ASC, event_id ASC',
         limit: limit,
