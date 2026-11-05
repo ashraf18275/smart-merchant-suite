@@ -221,6 +221,42 @@ void main() {
     expect(retryBatch.any((event) => event.eventId == childId), isFalse);
   });
 
+  test('stale processing claims are recovered with a cooldown', () async {
+    final start = DateTime.utc(2026, 11, 5, 11);
+    final eventId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: 'stale-1',
+      action: 'create',
+      payload: {'name': 'حدث توقف التطبيق'},
+    );
+
+    final first = (await outbox.claimPendingBatch(
+      businessId: 'business-a',
+      now: start,
+    )).single;
+    expect(first.eventId, eventId);
+
+    expect(
+      await outbox.claimPendingBatch(
+        businessId: 'business-a',
+        now: start.add(const Duration(minutes: 6)),
+        staleProcessingAge: const Duration(minutes: 5),
+        staleRetryDelay: const Duration(seconds: 45),
+      ),
+      isEmpty,
+    );
+
+    final recovered = (await outbox.claimPendingBatch(
+      businessId: 'business-a',
+      now: start.add(const Duration(minutes: 6, seconds: 45)),
+      staleProcessingAge: const Duration(minutes: 5),
+      staleRetryDelay: const Duration(seconds: 45),
+    )).single;
+    expect(recovered.eventId, eventId);
+    expect(recovered.attempts, 2);
+  });
+
   test('failed events use exponential retry delays and expose exhausted attempts', () async {
     final start = DateTime.utc(2026, 11, 5, 10);
     final eventId = await outbox.enqueue(
