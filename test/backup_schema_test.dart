@@ -10,7 +10,8 @@ void main() {
     expect(BackupSchema.supports(18), isTrue);
     expect(BackupSchema.supports(19), isTrue);
     expect(BackupSchema.supports(20), isTrue);
-    expect(BackupSchema.supports(21), isFalse);
+    expect(BackupSchema.supports(21), isTrue);
+    expect(BackupSchema.supports(22), isFalse;
   });
 
   test('maps purchase and account data to the schema versions that introduced them', () {
@@ -31,6 +32,8 @@ void main() {
     expect(BackupSchema.hasPaymentData(14), isTrue);
     expect(BackupSchema.hasCashSessionData(14), isFalse);
     expect(BackupSchema.hasCashSessionData(15), isTrue);
+    expect(BackupSchema.hasBranchScopedPaymentData(20), isFalse);
+    expect(BackupSchema.hasBranchScopedPaymentData(21), isTrue;
   });
 
   test('restore ordering covers every current business table', () {
