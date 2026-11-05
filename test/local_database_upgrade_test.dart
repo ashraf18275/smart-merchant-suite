@@ -101,6 +101,18 @@ void main() {
         ON cash_sessions(status) WHERE status = 'open'
       ''');
       await legacy.execute('''
+        CREATE TABLE payment_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          direction TEXT NOT NULL,
+          payment_method TEXT NOT NULL,
+          amount_minor INTEGER NOT NULL,
+          source_type TEXT NOT NULL,
+          source_id INTEGER,
+          note TEXT,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      await legacy.execute('''
         CREATE TABLE cash_transactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           created_at TEXT NOT NULL
@@ -123,7 +135,7 @@ void main() {
         'status': 'open',
       });
 
-      await upgradeLocalDatabaseSchema(legacy, 19, 20);
+      await upgradeLocalDatabaseSchema(legacy, 19, 21);
 
       final expense = (await legacy.query('expenses',
         where: 'id = ?', whereArgs: [expenseId])).single;
@@ -132,6 +144,11 @@ void main() {
         where: 'id = ?', whereArgs: [sessionId])).single;
       expect(session['branch_id'], isNull);
       expect(session['cash_drawer_id'], isNull);
+
+      final paymentColumns = await legacy.rawQuery('PRAGMA table_info(payment_records)');
+      expect(paymentColumns.map((row) => row['name']), contains('branch_id'));
+      expect(await legacy.query('schema_migrations',
+        where: 'version = ?', whereArgs: [21]), hasLength(1));
 
       final drawerA = await legacy.insert('cash_drawers', {
         'branch_id': branchId,
@@ -160,5 +177,29 @@ void main() {
       expect(await legacy.query('schema_migrations',
         where: 'version = ?', whereArgs: [20]), hasLength(1));
   });
+
+  test('upgrades version 20 payment records without guessing their branch', () async {
+    await database.execute('DROP INDEX IF EXISTS idx_payment_records_branch_created');
+    await database.execute('ALTER TABLE payment_records DROP COLUMN branch_id');
+    await database.delete('schema_migrations',
+      where: 'version = ?', whereArgs: [21]);
+    final paymentId = await database.insert('payment_records', {
+      'direction': 'in',
+      'payment_method': 'cash',
+      'amount_minor': 2500,
+      'source_type': 'legacy_payment',
+      'source_id': 1,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+
+    await upgradeLocalDatabaseSchema(database, 20, 21);
+
+    final payment = (await database.query('payment_records',
+      where: 'id = ?', whereArgs: [paymentId])).single;
+    expect(payment['branch_id'], isNull);
+    expect(await database.query('schema_migrations',
+      where: 'version = ?', whereArgs: [21]), hasLength(1));
+  });
+
 
 }
