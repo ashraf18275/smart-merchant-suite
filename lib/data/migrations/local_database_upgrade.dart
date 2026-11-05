@@ -9,7 +9,11 @@ import 'sync_outbox_schema.dart';
 
 /// Applies every schema migration after [oldVersion] in the same order on
 /// Android and desktop. Keep this list aligned with the database version.
-Future<void> upgradeLocalDatabaseSchema(Database db, int oldVersion) async {
+Future<void> upgradeLocalDatabaseSchema(
+  Database db,
+  int oldVersion,
+  int newVersion,
+) async {
   if (oldVersion < 2) await createSalesSchema(db);
   if (oldVersion < 3) await createExpensesSchema(db);
   if (oldVersion < 4) await createCatalogSchema(db);
