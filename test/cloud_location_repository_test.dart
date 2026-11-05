@@ -46,6 +46,19 @@ void main() {
       expect(workspace.canManageWarehouses, isTrue);
     });
 
+    test('branch manager can view locations to complete explicit mapping', () {
+      const workspace = CloudLocationWorkspace(
+        branches: [],
+        warehouses: [],
+        actorIsOwner: false,
+        permissions: {'branches.manage'},
+      );
+
+      expect(workspace.canView, isTrue);
+      expect(workspace.canManageBranches, isTrue);
+      expect(workspace.canManageWarehouses, isFalse);
+    });
+
     test('branch viewer can view locations but cannot manage them', () {
       const workspace = CloudLocationWorkspace(
         branches: [],
@@ -56,6 +69,19 @@ void main() {
 
       expect(workspace.canView, isTrue);
       expect(workspace.canManageBranches, isFalse);
+      expect(workspace.canManageWarehouses, isFalse);
+    });
+
+    test('a branch manager can read the locations required for mapping', () {
+      const workspace = CloudLocationWorkspace(
+        branches: [],
+        warehouses: [],
+        actorIsOwner: false,
+        permissions: {'branches.manage'},
+      );
+
+      expect(workspace.canView, isTrue);
+      expect(workspace.canManageBranches, isTrue);
       expect(workspace.canManageWarehouses, isFalse);
     });
 

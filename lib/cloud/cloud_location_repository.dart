@@ -66,6 +66,8 @@ class CloudLocationWorkspace {
       const {
         'branches.view',
         'warehouses.view',
+        'branches.manage',
+        'warehouses.manage',
         'inventory.view',
         'sales.create',
         'products.view',

@@ -11,6 +11,7 @@ import '../cloud/cloud_workspace_context.dart';
 import '../data/local_database.dart';
 import 'home_dashboard.dart' as local_dashboard;
 import 'cloud_locations_page.dart';
+import 'cloud_location_mapping_page.dart';
 import 'cloud_members_page.dart';
 import 'cloud_products_page.dart';
 
@@ -204,6 +205,20 @@ class _CloudWorkspacePageState extends State<CloudWorkspacePage> {
     if (mounted) await _reload();
   }
 
+  Future<void> _openLocationMappings() async {
+    final workspace = _workspace;
+    if (workspace == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => CloudLocationMappingPage(
+        client: widget.client,
+        businessId: widget.business.id,
+        businessName: widget.business.name,
+        workspace: workspace,
+      ),
+    ));
+    if (mounted) await _reload();
+  }
+
   Future<void> _openLocalBusinessData() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => local_dashboard.HomeDashboard(
@@ -329,6 +344,12 @@ class _CloudWorkspacePageState extends State<CloudWorkspacePage> {
                     onPressed: _loading ? null : _openLocations,
                     icon: const Icon(Icons.warehouse_outlined),
                     label: const Text('إدارة الفروع والمخازن'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _loading || data == null ? null : _openLocationMappings,
+                    icon: const Icon(Icons.link_outlined),
+                    label: const Text('ربط الفروع والمخازن المحلية بالسحابة'),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
