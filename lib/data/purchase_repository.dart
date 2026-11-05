@@ -99,10 +99,11 @@ class PurchaseRepository {
         whereArgs: [supplierId], limit: 1);
       if (suppliers.isEmpty) throw AppException('المورد غير موجود أو موقوف');
       final warehouses = await txn.rawQuery('''
-        SELECT w.id FROM warehouses w JOIN branches b ON b.id = w.branch_id
+        SELECT w.id, w.branch_id FROM warehouses w JOIN branches b ON b.id = w.branch_id
         WHERE w.id = ? AND w.is_active = 1 AND b.is_active = 1 LIMIT 1
       ''', [warehouseId]);
       if (warehouses.isEmpty) throw AppException('المخزن المحدد غير موجود أو غير نشط');
+      final branchId = warehouses.single['branch_id']! as int;
 
       final prepared = <Map<String, int>>[];
       final seen = <int>{};
@@ -191,6 +192,7 @@ class PurchaseRepository {
         note: 'سداد عند فاتورة مشتريات رقم $purchaseId',
         createdAt: stamp,
         paymentMethod: paymentMethod,
+        branchId: branchId,
       );
       for (final item in prepared) {
         final productId = item['productId']!;
@@ -283,6 +285,9 @@ class PurchaseRepository {
       final purchase = purchases.single;
       final supplierId = purchase['supplier_id']! as int;
       final warehouseId = purchase['warehouse_id']! as int;
+      final warehouseRows = await txn.query('warehouses', columns: ['branch_id'], where: 'id = ?', whereArgs: [warehouseId], limit: 1);
+      if (warehouseRows.isEmpty) throw AppException('فرع مخزن فاتورة الشراء غير معروف');
+      final branchId = warehouseRows.single['branch_id']! as int;
       final prepared = <Map<String, int>>[];
       var total = 0;
 
@@ -422,6 +427,7 @@ class PurchaseRepository {
           note: 'استرداد من المورد عن مرتجع رقم $returnId',
           createdAt: stamp,
           paymentMethod: refundMethod,
+          branchId: branchId,
         );
       }
       return returnId;
