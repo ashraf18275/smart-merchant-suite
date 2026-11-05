@@ -1,5 +1,5 @@
 name: Flutter CI and Gated Builds
-# Keep private Android/Windows rollback builds. Use workflow_dispatch or a feature-branch push whose commit message contains [build-release].
+# Keep private Android/Windows rollback builds; this gated run also verifies the persisted cloud workspace-context integration.
 
 on:
   push:
