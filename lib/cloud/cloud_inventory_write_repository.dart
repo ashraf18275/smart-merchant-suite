@@ -65,6 +65,7 @@ class CloudInventoryWriteRepository {
     }
 
     await _requireCurrentBusiness(businessId);
+    await _requireDependencySynced(event, businessId);
     final warehouseRows = await _database.query(
       'warehouses',
       columns: ['branch_id', 'is_active'],
@@ -141,6 +142,26 @@ class CloudInventoryWriteRepository {
     );
     if (remoteId == null) throw StateError('missing_${label}_mapping');
     return _requireUuid(remoteId, 'remote_${label}_id');
+  }
+
+  Future<void> _requireDependencySynced(
+    SyncOutboxEvent event,
+    String businessId,
+  ) async {
+    final dependencyId = event.dependsOnEventId;
+    if (dependencyId == null) return;
+    final rows = await _database.query(
+      'sync_outbox',
+      columns: ['business_id', 'status'],
+      where: 'event_id = ?',
+      whereArgs: [dependencyId],
+      limit: 1,
+    );
+    if (rows.isEmpty ||
+        rows.single['business_id'] != businessId ||
+        rows.single['status'] != 'synced') {
+      throw StateError('inventory_dependency_not_synced');
+    }
   }
 
   Future<void> _requireCurrentBusiness(String businessId) async {

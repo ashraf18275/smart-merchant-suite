@@ -105,6 +105,7 @@ void main() {
     String entityType = 'inventory_movement',
     String operationId = _operationId,
     String localEntityId = '99',
+    String? dependsOnEventId,
   }) {
     return SyncOutboxEvent(
       eventId: '7f8f5771-3a1b-4b2a-9c7d-1d0e4a5b6c7d',
@@ -123,6 +124,7 @@ void main() {
           },
       status: 'processing',
       attempts: 1,
+      dependsOnEventId: dependsOnEventId,
     );
   }
 
@@ -152,13 +154,42 @@ void main() {
     await expectLater(repository.adjustFromEvent(event()), throwsStateError);
     expect(rpc.calls, isEmpty);
 
+    await database.delete('sync_entity_map');
     await addMappings(product: true, branch: false, warehouse: true);
     await expectLater(repository.adjustFromEvent(event()), throwsStateError);
     expect(rpc.calls, isEmpty);
 
+    await database.delete('sync_entity_map');
     await addMappings(product: true, branch: true, warehouse: false);
     await expectLater(repository.adjustFromEvent(event()), throwsStateError);
     expect(rpc.calls, isEmpty);
+  });
+
+  test('requires the dependent product event to be synced before inventory RPC', () async {
+    await addMappings();
+    final parentId = await outbox.enqueue(
+      businessId: _businessId,
+      entityType: 'product',
+      localEntityId: productId.toString(),
+      action: 'create',
+      payload: {'name': 'منتج المخزون'},
+    );
+    final dependentEvent = event(dependsOnEventId: parentId);
+
+    await expectLater(
+      repository.adjustFromEvent(dependentEvent),
+      throwsStateError,
+    );
+    expect(rpc.calls, isEmpty);
+
+    final parent = (await outbox.claimPendingBatch(businessId: _businessId)).single;
+    await outbox.markSynced(
+      parent.eventId,
+      remoteEntityId: _productCloudId,
+    );
+    final movementId = await repository.adjustFromEvent(dependentEvent);
+    expect(movementId, _movementCloudId);
+    expect(rpc.calls, hasLength(1));
   });
 
   test('rejects a local inactive warehouse or inactive product before RPC', () async {
