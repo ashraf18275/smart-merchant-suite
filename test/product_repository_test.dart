@@ -32,6 +32,10 @@ void main() {
     await database.close();
   });
 
+  Future<int> mainBranchId() async =>
+      (await database.query('branches', columns: ['id'], where: 'name = ?',
+          whereArgs: ['الفرع الرئيسي'], limit: 1)).single['id']! as int;
+
   Future<int> mainWarehouseId() async =>
       (await WarehouseRepository(database).warehouses()).firstWhere((w) => w.name == 'المخزن الرئيسي').id;
 
@@ -628,14 +632,15 @@ void main() {
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
-    await expenses.add(description: 'إيجار المحل', category: 'إيجار', amountMinor: 4000);
-    final s = await expenses.summary();
+    await expenses.add(description: 'إيجار المحل', category: 'إيجار', amountMinor: 4000, branchId: await mainBranchId());
+    final branchId = await mainBranchId();
+    final s = await expenses.summary(branchId: branchId);
     expect(s.salesMinor, 1800);
     expect(s.costOfGoodsMinor, 1000);
     expect(s.expensesMinor, 4000);
     expect(s.grossProfitMinor, 800);
     expect(s.netProfitMinor, -3200);
-    expect((await expenses.all()).single.description, 'إيجار المحل');
+    expect((await expenses.all(branchId: branchId)).single.description, 'إيجار المحل');
   });
 
   test('profit summary subtracts customer return revenue and original inventory cost', () async {
@@ -659,7 +664,7 @@ void main() {
       reason: 'مرتجع لاختبار الأرباح',
     );
 
-    final summary = await ExpenseRepository(database).summary();
+    final summary = await ExpenseRepository(database).summary(branchId: await mainBranchId());
     expect(summary.salesMinor, 900);
     expect(summary.costOfGoodsMinor, 500);
     expect(summary.grossProfitMinor, 400);
@@ -697,8 +702,8 @@ void main() {
     await database.update('sales', {'created_at': '2025-01-10T12:00:00.000Z'});
     await database.update('sale_items', {'quantity': 2000});
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
-    await expenses.add(description: 'مصروف داخل الفترة', category: 'أخرى', amountMinor: 300);
-    await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700);
+    await expenses.add(description: 'مصروف داخل الفترة', category: 'أخرى', amountMinor: 300, branchId: await mainBranchId());
+    await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700, branchId: await mainBranchId());
     await database.update('expenses', {'created_at': '2025-01-10T09:00:00.000Z'},
       where: 'description = ?', whereArgs: ['مصروف داخل الفترة']);
     await database.update('expenses', {'created_at': '2025-01-11T09:00:00.000Z'},
@@ -706,12 +711,13 @@ void main() {
 
     final from = DateTime(2025, 1, 10);
     final to = DateTime(2025, 1, 10);
-    final summary = await expenses.summary(from: from, to: to);
+    final branchId = await mainBranchId();
+    final summary = await expenses.summary(branchId: branchId, from: from, to: to);
     expect(summary.salesMinor, 1800);
     expect(summary.costOfGoodsMinor, 1000);
     expect(summary.expensesMinor, 300);
     expect(summary.netProfitMinor, 500);
-    final rows = await expenses.all(from: from, to: to);
+    final rows = await expenses.all(branchId: branchId, from: from, to: to);
     expect(rows, hasLength(1));
     expect(rows.single.description, 'مصروف داخل الفترة');
   });
@@ -749,15 +755,15 @@ void main() {
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
 
     await expectLater(
-      expenses.add(description: ' ', category: 'أخرى', amountMinor: 100),
+      expenses.add(description: ' ', category: 'أخرى', amountMinor: 100, branchId: await mainBranchId()),
       throwsA(isA<AppException>()),
     );
     await expectLater(
-      expenses.add(description: 'قلم', category: 'أخرى', amountMinor: 0),
+      expenses.add(description: 'قلم', category: 'أخرى', amountMinor: 0, branchId: await mainBranchId()),
       throwsA(isA<AppException>()),
     );
     await expectLater(
-      expenses.all(from: DateTime(2025, 2, 2), to: DateTime(2025, 2, 1)),
+      expenses.all(branchId: await mainBranchId(), from: DateTime(2025, 2, 2), to: DateTime(2025, 2, 1)),
       throwsA(isA<AppException>()),
     );
     expect(await database.query('expenses'), isEmpty);
