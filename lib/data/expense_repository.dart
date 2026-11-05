@@ -2,6 +2,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../application/ports/expense_store.dart';
 import '../core/app_error.dart';
+import '../domain/branch.dart';
 import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
 import '../domain/payment_method.dart';
@@ -11,8 +12,19 @@ class ExpenseRepository implements ExpenseStore {
   ExpenseRepository(this._db);
   final Database _db;
 
-  // Date-picker values are local calendar dates. Store/query timestamps in UTC,
-  // with an exclusive next-day upper bound to include the entire selected end date.
+  @override
+  Future<List<Branch>> branches() async {
+    final rows = await _db.query('branches',
+        where: 'is_active = 1', orderBy: 'name COLLATE NOCASE ASC');
+    return rows.map((row) => Branch(
+      id: row['id']! as int,
+      name: row['name']! as String,
+      address: row['address'] as String?,
+      phone: row['phone'] as String?,
+      isActive: row['is_active'] == 1,
+    )).toList(growable: false);
+  }
+
   List<String> _dateBounds(DateTime? from, DateTime? to) {
     final bounds = <String>[];
     if (from != null) {
@@ -24,92 +36,134 @@ class ExpenseRepository implements ExpenseStore {
     return bounds;
   }
 
-  String _whereDateRange(DateTime? from, DateTime? to, String column) {
+  String _datePredicate(DateTime? from, DateTime? to, String column) {
     final clauses = <String>[];
     if (from != null) clauses.add('$column >= ?');
     if (to != null) clauses.add('$column < ?');
-    return clauses.isEmpty ? '' : ' WHERE ${clauses.join(' AND ')}';
+    return clauses.isEmpty ? '' : ' AND ${clauses.join(' AND ')}';
   }
 
-  Future<int> add({required String description, required String category, required int amountMinor, String paymentMethod = PaymentMethod.cash}) async {
+  Future<int> add({
+    required String description,
+    required String category,
+    required int amountMinor,
+    required int branchId,
+    String paymentMethod = PaymentMethod.cash,
+  }) async {
     final d = description.trim(), c = category.trim();
     if (d.isEmpty) throw const AppException('وصف المصروف مطلوب');
     if (c.isEmpty) throw const AppException('تصنيف المصروف مطلوب');
     if (amountMinor <= 0) throw const AppException('قيمة المصروف يجب أن تكون أكبر من صفر');
-    if (!PaymentMethod.isValid(paymentMethod)) throw const AppException('طريقة الدفع المحددة غير مدعومة');
+    if (branchId <= 0) throw const AppException('اختر فرعًا صالحًا');
+    if (!PaymentMethod.isValid(paymentMethod)) {
+      throw const AppException('طريقة الدفع المحددة غير مدعومة');
+    }
     return _db.transaction((txn) async {
-      final createdAt = DateTime.now().toUtc().toIso8601String();
-      final expenseId = await txn.insert('expenses', {
-        'description': d, 'category': c, 'amount_minor': amountMinor,
-        'created_at': createdAt,
+      final branch = await txn.query('branches',
+          columns: ['id'],
+          where: 'id = ? AND is_active = 1',
+          whereArgs: [branchId],
+          limit: 1);
+      if (branch.isEmpty) throw const AppException('اختر فرعًا نشطًا صالحًا');
+
+      final stamp = DateTime.now().toUtc().toIso8601String();
+      final id = await txn.insert('expenses', {
+        'description': d,
+        'category': c,
+        'amount_minor': amountMinor,
+        'branch_id': branchId,
+        'created_at': stamp,
       });
       await writeAuditEvent(txn,
-        action: 'expense_recorded',
-        entityType: 'expense',
-        entityId: expenseId,
-        amountMinor: amountMinor,
-        details: '$c — $d',
-        createdAt: createdAt,
-      );
+          action: 'expense_recorded',
+          entityType: 'expense',
+          entityId: id,
+          amountMinor: amountMinor,
+          details: '$c — $d',
+          createdAt: stamp);
       await writeCashMovement(txn,
-        direction: 'out',
-        category: 'expense',
-        amountMinor: amountMinor,
-        sourceType: 'expense',
-        sourceId: expenseId,
-        note: '$c — $d',
-        createdAt: createdAt,
-        paymentMethod: paymentMethod,
-      );
-      return expenseId;
+          direction: 'out',
+          category: 'expense',
+          amountMinor: amountMinor,
+          sourceType: 'expense',
+          sourceId: id,
+          note: '$c — $d',
+          createdAt: stamp,
+          paymentMethod: paymentMethod,
+          branchId: branchId);
+      return id;
     });
   }
 
-  Future<List<ExpenseRecord>> all({DateTime? from, DateTime? to}) async {
-    final bounds = _dateBounds(from, to);
-    final where = _whereDateRange(from, to, 'created_at');
+  @override
+  Future<List<ExpenseRecord>> all({
+    required int branchId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    if (branchId <= 0) throw const AppException('اختر فرعًا صالحًا');
+    final dateClause = _datePredicate(from, to, 'created_at');
     final rows = await _db.rawQuery(
-      'SELECT * FROM expenses$where ORDER BY id DESC', bounds);
-    return rows.map((r) => ExpenseRecord(
-      id: r['id']! as int, description: r['description']! as String,
-      category: r['category']! as String, amountMinor: r['amount_minor']! as int,
-      createdAt: DateTime.parse(r['created_at']! as String).toLocal(),
+      'SELECT * FROM expenses WHERE branch_id = ?$dateClause ORDER BY id DESC',
+      [branchId, ..._dateBounds(from, to)]);
+    return rows.map((row) => ExpenseRecord(
+      id: row['id']! as int,
+      description: row['description']! as String,
+      category: row['category']! as String,
+      amountMinor: row['amount_minor']! as int,
+      createdAt: DateTime.parse(row['created_at']! as String).toLocal(),
     )).toList(growable: false);
   }
 
-  Future<ProfitSummary> summary({DateTime? from, DateTime? to}) async {
+  @override
+  Future<ProfitSummary> summary({
+    required int branchId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    if (branchId <= 0) throw const AppException('اختر فرعًا صالحًا');
     final bounds = _dateBounds(from, to);
-    final salesDateWhere = _whereDateRange(from, to, 'created_at');
-    final salesWhere = ' WHERE cancelled_at IS NULL' +
-        (salesDateWhere.isEmpty ? '' : ' AND ' + salesDateWhere.substring(7));
-    final sales = await _db.rawQuery(
-      'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM sales$salesWhere', bounds);
-    final returnWhere = _whereDateRange(from, to, 'created_at');
-    final returns = await _db.rawQuery(
-      'SELECT COALESCE(SUM(total_minor), 0) AS amount FROM customer_returns$returnWhere', bounds);
-    final costDateWhere = _whereDateRange(from, to, 's.created_at');
-    final costWhere = ' WHERE s.cancelled_at IS NULL' +
-        (costDateWhere.isEmpty ? '' : ' AND ' + costDateWhere.substring(7));
+    final salesDate = _datePredicate(from, to, 's.created_at');
+    final returnDate = _datePredicate(from, to, 'r.created_at');
+    final expenseDate = _datePredicate(from, to, 'created_at');
+
+    // Branch reports only include documents explicitly linked to a warehouse
+    // in that branch. Historical unassigned records are never guessed.
+    final sales = await _db.rawQuery('''
+      SELECT COALESCE(SUM(s.total_minor), 0) AS amount
+      FROM sales s
+      JOIN warehouses w ON w.id = s.warehouse_id
+      WHERE s.cancelled_at IS NULL AND w.branch_id = ?$salesDate
+    ''', [branchId, ...bounds]);
+    final returns = await _db.rawQuery('''
+      SELECT COALESCE(SUM(r.total_minor), 0) AS amount
+      FROM customer_returns r
+      JOIN warehouses w ON w.id = r.warehouse_id
+      WHERE w.branch_id = ?$returnDate
+    ''', [branchId, ...bounds]);
     final cost = await _db.rawQuery('''
       SELECT COALESCE(SUM((i.quantity * i.unit_cost_minor + 500) / 1000), 0) AS amount
-      FROM sale_items i JOIN sales s ON s.id = i.sale_id$costWhere
-    ''', bounds);
-    final returnCostWhere = _whereDateRange(from, to, 'r.created_at');
+      FROM sale_items i
+      JOIN sales s ON s.id = i.sale_id
+      JOIN warehouses w ON w.id = s.warehouse_id
+      WHERE s.cancelled_at IS NULL AND w.branch_id = ?$salesDate
+    ''', [branchId, ...bounds]);
     final returnCost = await _db.rawQuery('''
       SELECT COALESCE(SUM(i.line_cost_minor), 0) AS amount
       FROM customer_return_items i
-      JOIN customer_returns r ON r.id = i.customer_return_id$returnCostWhere
-    ''', bounds);
-    final expenseWhere = _whereDateRange(from, to, 'created_at');
+      JOIN customer_returns r ON r.id = i.customer_return_id
+      JOIN warehouses w ON w.id = r.warehouse_id
+      WHERE w.branch_id = ?$returnDate
+    ''', [branchId, ...bounds]);
     final expenses = await _db.rawQuery(
-      'SELECT COALESCE(SUM(amount_minor), 0) AS amount FROM expenses$expenseWhere', bounds);
-    final netSales = (sales.single['amount']! as num).toInt() -
-        (returns.single['amount']! as num).toInt();
-    final netCost = (cost.single['amount']! as num).toInt() -
-        (returnCost.single['amount']! as num).toInt();
+      'SELECT COALESCE(SUM(amount_minor), 0) AS amount FROM expenses WHERE branch_id = ?$expenseDate',
+      [branchId, ...bounds]);
+
     return ProfitSummary(
-      salesMinor: netSales,
-      costOfGoodsMinor: netCost,
+      salesMinor: (sales.single['amount']! as num).toInt() -
+          (returns.single['amount']! as num).toInt(),
+      costOfGoodsMinor: (cost.single['amount']! as num).toInt() -
+          (returnCost.single['amount']! as num).toInt(),
       expensesMinor: (expenses.single['amount']! as num).toInt(),
     );
   }
