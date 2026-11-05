@@ -58,4 +58,75 @@ void main() {
       hasLength(3),
     );
   });
+
+  test('upgrades version 19 to branch-scoped expenses and per-device cash drawers', () async {
+    final branchId = (await database.query('branches', columns: ['id'])).single['id']! as int;
+    final legacyExpenseId = await database.insert('expenses', {
+      'description': 'مصروف تاريخي',
+      'category': 'قديم',
+      'amount_minor': 500,
+      'created_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+    });
+    final legacySessionId = await database.insert('cash_sessions', {
+      'opened_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+      'opening_balance_minor': 1000,
+      'status': 'open',
+    });
+
+    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_single_open_drawer');
+    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_branch_status');
+    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_drawer_status');
+    await database.execute('DROP INDEX IF EXISTS idx_cash_transactions_branch_created');
+    await database.execute('DROP INDEX IF EXISTS idx_cash_transactions_drawer_created');
+    await database.execute('DROP INDEX IF EXISTS idx_cash_drawers_branch_active');
+    await database.execute('DROP INDEX IF EXISTS idx_expenses_branch_created');
+    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_single_open');
+    await database.execute('DROP TABLE cash_drawers');
+    await database.execute('ALTER TABLE expenses DROP COLUMN branch_id');
+    await database.execute('ALTER TABLE cash_sessions DROP COLUMN branch_id');
+    await database.execute('ALTER TABLE cash_sessions DROP COLUMN cash_drawer_id');
+    await database.execute('ALTER TABLE cash_sessions DROP COLUMN device_id');
+    await database.execute('ALTER TABLE cash_sessions DROP COLUMN opened_by_user_id');
+    await database.execute('ALTER TABLE cash_transactions DROP COLUMN branch_id');
+    await database.execute('ALTER TABLE cash_transactions DROP COLUMN cash_drawer_id');
+    await database.delete('schema_migrations', where: 'version = ?', whereArgs: [20]);
+
+    await upgradeLocalDatabaseSchema(database, 19, 20);
+
+    final expense = (await database.query('expenses',
+      where: 'id = ?', whereArgs: [legacyExpenseId])).single;
+    expect(expense['branch_id'], isNull);
+    final legacySession = (await database.query('cash_sessions',
+      where: 'id = ?', whereArgs: [legacySessionId])).single;
+    expect(legacySession['branch_id'], isNull);
+    expect(legacySession['cash_drawer_id'], isNull);
+
+    final drawerA = await database.insert('cash_drawers', {
+      'branch_id': branchId,
+      'device_id': 'device-a',
+      'label': 'كاشير 1',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    final drawerB = await database.insert('cash_drawers', {
+      'branch_id': branchId,
+      'device_id': 'device-b',
+      'label': 'كاشير 2',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    Future<int> openFor(int drawerId, String deviceId) => database.insert('cash_sessions', {
+      'branch_id': branchId,
+      'cash_drawer_id': drawerId,
+      'device_id': deviceId,
+      'opened_at': DateTime.now().toUtc().toIso8601String(),
+      'opening_balance_minor': 0,
+      'status': 'open',
+    });
+    await openFor(drawerA, 'device-a');
+    await openFor(drawerB, 'device-b');
+    await expectLater(openFor(drawerA, 'device-a'), throwsA(anything));
+
+    final versions = await database.query('schema_migrations',
+      columns: ['version'], where: 'version = ?', whereArgs: [20]);
+    expect(versions, hasLength(1));
+  });
 }
