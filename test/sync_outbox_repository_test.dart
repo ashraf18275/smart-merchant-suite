@@ -426,7 +426,11 @@ void main() {
     );
 
     final first = (await outbox.claimPendingBatch(businessId: 'business-uuid')).single;
-    await outbox.markFailed(first.eventId, StateError('temporary network issue'));
+    await outbox.markFailed(
+      first.eventId,
+      StateError('temporary network issue'),
+      baseRetryDelay: Duration.zero,
+    );
 
     final retry = (await outbox.claimPendingBatch(businessId: 'business-uuid')).single;
     expect(retry.eventId, first.eventId);
