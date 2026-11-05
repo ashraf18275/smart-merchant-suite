@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../core/app_error.dart';
+import '../domain/branch.dart';
 import 'audit_cash_writer.dart';
 import '../domain/payment_method.dart';
 
@@ -50,6 +51,18 @@ class AccountRepository {
     });
   }
 
+  Future<List<Branch>> branches() async {
+    final rows = await _db.query('branches',
+      where: 'is_active = 1', orderBy: 'name COLLATE NOCASE ASC');
+    return rows.map((row) => Branch(
+      id: row['id']! as int,
+      name: row['name']! as String,
+      address: row['address'] as String?,
+      phone: row['phone'] as String?,
+      isActive: row['is_active'] == 1,
+    )).toList(growable: false);
+  }
+
   /// Returns active customers for selection in sales and account screens.
   Future<List<Map<String, Object?>>> customers() => _db.query(
     'customers',
@@ -60,6 +73,7 @@ class AccountRepository {
   Future<int> recordSupplierPayment({
     required int supplierId,
     required int amountMinor,
+    required int branchId,
     String? note,
     String paymentMethod = PaymentMethod.cash,
   }) => _recordPayment(
@@ -71,11 +85,13 @@ class AccountRepository {
     note: note,
     balanceLabel: 'المستحق للمورد',
     paymentMethod: paymentMethod,
+    branchId: branchId,
   );
 
   Future<int> recordCustomerReceipt({
     required int customerId,
     required int amountMinor,
+    required int branchId,
     String? note,
     String paymentMethod = PaymentMethod.cash,
   }) => _recordPayment(
@@ -94,6 +110,7 @@ class AccountRepository {
     required String ownerColumn,
     required int ownerId,
     required int amountMinor,
+    required int branchId,
     required String entryType,
     required String balanceLabel,
     required String paymentMethod,
@@ -107,6 +124,10 @@ class AccountRepository {
         columns: ['id'], where: 'id = ? AND is_active = 1',
         whereArgs: [ownerId], limit: 1);
       if (owner.isEmpty) throw AppException('الحساب غير موجود أو موقوف');
+      final branch = await txn.query('branches',
+        columns: ['id'], where: 'id = ? AND is_active = 1',
+        whereArgs: [branchId], limit: 1);
+      if (branch.isEmpty) throw AppException('اختر فرعًا نشطًا صالحًا');
       final rows = await txn.rawQuery(
         'SELECT COALESCE(SUM(amount_minor), 0) AS balance FROM $table WHERE $ownerColumn = ?',
         [ownerId],
@@ -139,6 +160,7 @@ class AccountRepository {
         note: note?.trim(),
         createdAt: createdAt,
         paymentMethod: paymentMethod,
+        branchId: branchId,
       );
       return entryId;
     });
