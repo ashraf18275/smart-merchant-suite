@@ -388,12 +388,12 @@ class ProductRepository implements ProductStore, CatalogStore {
               : 'المخزن المحدد غير موجود أو غير نشط',
         );
       }
-      final warehouseId = warehouses.single['id']! as int;
+      final resolvedWarehouseId = warehouses.single['id']! as int;
       final balances = await txn.query(
         'product_warehouse_stock',
         columns: ['id', 'quantity'],
         where: 'product_id = ? AND warehouse_id = ?',
-        whereArgs: [productId, warehouseId],
+        whereArgs: [productId, resolvedWarehouseId],
         limit: 1,
       );
       final current = balances.isEmpty ? 0 : balances.single['quantity']! as int;
@@ -403,7 +403,7 @@ class ProductRepository implements ProductStore, CatalogStore {
       if (balances.isEmpty) {
         await txn.insert('product_warehouse_stock', {
           'product_id': productId,
-          'warehouse_id': warehouseId,
+          'warehouse_id': resolvedWarehouseId,
           'quantity': next,
           'updated_at': stamp,
         });
@@ -421,7 +421,7 @@ class ProductRepository implements ProductStore, CatalogStore {
           where: 'id = ?', whereArgs: [productId]);
       final movementId = await txn.insert('inventory_movements', {
         'product_id': productId,
-        'warehouse_id': warehouseId,
+        'warehouse_id': resolvedWarehouseId,
         'quantity_delta': quantityDelta,
         'reason': reason.trim(),
         'created_at': stamp,
@@ -430,7 +430,7 @@ class ProductRepository implements ProductStore, CatalogStore {
         txn,
         movementId: movementId,
         productId: productId,
-        warehouseId: warehouseId,
+        warehouseId: resolvedWarehouseId,
         quantityDelta: quantityDelta,
         reason: reason.trim(),
       );
