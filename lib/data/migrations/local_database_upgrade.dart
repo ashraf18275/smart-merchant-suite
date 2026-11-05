@@ -37,5 +37,7 @@ Future<void> upgradeLocalDatabaseSchema(
   if (oldVersion < 17) await createSyncOutboxDependenciesSchema(db);
   if (oldVersion < 18) await createSyncOutboxDependencyEdgesSchema(db);
   if (oldVersion < 19) await createSyncOutboxRetryScheduleSchema(db);
-  if (oldVersion < 20) await createBranchCashDrawersSchema(db);
+  if (oldVersion < 20 && newVersion >= 20) {
+    await createBranchCashDrawersSchema(db);
+  }
 }
