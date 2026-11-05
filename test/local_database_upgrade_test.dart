@@ -63,7 +63,6 @@ void main() {
     await database.close();
     database = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     final legacy = database;
-    try {
       await legacy.execute('''
         CREATE TABLE schema_migrations (
           version INTEGER PRIMARY KEY,
@@ -160,9 +159,6 @@ void main() {
 
       expect(await legacy.query('schema_migrations',
         where: 'version = ?', whereArgs: [20]), hasLength(1));
-    } finally {
-      // The shared test teardown closes the replacement in-memory database.
-    }
   });
 
 }
