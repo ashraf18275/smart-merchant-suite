@@ -7,11 +7,16 @@ abstract interface class ProductStore {
 
   Future<void> setActive({required int productId, required bool isActive});
 
-  Future<List<Product>> all({String search = '', bool includeInactive = false});
+  Future<List<Product>> all({
+    String search = '',
+    bool includeInactive = false,
+    int? warehouseId,
+  });
 
   Future<void> changeStock({
     required int productId,
     required int quantityDelta,
     required String reason,
+    int? warehouseId,
   });
 }
