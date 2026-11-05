@@ -59,74 +59,108 @@ void main() {
     );
   });
 
-  test('upgrades version 19 to branch-scoped expenses and per-device cash drawers', () async {
-    final branchId = (await database.query('branches', columns: ['id'])).single['id']! as int;
-    final legacyExpenseId = await database.insert('expenses', {
-      'description': 'مصروف تاريخي',
-      'category': 'قديم',
-      'amount_minor': 500,
-      'created_at': DateTime.utc(2026, 1, 1).toIso8601String(),
-    });
-    final legacySessionId = await database.insert('cash_sessions', {
-      'opened_at': DateTime.utc(2026, 1, 1).toIso8601String(),
-      'opening_balance_minor': 1000,
-      'status': 'open',
-    });
+  test('upgrades a legacy version 19 database without assigning historical rows', () async {
+    final legacy = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    try {
+      await legacy.execute('''
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL
+        )
+      ''');
+      await legacy.execute('''
+        CREATE TABLE branches (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL
+        )
+      ''');
+      await legacy.execute('''
+        CREATE TABLE expenses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          description TEXT NOT NULL,
+          category TEXT NOT NULL,
+          amount_minor INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      await legacy.execute('''
+        CREATE TABLE cash_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          opened_at TEXT NOT NULL,
+          opening_balance_minor INTEGER NOT NULL,
+          closed_at TEXT,
+          expected_balance_minor INTEGER,
+          counted_balance_minor INTEGER,
+          difference_minor INTEGER,
+          status TEXT NOT NULL
+        )
+      ''');
+      await legacy.execute('''
+        CREATE UNIQUE INDEX idx_cash_sessions_single_open
+        ON cash_sessions(status) WHERE status = 'open'
+      ''');
+      await legacy.execute('''
+        CREATE TABLE cash_transactions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      await legacy.insert('schema_migrations', {
+        'version': 19,
+        'applied_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+      });
+      final branchId = await legacy.insert('branches', {'name': 'فرع تجريبي'});
+      final expenseId = await legacy.insert('expenses', {
+        'description': 'مصروف تاريخي',
+        'category': 'قديم',
+        'amount_minor': 500,
+        'created_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+      });
+      final sessionId = await legacy.insert('cash_sessions', {
+        'opened_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'opening_balance_minor': 1000,
+        'status': 'open',
+      });
 
-    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_single_open_drawer');
-    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_branch_status');
-    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_drawer_status');
-    await database.execute('DROP INDEX IF EXISTS idx_cash_transactions_branch_created');
-    await database.execute('DROP INDEX IF EXISTS idx_cash_transactions_drawer_created');
-    await database.execute('DROP INDEX IF EXISTS idx_cash_drawers_branch_active');
-    await database.execute('DROP INDEX IF EXISTS idx_expenses_branch_created');
-    await database.execute('DROP INDEX IF EXISTS idx_cash_sessions_single_open');
-    await database.execute('DROP TABLE cash_drawers');
-    await database.execute('ALTER TABLE expenses DROP COLUMN branch_id');
-    await database.execute('ALTER TABLE cash_sessions DROP COLUMN branch_id');
-    await database.execute('ALTER TABLE cash_sessions DROP COLUMN cash_drawer_id');
-    await database.execute('ALTER TABLE cash_sessions DROP COLUMN device_id');
-    await database.execute('ALTER TABLE cash_sessions DROP COLUMN opened_by_user_id');
-    await database.execute('ALTER TABLE cash_transactions DROP COLUMN branch_id');
-    await database.execute('ALTER TABLE cash_transactions DROP COLUMN cash_drawer_id');
-    await database.delete('schema_migrations', where: 'version = ?', whereArgs: [20]);
+      await upgradeLocalDatabaseSchema(legacy, 19, 20);
 
-    await upgradeLocalDatabaseSchema(database, 19, 20);
+      final expense = (await legacy.query('expenses',
+        where: 'id = ?', whereArgs: [expenseId])).single;
+      expect(expense['branch_id'], isNull);
+      final session = (await legacy.query('cash_sessions',
+        where: 'id = ?', whereArgs: [sessionId])).single;
+      expect(session['branch_id'], isNull);
+      expect(session['cash_drawer_id'], isNull);
 
-    final expense = (await database.query('expenses',
-      where: 'id = ?', whereArgs: [legacyExpenseId])).single;
-    expect(expense['branch_id'], isNull);
-    final legacySession = (await database.query('cash_sessions',
-      where: 'id = ?', whereArgs: [legacySessionId])).single;
-    expect(legacySession['branch_id'], isNull);
-    expect(legacySession['cash_drawer_id'], isNull);
+      final drawerA = await legacy.insert('cash_drawers', {
+        'branch_id': branchId,
+        'device_id': 'device-a',
+        'label': 'كاشير 1',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      final drawerB = await legacy.insert('cash_drawers', {
+        'branch_id': branchId,
+        'device_id': 'device-b',
+        'label': 'كاشير 2',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      Future<int> openFor(int drawerId, String deviceId) => legacy.insert('cash_sessions', {
+        'branch_id': branchId,
+        'cash_drawer_id': drawerId,
+        'device_id': deviceId,
+        'opened_at': DateTime.now().toUtc().toIso8601String(),
+        'opening_balance_minor': 0,
+        'status': 'open',
+      });
+      await openFor(drawerA, 'device-a');
+      await openFor(drawerB, 'device-b');
+      await expectLater(openFor(drawerA, 'device-a'), throwsA(anything));
 
-    final drawerA = await database.insert('cash_drawers', {
-      'branch_id': branchId,
-      'device_id': 'device-a',
-      'label': 'كاشير 1',
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-    });
-    final drawerB = await database.insert('cash_drawers', {
-      'branch_id': branchId,
-      'device_id': 'device-b',
-      'label': 'كاشير 2',
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-    });
-    Future<int> openFor(int drawerId, String deviceId) => database.insert('cash_sessions', {
-      'branch_id': branchId,
-      'cash_drawer_id': drawerId,
-      'device_id': deviceId,
-      'opened_at': DateTime.now().toUtc().toIso8601String(),
-      'opening_balance_minor': 0,
-      'status': 'open',
-    });
-    await openFor(drawerA, 'device-a');
-    await openFor(drawerB, 'device-b');
-    await expectLater(openFor(drawerA, 'device-a'), throwsA(anything));
-
-    final versions = await database.query('schema_migrations',
-      columns: ['version'], where: 'version = ?', whereArgs: [20]);
-    expect(versions, hasLength(1));
+      expect(await legacy.query('schema_migrations',
+        where: 'version = ?', whereArgs: [20]), hasLength(1));
+    } finally {
+      await legacy.close();
+    }
   });
+
 }
