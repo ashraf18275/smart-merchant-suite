@@ -1893,7 +1893,8 @@ begin
     'RPC Product',
     'RPC-PRODUCT',
     120,
-    250
+    250,
+    true
   );
   v_product_create_retry := public.create_cloud_product(
     '20000000-0000-0000-0000-000000000001',
@@ -1901,7 +1902,8 @@ begin
     'RPC Product',
     'RPC-PRODUCT',
     120,
-    250
+    250,
+    true
   );
   if v_product_create_id is distinct from v_product_create_retry then
     raise exception 'product create idempotency failed: retry returned a different id';
@@ -1914,7 +1916,8 @@ begin
       'RPC Product',
       'RPC-PRODUCT',
       120,
-      251
+      251,
+      true
     );
     raise exception 'product create idempotency failed: mismatched payload was accepted';
   exception when invalid_parameter_value then

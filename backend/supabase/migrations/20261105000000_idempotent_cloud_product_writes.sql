@@ -30,7 +30,8 @@ create or replace function public.create_cloud_product(
   p_name text,
   p_sku text,
   p_cost_minor bigint,
-  p_price_minor bigint
+  p_price_minor bigint,
+  p_is_active boolean
 )
 returns uuid
 language plpgsql
@@ -52,7 +53,8 @@ begin
      or length(v_name) > 250
      or length(coalesce(v_sku, '')) > 120
      or p_cost_minor is null or p_cost_minor < 0
-     or p_price_minor is null or p_price_minor < 0 then
+     or p_price_minor is null or p_price_minor < 0
+     or p_is_active is null then
     raise exception 'invalid cloud product payload' using errcode = '22023';
   end if;
 
@@ -67,7 +69,8 @@ begin
         'name', v_name,
         'sku', v_sku,
         'cost_minor', p_cost_minor,
-        'price_minor', p_price_minor
+        'price_minor', p_price_minor,
+        'is_active', p_is_active
       )::text,
       'sha256'
     ),
@@ -94,9 +97,9 @@ begin
   end if;
 
   insert into public.cloud_products (
-    business_id, name, sku, cost_minor, price_minor, created_by
+    business_id, name, sku, cost_minor, price_minor, is_active, created_by
   ) values (
-    p_business_id, v_name, v_sku, p_cost_minor, p_price_minor, auth.uid()
+    p_business_id, v_name, v_sku, p_cost_minor, p_price_minor, p_is_active, auth.uid()
   )
   returning id into v_product_id;
 
@@ -280,7 +283,7 @@ begin
 end;
 $function$;
 
-revoke all on function public.create_cloud_product(uuid, uuid, text, text, bigint, bigint)
+revoke all on function public.create_cloud_product(uuid, uuid, text, text, bigint, bigint, boolean)
   from public, anon;
 revoke all on function public.update_cloud_product(
   uuid, uuid, uuid, text, text, bigint, bigint, boolean,
