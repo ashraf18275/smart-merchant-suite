@@ -209,6 +209,15 @@ declare
   v_purchase_cash_refund_id uuid;
   v_sale_overreturn_rejected boolean := false;
   v_purchase_overreturn_rejected boolean := false;
+  v_product_create_id uuid;
+  v_product_create_retry uuid;
+  v_product_update_id uuid;
+  v_product_update_retry uuid;
+  v_product_create_payload_rejected boolean := false;
+  v_product_update_payload_rejected boolean := false;
+  v_product_stale_base_rejected boolean := false;
+  v_product_unauthorized_rejected boolean := false;
+  v_product_cross_tenant_rejected boolean := false;
 begin
   -- Business ownership is immutable to clients; business names remain editable.
   if has_column_privilege(current_user, 'public.businesses', 'owner_user_id', 'UPDATE') then
@@ -1868,6 +1877,180 @@ begin
 
   if not v_owner_change_rejected then
     raise exception 'owner protection regression: owner permission change was not rejected';
+  end if;
+
+  -- Product writes must use idempotent RPCs and optimistic base snapshots.
+  if has_column_privilege(current_user, 'public.cloud_products', 'name', 'INSERT')
+     or has_column_privilege(current_user, 'public.cloud_products', 'price_minor', 'UPDATE')
+     or has_table_privilege(current_user, 'public.cloud_product_write_receipts', 'SELECT')
+     or has_table_privilege(current_user, 'public.cloud_product_write_receipts', 'INSERT') then
+    raise exception 'product write security regression: client has direct write or receipt access';
+  end if;
+
+  v_product_create_id := public.create_cloud_product(
+    '20000000-0000-0000-0000-000000000001',
+    '50000000-0000-0000-0000-000000000100',
+    'RPC Product',
+    'RPC-PRODUCT',
+    120,
+    250
+  );
+  v_product_create_retry := public.create_cloud_product(
+    '20000000-0000-0000-0000-000000000001',
+    '50000000-0000-0000-0000-000000000100',
+    'RPC Product',
+    'RPC-PRODUCT',
+    120,
+    250
+  );
+  if v_product_create_id is distinct from v_product_create_retry then
+    raise exception 'product create idempotency failed: retry returned a different id';
+  end if;
+
+  begin
+    perform public.create_cloud_product(
+      '20000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000100',
+      'RPC Product',
+      'RPC-PRODUCT',
+      120,
+      251
+    );
+    raise exception 'product create idempotency failed: mismatched payload was accepted';
+  exception when invalid_parameter_value then
+    v_product_create_payload_rejected := true;
+  end;
+  if not v_product_create_payload_rejected then
+    raise exception 'product create idempotency failed: mismatched payload was not rejected';
+  end if;
+
+  v_product_update_id := public.update_cloud_product(
+    '20000000-0000-0000-0000-000000000001',
+    '50000000-0000-0000-0000-000000000101',
+    v_product_create_id,
+    'RPC Product',
+    'RPC-PRODUCT',
+    120,
+    250,
+    true,
+    'RPC Product Updated',
+    'RPC-PRODUCT',
+    130,
+    300,
+    true
+  );
+  v_product_update_retry := public.update_cloud_product(
+    '20000000-0000-0000-0000-000000000001',
+    '50000000-0000-0000-0000-000000000101',
+    v_product_create_id,
+    'RPC Product',
+    'RPC-PRODUCT',
+    120,
+    250,
+    true,
+    'RPC Product Updated',
+    'RPC-PRODUCT',
+    130,
+    300,
+    true
+  );
+  if v_product_update_id is distinct from v_product_update_retry then
+    raise exception 'product update idempotency failed: retry returned a different id';
+  end if;
+
+  begin
+    perform public.update_cloud_product(
+      '20000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000101',
+      v_product_create_id,
+      'RPC Product',
+      'RPC-PRODUCT',
+      120,
+      250,
+      true,
+      'RPC Product Updated',
+      'RPC-PRODUCT',
+      130,
+      301,
+      true
+    );
+    raise exception 'product update idempotency failed: mismatched payload was accepted';
+  exception when invalid_parameter_value then
+    v_product_update_payload_rejected := true;
+  end;
+  if not v_product_update_payload_rejected then
+    raise exception 'product update idempotency failed: mismatched payload was not rejected';
+  end if;
+
+  begin
+    perform public.update_cloud_product(
+      '20000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000102',
+      v_product_create_id,
+      'RPC Product',
+      'RPC-PRODUCT',
+      120,
+      250,
+      true,
+      'Stale Update',
+      'RPC-PRODUCT',
+      130,
+      350,
+      true
+    );
+    raise exception 'product concurrency regression: stale base snapshot was accepted';
+  exception when serialization_failure then
+    v_product_stale_base_rejected := true;
+  end;
+  if not v_product_stale_base_rejected then
+    raise exception 'product concurrency regression: stale base snapshot was not rejected';
+  end if;
+
+  if not exists (
+    select 1 from public.cloud_products
+    where id = v_product_create_id
+      and business_id = '20000000-0000-0000-0000-000000000001'
+      and name = 'RPC Product Updated'
+      and cost_minor = 130
+      and price_minor = 300
+  ) then
+    raise exception 'product RPC regression: expected updated product snapshot not found';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+  begin
+    perform public.create_cloud_product(
+      '20000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000103',
+      'Unauthorized Product',
+      'RPC-UNAUTHORIZED',
+      1,
+      2
+    );
+    raise exception 'product permission regression: read-only member created a product';
+  exception when insufficient_privilege then
+    v_product_unauthorized_rejected := true;
+  end;
+  if not v_product_unauthorized_rejected then
+    raise exception 'product permission regression: unauthorized create was not rejected';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+  begin
+    perform public.create_cloud_product(
+      '20000000-0000-0000-0000-000000000002',
+      '50000000-0000-0000-0000-000000000104',
+      'Cross Tenant Product',
+      'RPC-CROSS-TENANT',
+      1,
+      2
+    );
+    raise exception 'product tenant regression: owner created product in another business';
+  exception when insufficient_privilege then
+    v_product_cross_tenant_rejected := true;
+  end;
+  if not v_product_cross_tenant_rejected then
+    raise exception 'product tenant regression: cross-tenant create was not rejected';
   end if;
 
   -- A user with no membership in either business receives no tenant data.
