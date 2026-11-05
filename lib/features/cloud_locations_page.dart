@@ -145,7 +145,7 @@ class _CloudLocationsPageState extends State<CloudLocationsPage> {
         branchId: branch.id,
         isActive: !branch.isActive,
       );
-      _branchId = null;
+      _branchId = branch.isActive ? null : branch.id;
       _warehouseId = null;
       await _reload();
     } catch (error) { if (mounted) _notice(_friendlyError(error)); }

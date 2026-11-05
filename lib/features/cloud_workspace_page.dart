@@ -97,21 +97,44 @@ class _CloudWorkspacePageState extends State<CloudWorkspacePage> {
 
   Future<void> _persistSelection(CloudWorkspaceContext selection) async {
     final user = _auth.currentUser;
-    final data = _workspace;
-    if (user == null ||
-        data == null ||
+    if (user == null) {
+      await _reload();
+      return;
+    }
+
+    var data = _workspace;
+    if (data == null ||
         !selection.isValidFor(
           expectedBusinessId: widget.business.id,
           branches: data.branches,
           warehouses: data.warehouses,
         )) {
+      try {
+        data = await _locations.load(widget.business.id);
+      } catch (_) {
+        await _reload();
+        return;
+      }
+    }
+
+    if (!selection.isValidFor(
+      expectedBusinessId: widget.business.id,
+      branches: data.branches,
+      warehouses: data.warehouses,
+    )) {
+      if (mounted) setState(() => _workspace = data);
       await _reload();
       return;
     }
 
     try {
       await _selectionStore?.save(userId: user.id, selection: selection);
-      if (mounted) setState(() => _selection = selection);
+      if (mounted) {
+        setState(() {
+          _workspace = data;
+          _selection = selection;
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
