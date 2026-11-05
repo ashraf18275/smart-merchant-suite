@@ -1,6 +1,6 @@
 /// Compatibility and referential ordering for full SQLite backups.
 abstract final class BackupSchema {
-  static const currentVersion = 19;
+  static const currentVersion = 20;
 
   static bool supports(int version) => version >= 3 && version <= currentVersion;
   static bool hasPurchaseData(int version) => version >= 8;
@@ -26,6 +26,7 @@ abstract final class BackupSchema {
     'audit_events',
     'cash_transactions',
     'payment_records',
+    'cash_drawers',
     'cash_sessions',
     'sale_items',
     'expenses',
@@ -49,6 +50,7 @@ abstract final class BackupSchema {
     'payment_records',
     'cash_transactions',
     'cash_sessions',
+    'cash_drawers',
     'audit_events',
     'supplier_return_items',
     'supplier_returns',
@@ -94,6 +96,7 @@ abstract final class BackupSchema {
     'supplier_account_entries',
     'customer_account_entries',
     'audit_events',
+    'cash_drawers',
     'cash_sessions',
     'cash_transactions',
     'payment_records',
