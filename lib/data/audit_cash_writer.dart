@@ -79,7 +79,7 @@ Future<void> writeCashMovement(
   String? note,
   String? createdAt,
   String paymentMethod = PaymentMethod.cash,
-  int? branchId,
+  required int branchId,
   int? cashSessionId,
   int? cashDrawerId,
 }) async {
@@ -89,6 +89,19 @@ Future<void> writeCashMovement(
   }
   if (!PaymentMethod.isValid(paymentMethod)) {
     throw ArgumentError.value(paymentMethod, 'paymentMethod');
+  }
+  if (branchId <= 0) {
+    throw ArgumentError.value(branchId, 'branchId');
+  }
+  final activeBranches = await executor.query(
+    'branches',
+    columns: ['id'],
+    where: 'id = ? AND is_active = 1',
+    whereArgs: [branchId],
+    limit: 1,
+  );
+  if (activeBranches.isEmpty) {
+    throw StateError('cash_movement_branch_missing_or_inactive');
   }
   final stamp = createdAt ?? DateTime.now().toUtc().toIso8601String();
   await executor.insert('payment_records', {
@@ -105,15 +118,13 @@ Future<void> writeCashMovement(
   if (paymentMethod != PaymentMethod.cash) return;
   Map<String, Object?>? drawer;
   var resolvedDrawerId = cashDrawerId;
-  if (branchId != null) {
-    drawer = await ensureCashDrawerForCurrentDevice(
-      executor,
-      branchId: branchId,
-    );
-    resolvedDrawerId ??= drawer['id']! as int;
-    if (drawer['id'] != resolvedDrawerId) {
-      throw StateError('cash_drawer_device_mismatch');
-    }
+  drawer = await ensureCashDrawerForCurrentDevice(
+    executor,
+    branchId: branchId,
+  );
+  resolvedDrawerId ??= drawer['id']! as int;
+  if (drawer['id'] != resolvedDrawerId) {
+    throw StateError('cash_drawer_device_mismatch');
   }
 
   Map<String, Object?>? session;
@@ -129,14 +140,14 @@ Future<void> writeCashMovement(
       throw StateError('cash_session_not_open_or_missing');
     }
     session = sessions.single;
-    if (branchId != null && session['branch_id'] != branchId) {
+    if (session['branch_id'] != branchId) {
       throw StateError('cash_session_branch_mismatch');
     }
     if (resolvedDrawerId != null &&
         session['cash_drawer_id'] != resolvedDrawerId) {
       throw StateError('cash_session_drawer_mismatch');
     }
-  } else if (branchId != null && resolvedDrawerId != null) {
+  } else if (resolvedDrawerId != null) {
     final sessions = await executor.query(
       'cash_sessions',
       columns: ['id'],
@@ -156,7 +167,7 @@ Future<void> writeCashMovement(
     'source_type': sourceType,
     'source_id': sourceId,
     'cash_session_id': resolvedSessionId,
-    'branch_id': branchId ?? session?['branch_id'] as int?,
+    'branch_id': branchId,
     'cash_drawer_id': resolvedDrawerId ?? session?['cash_drawer_id'] as int?,
     'note': note,
     'created_at': stamp,
