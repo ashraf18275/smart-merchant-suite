@@ -14,6 +14,9 @@ Future<void> upgradeLocalDatabaseSchema(
   int oldVersion,
   int newVersion,
 ) async {
+  if (newVersion < oldVersion) {
+    throw ArgumentError.value(newVersion, 'newVersion');
+  }
   if (oldVersion < 2) await createSalesSchema(db);
   if (oldVersion < 3) await createExpensesSchema(db);
   if (oldVersion < 4) await createCatalogSchema(db);
