@@ -193,7 +193,7 @@ class CashbookRepository {
         where: 'branch_id = ?',
         whereArgs: [branchId],
         orderBy: 'created_at DESC, id DESC',
-        limit: limit.clamp(1, 1000));
+        limit: limit.clamp(1, 1000).toInt());
 
   Future<List<Map<String, Object?>>> movements({
     required int branchId,
