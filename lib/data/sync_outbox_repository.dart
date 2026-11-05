@@ -119,29 +119,60 @@ class SyncOutboxRepository {
     return eventId;
   }
 
-  /// Binds existing local-only changes to the business selected by the owner.
-  /// This is intentionally explicit: a queue must never guess the tenant.
-  Future<int> assignUnboundEventsToBusiness(String businessId) async {
-    if (businessId.trim().isEmpty) {
-      throw ArgumentError.value(businessId, 'businessId');
+  /// Binds exactly one legacy event after an explicit owner confirmation.
+  /// Never bulk-assigns an existing local queue to a tenant.
+  Future<void> bindEventToBusiness({
+    required String eventId,
+    required String businessId,
+    required bool explicitlyConfirmed,
+  }) async {
+    if (eventId.trim().isEmpty || businessId.trim().isEmpty) {
+      throw ArgumentError('eventId and businessId are required');
     }
-    return _db.update(
-      'sync_outbox',
-      {
-        'business_id': businessId,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: "business_id IS NULL AND status IN ('pending', 'failed')",
-    );
+    if (!explicitlyConfirmed) {
+      throw StateError('tenant_binding_requires_explicit_confirmation');
+    }
+
+    await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'sync_outbox',
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Sync event not found: $eventId');
+      final event = SyncOutboxEvent.fromRow(rows.single);
+      if (event.businessId != null) {
+        if (event.businessId == businessId) return;
+        throw StateError('A sync event cannot be reassigned to another business');
+      }
+      if (!const {'pending', 'failed'}.contains(event.status)) {
+        throw StateError('Only an unbound pending or failed event can be assigned');
+      }
+
+      final changed = await txn.update(
+        'sync_outbox',
+        {
+          'business_id': businessId,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: "event_id = ? AND business_id IS NULL AND status IN ('pending', 'failed')",
+        whereArgs: [eventId],
+      );
+      if (changed != 1) {
+        throw StateError('Sync event tenant binding changed concurrently');
+      }
+    });
   }
 
   Future<List<SyncOutboxEvent>> claimPendingBatch({
+    required String businessId,
     int limit = 25,
     int maxAttempts = 5,
     Duration staleProcessingAge = const Duration(minutes: 5),
   }) async {
-    if (limit < 1 || maxAttempts < 1) {
-      throw ArgumentError('limit and maxAttempts must be positive');
+    if (businessId.trim().isEmpty || limit < 1 || maxAttempts < 1) {
+      throw ArgumentError('businessId, limit and maxAttempts must be valid');
     }
     return _db.transaction((txn) async {
       final now = DateTime.now().toUtc();
@@ -156,14 +187,14 @@ class SyncOutboxRepository {
           'last_error': 'Previous synchronization was interrupted',
           'updated_at': nowIso,
         },
-        where: "status = 'processing' AND updated_at < ?",
-        whereArgs: [staleBefore],
+        where: "status = 'processing' AND updated_at < ? AND business_id = ?",
+        whereArgs: [staleBefore, businessId],
       );
 
       final rows = await txn.query(
         'sync_outbox',
-        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id IS NOT NULL",
-        whereArgs: [maxAttempts],
+        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id = ?",
+        whereArgs: [maxAttempts, businessId],
         orderBy: 'created_at ASC, event_id ASC',
         limit: limit,
       );
@@ -220,7 +251,7 @@ class SyncOutboxRepository {
           now: now,
         );
       }
-      await txn.update(
+      final changed = await txn.update(
         'sync_outbox',
         {
           'status': 'synced',
@@ -232,13 +263,16 @@ class SyncOutboxRepository {
         where: 'event_id = ? AND status = ?',
         whereArgs: [eventId, 'processing'],
       );
+      if (changed != 1) {
+        throw StateError('Sync event changed before it could be marked synced');
+      }
     });
   }
 
   Future<void> markFailed(String eventId, Object error) async {
     final message = error.toString();
     final now = DateTime.now().toUtc().toIso8601String();
-    await _db.update(
+    final changed = await _db.update(
       'sync_outbox',
       {
         'status': 'failed',
@@ -248,6 +282,9 @@ class SyncOutboxRepository {
       where: 'event_id = ? AND status = ?',
       whereArgs: [eventId, 'processing'],
     );
+    if (changed != 1) {
+      throw StateError('Only a claimed event can be marked failed');
+    }
   }
 
   Future<void> recordConflict({
@@ -255,17 +292,24 @@ class SyncOutboxRepository {
     required String conflictType,
     Map<String, dynamic>? remotePayload,
   }) async {
-    final rows = await _db.query(
-      'sync_outbox',
-      where: 'event_id = ?',
-      whereArgs: [eventId],
-      limit: 1,
-    );
-    if (rows.isEmpty) throw StateError('Sync event not found: $eventId');
-    final event = SyncOutboxEvent.fromRow(rows.single);
+    if (conflictType.trim().isEmpty) {
+      throw ArgumentError.value(conflictType, 'conflictType');
+    }
     final now = DateTime.now().toUtc().toIso8601String();
 
     await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'sync_outbox',
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Sync event not found: $eventId');
+      final event = SyncOutboxEvent.fromRow(rows.single);
+      if (event.status != 'processing') {
+        throw StateError('Only a claimed event can be recorded as a conflict');
+      }
+
       await txn.insert(
         'sync_conflicts',
         {
@@ -281,16 +325,19 @@ class SyncOutboxRepository {
           'detected_at': now,
         },
       );
-      await txn.update(
+      final changed = await txn.update(
         'sync_outbox',
         {
           'status': 'conflict',
           'last_error': conflictType,
           'updated_at': now,
         },
-        where: 'event_id = ?',
+        where: "event_id = ? AND status = 'processing'",
         whereArgs: [eventId],
       );
+      if (changed != 1) {
+        throw StateError('Sync event changed while recording its conflict');
+      }
     });
   }
 

@@ -28,8 +28,8 @@ void main() {
     expect(first, matches(RegExp(r'^[0-9a-f-]{36}$')));
   });
 
-  test('enqueues in the caller transaction and binds only explicitly', () async {
-    final eventId = await database.transaction((txn) {
+  test('enqueues atomically and binds one event only after explicit confirmation', () async {
+    final firstEventId = await database.transaction((txn) {
       return outbox.enqueue(
         executor: txn,
         entityType: 'product',
@@ -38,21 +38,68 @@ void main() {
         payload: {'name': 'قلم', 'price_minor': 1250},
       );
     });
+    final secondEventId = await outbox.enqueue(
+      entityType: 'expense',
+      localEntityId: '9',
+      action: 'create',
+      payload: {'amount_minor': 300},
+    );
 
-    expect(await outbox.pendingCount(), 1);
-    expect(await outbox.claimPendingBatch(), isEmpty);
+    expect(await outbox.pendingCount(), 2);
+    expect(await outbox.claimPendingBatch(businessId: 'business-a'), isEmpty);
 
-    expect(await outbox.assignUnboundEventsToBusiness('business-uuid'), 1);
-    final claimed = await outbox.claimPendingBatch();
+    await expectLater(
+      outbox.bindEventToBusiness(
+        eventId: firstEventId,
+        businessId: 'business-a',
+        explicitlyConfirmed: false,
+      ),
+      throwsStateError,
+    );
 
+    await outbox.bindEventToBusiness(
+      eventId: firstEventId,
+      businessId: 'business-a',
+      explicitlyConfirmed: true,
+    );
+    await outbox.bindEventToBusiness(
+      eventId: secondEventId,
+      businessId: 'business-b',
+      explicitlyConfirmed: true,
+    );
+
+    final claimed = await outbox.claimPendingBatch(businessId: 'business-a');
     expect(claimed, hasLength(1));
-    expect(claimed.single.eventId, eventId);
-    expect(claimed.single.businessId, 'business-uuid');
+    expect(claimed.single.eventId, firstEventId);
+    expect(claimed.single.businessId, 'business-a');
     expect(claimed.single.entityType, 'product');
     expect(claimed.single.localEntityId, '42');
     expect(claimed.single.payload['name'], 'قلم');
     expect(claimed.single.attempts, 1);
     expect(claimed.single.status, 'processing');
+
+    final otherTenant = await outbox.claimPendingBatch(businessId: 'business-b');
+    expect(otherTenant, hasLength(1));
+    expect(otherTenant.single.eventId, secondEventId);
+  });
+
+  test('an event cannot be rebound to a different business', () async {
+    final eventId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: '1',
+      action: 'create',
+      payload: {'name': 'قلم'},
+    );
+
+    await expectLater(
+      outbox.bindEventToBusiness(
+        eventId: eventId,
+        businessId: 'business-b',
+        explicitlyConfirmed: true,
+      ),
+      throwsStateError,
+    );
   });
 
   test('retries failed events with an incremented attempt count', () async {
@@ -64,10 +111,10 @@ void main() {
       payload: {'amount_minor': 300},
     );
 
-    final first = (await outbox.claimPendingBatch()).single;
+    final first = (await outbox.claimPendingBatch(businessId: 'business-uuid')).single;
     await outbox.markFailed(first.eventId, StateError('temporary network issue'));
 
-    final retry = (await outbox.claimPendingBatch()).single;
+    final retry = (await outbox.claimPendingBatch(businessId: 'business-uuid')).single;
     expect(retry.eventId, first.eventId);
     expect(retry.attempts, 2);
     expect(retry.status, 'processing');
@@ -100,18 +147,37 @@ void main() {
       action: 'update',
       payload: {'price_minor': 2000},
     );
-    final event = (await outbox.claimPendingBatch()).single;
+    final event = (await outbox.claimPendingBatch(businessId: 'business-uuid')).single;
     await outbox.recordConflict(
       eventId: event.eventId,
       conflictType: 'remote_record_changed',
       remotePayload: {'price_minor': 2200},
     );
 
-    expect(await outbox.claimPendingBatch(), isEmpty);
+    expect(await outbox.claimPendingBatch(businessId: 'business-uuid'), isEmpty);
     final conflicts = await database.query('sync_conflicts');
     expect(conflicts, hasLength(1));
     expect(conflicts.single['conflict_type'], 'remote_record_changed');
     expect(conflicts.single['business_id'], 'business-uuid');
+  });
+
+  test('cannot record a conflict for an event that was not claimed', () async {
+    final eventId = await outbox.enqueue(
+      businessId: 'business-uuid',
+      entityType: 'product',
+      localEntityId: '8',
+      action: 'update',
+      payload: {'price_minor': 2200},
+    );
+
+    await expectLater(
+      outbox.recordConflict(
+        eventId: eventId,
+        conflictType: 'remote_record_changed',
+      ),
+      throwsStateError,
+    );
+    expect(await database.query('sync_conflicts'), isEmpty);
   });
 
   test('maps local entities to one cloud identity per business', () async {
