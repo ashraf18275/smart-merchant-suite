@@ -5,6 +5,7 @@ import 'local_schema.dart';
 import 'payment_methods_schema.dart';
 import 'sync_outbox_dependencies_schema.dart';
 import 'sync_outbox_dependency_edges_schema.dart';
+import 'sync_outbox_retry_schedule_schema.dart';
 import 'sync_outbox_schema.dart';
 
 /// Applies every schema migration after [oldVersion] in the same order on
@@ -34,4 +35,5 @@ Future<void> upgradeLocalDatabaseSchema(
   if (oldVersion < 16) await createSyncOutboxSchema(db);
   if (oldVersion < 17) await createSyncOutboxDependenciesSchema(db);
   if (oldVersion < 18) await createSyncOutboxDependencyEdgesSchema(db);
+  if (oldVersion < 19) await createSyncOutboxRetryScheduleSchema(db);
 }
