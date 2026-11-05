@@ -290,7 +290,7 @@ revoke all on function public.update_cloud_product(
   text, text, bigint, bigint, boolean
 ) from public, anon;
 
-grant execute on function public.create_cloud_product(uuid, uuid, text, text, bigint, bigint)
+grant execute on function public.create_cloud_product(uuid, uuid, text, text, bigint, bigint, boolean)
   to authenticated;
 grant execute on function public.update_cloud_product(
   uuid, uuid, uuid, text, text, bigint, bigint, boolean,
