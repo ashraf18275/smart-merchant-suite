@@ -685,7 +685,7 @@ void main() {
       refundedMinor: 1800,
       reason: 'إلغاء لاختبار التقرير',
     );
-    final summary = await ExpenseRepository(database).summary();
+    final summary = await ExpenseRepository(database).summary(branchId: await mainBranchId());
     expect(summary.salesMinor, 0);
     expect(summary.costOfGoodsMinor, 0);
     expect(summary.grossProfitMinor, 0);
