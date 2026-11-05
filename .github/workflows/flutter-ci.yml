@@ -1,5 +1,5 @@
 name: Flutter CI and Gated Builds
-# Keep private Android/Windows rollback builds; this gated run verifies tenant-scoped Outbox hardening and the safe-sync design baseline.
+# Keep private Android/Windows rollback builds; this gated run also verifies the persisted cloud workspace-context integration.
 
 on:
   push:
