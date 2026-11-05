@@ -711,3 +711,35 @@ Workflow: `.github/workflows/flutter-ci.yml`
 ### الخطوة التالية
 
 إضافة عميل كتابة سحابي للمنتجات يطابق عقد RPC ويُختبر بمحاكاة Supabase، دون ربطه بعامل إرسال أو تشغيله تلقائيًا. بعد ذلك تُستكمل خرائط المنتج/الموقع وتغطية بقية العمليات قبل أي Push.
+
+
+---
+
+## تحديث التنفيذ — محول Flutter لعقود كتابة المنتجات (5 نوفمبر 2026)
+
+### التنفيذ
+
+- Commit المصدر: `e4ba26f2f7a014350f76ef0ced7eed45f546a8b5`.
+- ملف جديد: `lib/cloud/cloud_product_write_repository.dart`.
+- ملف اختبارات جديد: `test/cloud_product_write_repository_test.dart`.
+- أضيف `CloudProductRpcClient` كواجهة صغيرة، و`SupabaseCloudProductRpcClient` كمحول إلى Supabase RPC.
+- `createFromEvent` يحول حدث إنشاء المنتج إلى `create_cloud_product`.
+- `updateFromEvent` يحول لقطة `base` و`record` إلى `update_cloud_product`، ويشترط UUID سحابيًا للمنتج مصدره mapping.
+- يتحقق المحول من النشاط وUUID العملية، نوع الحدث والفعل، إصدار الحمولة، أسماء الحقول وأنواعها، القيم المالية الصحيحة، وحالة التفعيل. كما يتحقق من UUID الذي يعيده الخادم.
+- لم تتم إضافة أي استدعاء تلقائي أو عامل إرسال؛ المحول لا يعمل إلا إذا استدعاه كود صريح.
+
+### التحقق
+
+- Flutter CI run #654: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41956269112
+- Flutter Analyze: `No issues found!`
+- الاختبارات: **210 tests passed**.
+- Android وWindows builds: `skipped` عمدًا؛ لا حاجة لإعادة بناء الملفات التنفيذية لهذه المرحلة.
+- الاختبارات تستخدم Fake RPC client؛ لا يوجد اتصال بخادم Supabase حي.
+
+### الحدود والخطوة التالية
+
+- لا يزال ترتيب الاعتماديات في Outbox غير ممثل بعمود مستقل؛ لذلك لا ينبغي بناء عامل إرسال أو إرسال دفعات أحداث منتجات/مخزون قبل استكمال dependency ordering.
+- تحديث المنتج يحتاج mapping من local product ID إلى cloud product UUID.
+- حركات المخزون تحتاج mapping صريحًا للفرع والمخزن السحابي؛ الأرقام المحلية لا تُستخدم كـ UUIDs.
+- الخطوة التالية: إضافة اعتماديات Outbox صريحة بحيث لا تُرسل حركة المخزون قبل نجاح إنشاء المنتج وربط UUID، ثم اختبار إعادة المحاولة وفشل الحدث الأب.
+- المزامنة ما زالت معطلة، ولا نشر أو دمج إلى `main` أو تعديل بيانات حقيقية.
