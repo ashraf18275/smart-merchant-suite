@@ -1,6 +1,6 @@
 /// Compatibility and referential ordering for full SQLite backups.
 abstract final class BackupSchema {
-  static const currentVersion = 18;
+  static const currentVersion = 19;
 
   static bool supports(int version) => version >= 3 && version <= currentVersion;
   static bool hasPurchaseData(int version) => version >= 8;
