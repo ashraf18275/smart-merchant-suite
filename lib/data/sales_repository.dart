@@ -44,7 +44,7 @@ class SalesRepository implements SalesStore {
         }
       }
       final selectedWarehouses = await txn.rawQuery("""
-        SELECT w.id FROM warehouses w
+        SELECT w.id, w.branch_id FROM warehouses w
         JOIN branches b ON b.id = w.branch_id
         WHERE w.id = ? AND w.is_active = 1 AND b.is_active = 1
         LIMIT 1
@@ -52,6 +52,7 @@ class SalesRepository implements SalesStore {
       if (selectedWarehouses.isEmpty) {
         throw AppException('المخزن المحدد أو الفرع التابع له غير موجود أو غير نشط');
       }
+      final branchId = selectedWarehouses.single['branch_id']! as int;
       final items = <Map<String, int>>[];
       var total = 0;
       for (final entry in quantities.entries) {
@@ -142,6 +143,7 @@ class SalesRepository implements SalesStore {
         note: 'تحصيل لفاتورة بيع رقم $saleId',
         createdAt: createdAt,
         paymentMethod: paymentMethod,
+        branchId: branchId,
       );
       for (final item in items) {
         final productId = item['productId']!;
@@ -245,6 +247,9 @@ class SalesRepository implements SalesStore {
       if (warehouseId == null) {
         throw AppException('لا يمكن إرجاع فاتورة قديمة لا يحتوي سجلها على مخزن محدد');
       }
+      final warehouseRows = await txn.query('warehouses', columns: ['branch_id'], where: 'id = ?', whereArgs: [warehouseId], limit: 1);
+      if (warehouseRows.isEmpty) throw AppException('فرع مخزن الفاتورة غير معروف');
+      final branchId = warehouseRows.single['branch_id']! as int;
       final customerId = sale['customer_id'] as int?;
       final createdAt = DateTime.now().toUtc().toIso8601String();
       final prepared = <Map<String, int>>[];
@@ -393,6 +398,7 @@ class SalesRepository implements SalesStore {
         note: 'رد مبلغ عن مرتجع فاتورة رقم $saleId',
         createdAt: createdAt,
         paymentMethod: refundMethod,
+        branchId: branchId,
       );
       if (customerId != null && totalMinor > 0) {
         await txn.insert('customer_account_entries', {
@@ -452,6 +458,9 @@ class SalesRepository implements SalesStore {
       if (warehouseId == null) {
         throw AppException('لا يمكن إلغاء فاتورة قديمة لا يحتوي سجلها على مخزن محدد');
       }
+      final warehouseRows = await txn.query('warehouses', columns: ['branch_id'], where: 'id = ?', whereArgs: [warehouseId], limit: 1);
+      if (warehouseRows.isEmpty) throw AppException('فرع مخزن الفاتورة غير معروف');
+      final branchId = warehouseRows.single['branch_id']! as int;
       final customerId = sale['customer_id'] as int?;
       final lines = await txn.query('sale_items',
         where: 'sale_id = ?', whereArgs: [saleId], orderBy: 'id ASC');
@@ -576,6 +585,7 @@ class SalesRepository implements SalesStore {
         note: 'رد مبلغ عن إلغاء فاتورة رقم $saleId',
         createdAt: createdAt,
         paymentMethod: refundMethod,
+        branchId: branchId,
       );
       await txn.update('sales', {
         'cancelled_at': createdAt,
