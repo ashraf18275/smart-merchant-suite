@@ -15,6 +15,7 @@ class SyncOutboxEvent {
     required this.status,
     required this.attempts,
     this.dependsOnEventId,
+    this.nextAttemptAt,
   });
 
   final String eventId;
@@ -27,6 +28,7 @@ class SyncOutboxEvent {
   final String status;
   final int attempts;
   final String? dependsOnEventId;
+  final String? nextAttemptAt;
 
   factory SyncOutboxEvent.fromRow(Map<String, Object?> row) {
     final decoded = jsonDecode(row['payload_json']! as String);
@@ -44,6 +46,7 @@ class SyncOutboxEvent {
       status: row['status']! as String,
       attempts: row['attempts']! as int,
       dependsOnEventId: row['depends_on_event_id'] as String?,
+      nextAttemptAt: row['next_attempt_at'] as String?,
     );
   }
 }
@@ -330,21 +333,27 @@ class SyncOutboxRepository {
     int limit = 25,
     int maxAttempts = 5,
     Duration staleProcessingAge = const Duration(minutes: 5),
+    Duration staleRetryDelay = const Duration(seconds: 30),
+    DateTime? now,
   }) async {
-    if (businessId.trim().isEmpty || limit < 1 || maxAttempts < 1) {
-      throw ArgumentError('businessId, limit and maxAttempts must be valid');
+    if (businessId.trim().isEmpty || limit < 1 || maxAttempts < 1 ||
+        staleProcessingAge.isNegative || staleRetryDelay.isNegative) {
+      throw ArgumentError('Invalid Outbox claim parameters');
     }
     return _db.transaction((txn) async {
-      final now = DateTime.now().toUtc();
-      final nowIso = now.toIso8601String();
+      final stamp = (now ?? DateTime.now()).toUtc();
+      final nowIso = stamp.toIso8601String();
       final staleBefore =
-          now.subtract(staleProcessingAge).toIso8601String();
+          stamp.subtract(staleProcessingAge).toIso8601String();
+      final staleRetryAt =
+          stamp.add(staleRetryDelay).toIso8601String();
 
       await txn.update(
         'sync_outbox',
         {
           'status': 'failed',
           'last_error': 'Previous synchronization was interrupted',
+          'next_attempt_at': staleRetryAt,
           'updated_at': nowIso,
         },
         where: "status = 'processing' AND updated_at < ? AND business_id = ?",
@@ -353,8 +362,8 @@ class SyncOutboxRepository {
 
       final rows = await txn.query(
         'sync_outbox',
-        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id = ? AND NOT EXISTS (SELECT 1 FROM sync_outbox_dependencies dependency JOIN sync_outbox parent ON parent.event_id = dependency.depends_on_event_id WHERE dependency.event_id = sync_outbox.event_id AND (parent.business_id IS NOT sync_outbox.business_id OR parent.status <> 'synced'))",
-        whereArgs: [maxAttempts, businessId],
+        where: "status IN ('pending', 'failed') AND attempts < ? AND business_id = ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND NOT EXISTS (SELECT 1 FROM sync_outbox_dependencies dependency JOIN sync_outbox parent ON parent.event_id = dependency.depends_on_event_id WHERE dependency.event_id = sync_outbox.event_id AND (parent.business_id IS NOT sync_outbox.business_id OR parent.status <> 'synced'))",
+        whereArgs: [maxAttempts, businessId, nowIso],
         orderBy: 'created_at ASC, event_id ASC',
         limit: limit,
       );
@@ -368,6 +377,8 @@ class SyncOutboxRepository {
           {
             'status': 'processing',
             'attempts': attempts,
+            'last_attempt_at': nowIso,
+            'next_attempt_at': null,
             'updated_at': nowIso,
             'last_error': null,
           },
@@ -378,6 +389,8 @@ class SyncOutboxRepository {
           ...row,
           'status': 'processing',
           'attempts': attempts,
+          'last_attempt_at': nowIso,
+          'next_attempt_at': null,
         }));
       }
       return claimed;
@@ -417,6 +430,7 @@ class SyncOutboxRepository {
           'status': 'synced',
           'remote_entity_id': remoteEntityId,
           'last_error': null,
+          'next_attempt_at': null,
           'synced_at': now,
           'updated_at': now,
         },
@@ -429,22 +443,66 @@ class SyncOutboxRepository {
     });
   }
 
-  Future<void> markFailed(String eventId, Object error) async {
-    final message = error.toString();
-    final now = DateTime.now().toUtc().toIso8601String();
-    final changed = await _db.update(
-      'sync_outbox',
-      {
-        'status': 'failed',
-        'last_error': message.length > 1000 ? message.substring(0, 1000) : message,
-        'updated_at': now,
-      },
-      where: 'event_id = ? AND status = ?',
-      whereArgs: [eventId, 'processing'],
-    );
-    if (changed != 1) {
-      throw StateError('Only a claimed event can be marked failed');
+  Future<void> markFailed(
+    String eventId,
+    Object error, {
+    DateTime? now,
+    Duration baseRetryDelay = const Duration(seconds: 30),
+    Duration maxRetryDelay = const Duration(hours: 6),
+  }) async {
+    if (baseRetryDelay.isNegative || maxRetryDelay.isNegative) {
+      throw ArgumentError('Retry delays cannot be negative');
     }
+    final message = error.toString();
+    final stamp = (now ?? DateTime.now()).toUtc();
+    await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'sync_outbox',
+        columns: ['attempts', 'status'],
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+        limit: 1,
+      );
+      if (rows.isEmpty || rows.single['status'] != 'processing') {
+        throw StateError('Only a claimed event can be marked failed');
+      }
+      final attempts = rows.single['attempts']! as int;
+      final maxDelayMs = maxRetryDelay.inMilliseconds;
+      var delayMs = baseRetryDelay.inMilliseconds;
+      for (var retry = 1; retry < attempts && delayMs < maxDelayMs; retry++) {
+        delayMs = delayMs > maxDelayMs ~/ 2 ? maxDelayMs : delayMs * 2;
+      }
+      if (delayMs > maxDelayMs) delayMs = maxDelayMs;
+      final retryAt = stamp.add(Duration(milliseconds: delayMs)).toIso8601String();
+      final changed = await txn.update(
+        'sync_outbox',
+        {
+          'status': 'failed',
+          'last_error': message.length > 1000 ? message.substring(0, 1000) : message,
+          'next_attempt_at': retryAt,
+          'updated_at': stamp.toIso8601String(),
+        },
+        where: 'event_id = ? AND status = ?',
+        whereArgs: [eventId, 'processing'],
+      );
+      if (changed != 1) {
+        throw StateError('Only a claimed event can be marked failed');
+      }
+    });
+  }
+
+  Future<int> retryExhaustedCount({
+    required String businessId,
+    int maxAttempts = 5,
+  }) async {
+    if (businessId.trim().isEmpty || maxAttempts < 1) {
+      throw ArgumentError('businessId and maxAttempts must be valid');
+    }
+    final rows = await _db.rawQuery(
+      "SELECT COUNT(*) AS count FROM sync_outbox WHERE business_id = ? AND status = 'failed' AND attempts >= ?",
+      [businessId, maxAttempts],
+    );
+    return rows.single['count']! as int;
   }
 
   Future<void> recordConflict({
@@ -490,6 +548,7 @@ class SyncOutboxRepository {
         {
           'status': 'conflict',
           'last_error': conflictType,
+          'next_attempt_at': null,
           'updated_at': now,
         },
         where: "event_id = ? AND status = 'processing'",
