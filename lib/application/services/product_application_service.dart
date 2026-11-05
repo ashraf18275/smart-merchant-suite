@@ -34,13 +34,19 @@ class ProductApplicationService implements ProductCatalog {
   Future<List<Product>> all({
     String search = '',
     bool includeInactive = false,
-  }) => _store.all(search: search, includeInactive: includeInactive);
+    int? warehouseId,
+  }) => _store.all(
+    search: search,
+    includeInactive: includeInactive,
+    warehouseId: warehouseId,
+  );
 
   @override
   Future<void> changeStock({
     required int productId,
     required int quantityDelta,
     required String reason,
+    int? warehouseId,
   }) async {
     if (quantityDelta == 0) {
       throw AppException('يجب أن تكون حركة المخزون أكبر من صفر أو أقل من صفر');
@@ -50,6 +56,7 @@ class ProductApplicationService implements ProductCatalog {
       productId: productId,
       quantityDelta: quantityDelta,
       reason: reason,
+      warehouseId: warehouseId,
     );
   }
 
