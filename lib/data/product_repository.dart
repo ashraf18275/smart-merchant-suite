@@ -7,6 +7,7 @@ import '../domain/product.dart';
 import '../domain/product_category.dart';
 import '../domain/product_unit.dart';
 import '../application/ports/catalog_store.dart';
+import 'sync_outbox_repository.dart';
 
 Map<String, Object?> _productToRow(Product product) {
   final normalizedSku = product.sku?.trim();
@@ -41,9 +42,53 @@ Product _productFromRow(Map<String, Object?> row) => Product(
     );
 
 class ProductRepository implements ProductStore, CatalogStore {
-  ProductRepository(this._db);
+  ProductRepository(this._db) : _outbox = SyncOutboxRepository(_db);
 
   final Database _db;
+  final SyncOutboxRepository _outbox;
+
+  Future<void> _enqueueProductSnapshot(
+    DatabaseExecutor txn, {
+    required String localProductId,
+    required String action,
+    required Map<String, dynamic> base,
+    required Map<String, dynamic> record,
+  }) async {
+    await _outbox.enqueueForCurrentBusiness(
+      executor: txn,
+      entityType: 'product',
+      localEntityId: localProductId,
+      action: action,
+      payload: {
+        'payload_schema_version': 1,
+        'base': base,
+        'record': record,
+      },
+    );
+  }
+
+  Future<void> _enqueueInventoryAdjustment(
+    DatabaseExecutor txn, {
+    required int movementId,
+    required int productId,
+    required int warehouseId,
+    required int quantityDelta,
+    required String reason,
+  }) async {
+    await _outbox.enqueueForCurrentBusiness(
+      executor: txn,
+      entityType: 'inventory_movement',
+      localEntityId: movementId.toString(),
+      action: 'adjust',
+      payload: {
+        'payload_schema_version': 1,
+        'local_product_id': productId.toString(),
+        'local_warehouse_id': warehouseId.toString(),
+        'quantity_delta': quantityDelta,
+        'reason': reason,
+      },
+    );
+  }
 
   Future<int> add(Product product) async {
     return _db.transaction((txn) async {
@@ -91,14 +136,35 @@ class ProductRepository implements ProductStore, CatalogStore {
         'quantity': product.stockQuantity,
         'updated_at': stamp,
       });
+      await _enqueueProductSnapshot(
+        txn,
+        localProductId: productId.toString(),
+        action: 'create',
+        base: const {},
+        record: {
+          'name': product.name.trim(),
+          'sku': row['sku'],
+          'cost_minor': product.costMinor,
+          'price_minor': product.priceMinor,
+          'is_active': product.isActive,
+        },
+      );
       if (product.stockQuantity > 0) {
-        await txn.insert('inventory_movements', {
+        final movementId = await txn.insert('inventory_movements', {
           'product_id': productId,
           'warehouse_id': warehouseId,
           'quantity_delta': product.stockQuantity,
           'reason': 'رصيد افتتاحي',
           'created_at': stamp,
         });
+        await _enqueueInventoryAdjustment(
+          txn,
+          movementId: movementId,
+          productId: productId,
+          warehouseId: warehouseId,
+          quantityDelta: product.stockQuantity,
+          reason: 'رصيد افتتاحي',
+        );
       }
       return productId;
     });
@@ -111,7 +177,10 @@ class ProductRepository implements ProductStore, CatalogStore {
     await _db.transaction((txn) async {
       final current = await txn.query(
         'products',
-        columns: ['stock_quantity', 'unit_id'],
+        columns: [
+          'stock_quantity', 'unit_id', 'name', 'sku',
+          'cost_minor', 'price_minor', 'is_active',
+        ],
         where: 'id = ?',
         whereArgs: [id],
         limit: 1,
@@ -162,20 +231,70 @@ class ProductRepository implements ProductStore, CatalogStore {
         'unit_id': targetUnitId,
       }, where: 'id = ?', whereArgs: [id]);
       if (changed == 0) throw AppException('المنتج غير موجود');
+      final before = current.single;
+      await _enqueueProductSnapshot(
+        txn,
+        localProductId: id.toString(),
+        action: 'update',
+        base: {
+          'name': before['name'],
+          'sku': before['sku'],
+          'cost_minor': before['cost_minor'],
+          'price_minor': before['price_minor'],
+          'is_active': before['is_active'] == 1,
+        },
+        record: {
+          'name': product.name.trim(),
+          'sku': normalizedSku == null || normalizedSku.isEmpty ? null : normalizedSku,
+          'cost_minor': product.costMinor,
+          'price_minor': product.priceMinor,
+          'is_active': before['is_active'] == 1,
+        },
+      );
     });
   }
 
   /// Deactivates/reactivates a product without deleting its history or stock.
   Future<void> setActive({required int productId, required bool isActive}) async {
-    final changed = await _db.update(
-      'products',
-      {'is_active': isActive ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [productId],
-    );
-    if (changed == 0) {
-      throw AppException('المنتج غير موجود');
-    }
+    await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'products',
+        columns: ['name', 'sku', 'cost_minor', 'price_minor', 'is_active'],
+        where: 'id = ?',
+        whereArgs: [productId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw AppException('المنتج غير موجود');
+      final before = rows.single;
+      final wasActive = before['is_active'] == 1;
+      if (wasActive == isActive) return;
+      final changed = await txn.update(
+        'products',
+        {'is_active': isActive ? 1 : 0},
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+      if (changed != 1) throw AppException('المنتج غير موجود');
+      await _enqueueProductSnapshot(
+        txn,
+        localProductId: productId.toString(),
+        action: 'update',
+        base: {
+          'name': before['name'],
+          'sku': before['sku'],
+          'cost_minor': before['cost_minor'],
+          'price_minor': before['price_minor'],
+          'is_active': wasActive,
+        },
+        record: {
+          'name': before['name'],
+          'sku': before['sku'],
+          'cost_minor': before['cost_minor'],
+          'price_minor': before['price_minor'],
+          'is_active': isActive,
+        },
+      );
+    });
   }
 
   Future<List<Product>> all({
@@ -267,13 +386,21 @@ class ProductRepository implements ProductStore, CatalogStore {
       );
       await txn.update('products', {'stock_quantity': totals.single['total']},
           where: 'id = ?', whereArgs: [productId]);
-      await txn.insert('inventory_movements', {
+      final movementId = await txn.insert('inventory_movements', {
         'product_id': productId,
         'warehouse_id': warehouseId,
         'quantity_delta': quantityDelta,
         'reason': reason.trim(),
         'created_at': stamp,
       });
+      await _enqueueInventoryAdjustment(
+        txn,
+        movementId: movementId,
+        productId: productId,
+        warehouseId: warehouseId,
+        quantityDelta: quantityDelta,
+        reason: reason.trim(),
+      );
     });
   }
 
