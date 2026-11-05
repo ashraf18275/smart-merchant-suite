@@ -21,7 +21,7 @@ Future<sqflite.Database> openLocalDatabase() async {
           defaultTargetPlatform == TargetPlatform.iOS);
 
   if (isMobile) {
-    return sqflite.openDatabase(
+    final database = await sqflite.openDatabase(
       databasePath,
       version: 16,
       onCreate: (db, version) => createLocalSchema(db),
@@ -46,6 +46,15 @@ Future<sqflite.Database> openLocalDatabase() async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
     );
+    if (businessId != null) {
+      try {
+        await ensureBusinessDatabaseIdentity(database, businessId);
+      } catch (_) {
+        await database.close();
+        rethrow;
+      }
+    }
+    return database;
   }
 
   // Flutter web is not a supported target for this SQLite implementation.
@@ -55,7 +64,7 @@ Future<sqflite.Database> openLocalDatabase() async {
 
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
-  return databaseFactoryFfi.openDatabase(
+  final database = await databaseFactoryFfi.openDatabase(
     databasePath,
     options: OpenDatabaseOptions(
       version: 16,
@@ -82,4 +91,13 @@ Future<sqflite.Database> openLocalDatabase() async {
       },
     ),
   );
+  if (businessId != null) {
+    try {
+      await ensureBusinessDatabaseIdentity(database, businessId);
+    } catch (_) {
+      await database.close();
+      rethrow;
+    }
+  }
+  return database;
 }

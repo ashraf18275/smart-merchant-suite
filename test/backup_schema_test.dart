@@ -7,7 +7,7 @@ void main() {
       expect(BackupSchema.supports(version), isTrue, reason: 'version $version');
     }
     expect(BackupSchema.supports(2), isFalse);
-    expect(BackupSchema.supports(16), isFalse);
+    expect(BackupSchema.supports(17), isFalse);
   });
 
   test('maps purchase and account data to the schema versions that introduced them', () {

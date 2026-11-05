@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/data/backup_restore_writer.dart';
 import 'package:smart_merchant_suite/data/backup_schema.dart';
+import 'package:smart_merchant_suite/data/business_database_identity.dart';
+import 'package:smart_merchant_suite/data/sync_outbox_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -297,6 +299,53 @@ void main() {
       )).single['supplier_id'],
       ids['supplier_id'],
     );
+  });
+
+  test('restore clears stale sync operations but preserves device and tenant identity', () async {
+    const businessId = '6f8f5771-3a1b-4b2a-9c7d-1d0e4a5b6c7d';
+    await ensureBusinessDatabaseIdentity(database, businessId);
+    final outbox = SyncOutboxRepository(database);
+    final deviceId = await outbox.ensureDeviceId();
+    final eventId = await outbox.enqueue(
+      businessId: businessId,
+      entityType: 'product',
+      localEntityId: '77',
+      action: 'create',
+      payload: {'name': 'منتج قديم'},
+    );
+    final claimed = (await outbox.claimPendingBatch(businessId: businessId)).single;
+    await outbox.recordConflict(
+      eventId: claimed.eventId,
+      conflictType: 'restore_test',
+    );
+    await outbox.upsertEntityMapping(
+      businessId: businessId,
+      entityType: 'product',
+      localEntityId: '77',
+      remoteEntityId: 'remote-77',
+    );
+    await outbox.saveCursor(
+      businessId: businessId,
+      scope: 'products',
+      cursor: 'cursor-before-restore',
+    );
+
+    final backup = await captureBusinessData(database);
+    await database.transaction((txn) => replaceBackupBusinessData(txn, backup));
+
+    expect(await database.query('sync_outbox'), isEmpty);
+    expect(await database.query('sync_conflicts'), isEmpty);
+    expect(await database.query('sync_entity_map'), isEmpty);
+    expect(await database.query('sync_cursors'), isEmpty);
+    expect(await outbox.ensureDeviceId(), deviceId);
+    final tenant = await database.query(
+      'sync_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['database_business_id'],
+    );
+    expect(tenant.single['value'], businessId);
+    expect(eventId, isNotEmpty);
   });
 
   test('rolls back the entire replacement when a late foreign key insert fails', () async {

@@ -19,6 +19,15 @@ Future<void> replaceBackupBusinessData(
     }
   }
 
+  // Restoring business rows invalidates every pending local sync event and
+  // entity map that refers to the replaced SQLite IDs. Keep device metadata
+  // (including the per-installation device ID and tenant file binding), but
+  // clear operational sync state atomically with the data replacement.
+  await executor.delete('sync_conflicts');
+  await executor.delete('sync_outbox');
+  await executor.delete('sync_entity_map');
+  await executor.delete('sync_cursors');
+
   for (final table in BackupSchema.restoreDeleteOrder) {
     await executor.delete(table);
   }

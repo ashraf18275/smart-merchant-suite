@@ -9,6 +9,7 @@ import '../cloud/cloud_business.dart';
 import '../cloud/cloud_location_repository.dart';
 import '../cloud/cloud_workspace_context.dart';
 import '../data/local_database.dart';
+import 'home_dashboard.dart' as local_dashboard;
 import 'cloud_locations_page.dart';
 import 'cloud_members_page.dart';
 import 'cloud_products_page.dart';
@@ -203,6 +204,14 @@ class _CloudWorkspacePageState extends State<CloudWorkspacePage> {
     if (mounted) await _reload();
   }
 
+  Future<void> _openLocalBusinessData() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => local_dashboard.HomeDashboard(
+        businessId: widget.business.id,
+      ),
+    ));
+  }
+
   Future<void> _openMembers() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => CloudMembersPage(
@@ -327,9 +336,15 @@ class _CloudWorkspacePageState extends State<CloudWorkspacePage> {
                     icon: const Icon(Icons.people_outline),
                     label: const Text('المستخدمون والصلاحيات'),
                   ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _openLocalBusinessData,
+                    icon: const Icon(Icons.storefront_outlined),
+                    label: const Text('فتح بيانات هذا النشاط على الجهاز'),
+                  ),
                   const SizedBox(height: 16),
                   const Text(
-                    'يُحفظ اختيار النشاط والفرع والمخزن محليًا على هذا الجهاز لكل مستخدم ونشاط. هذا الاختيار لا ينقل بيانات SQLite ولا يبدأ المزامنة.',
+                    'تُفتح بيانات هذا النشاط في قاعدة SQLite مستقلة على هذا الجهاز. لا تُنقل إليها بياناتك المحلية القديمة تلقائيًا، ولا تبدأ المزامنة.',
                     style: TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                   if (data != null &&
