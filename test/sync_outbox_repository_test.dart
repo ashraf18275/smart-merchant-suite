@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_merchant_suite/data/business_database_identity.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/sync_outbox_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -12,6 +13,10 @@ void main() {
   setUp(() async {
     database = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await createLocalSchema(database);
+    await ensureBusinessDatabaseIdentity(
+      database,
+      '6f8f5771-3a1b-4b2a-9c7d-1d0e4a5b6c7d',
+    );
     outbox = SyncOutboxRepository(database);
   });
 
@@ -109,6 +114,80 @@ void main() {
     expect(secondBatch, hasLength(1));
     expect(secondBatch.single.eventId, childId);
     expect(secondBatch.single.dependsOnEventId, parentId);
+  });
+
+  test('a sale with multiple product dependencies waits for every parent', () async {
+    const tenantId = '6f8f5771-3a1b-4b2a-9c7d-1d0e4a5b6c7d';
+    final firstProduct = await outbox.enqueue(
+      businessId: tenantId,
+      entityType: 'product',
+      localEntityId: '101',
+      action: 'create',
+      payload: {'name': 'منتج أول'},
+    );
+    final secondProduct = await outbox.enqueue(
+      businessId: tenantId,
+      entityType: 'product',
+      localEntityId: '202',
+      action: 'create',
+      payload: {'name': 'منتج ثان'},
+    );
+    final saleId = await outbox.enqueue(
+      businessId: tenantId,
+      entityType: 'sale',
+      localEntityId: '900',
+      action: 'create',
+      payload: {'items': ['101', '202']},
+      dependsOnEventIds: [firstProduct, secondProduct],
+    );
+
+    final initial = await outbox.claimPendingBatch(businessId: tenantId);
+    expect(initial.map((event) => event.eventId).toSet(),
+        {firstProduct, secondProduct});
+
+    await outbox.markSynced(firstProduct);
+    final afterFirst = await outbox.claimPendingBatch(businessId: tenantId);
+    expect(afterFirst, hasLength(1));
+    expect(afterFirst.single.eventId, secondProduct);
+
+    await outbox.markSynced(secondProduct);
+    final afterBoth = await outbox.claimPendingBatch(businessId: tenantId);
+    expect(afterBoth, hasLength(1));
+    expect(afterBoth.single.eventId, saleId);
+    expect(afterBoth.single.dependsOnEventId, firstProduct);
+  });
+
+  test('latest unfinished event lookup returns one newest parent per local product', () async {
+    const tenantId = '6f8f5771-3a1b-4b2a-9c7d-1d0e4a5b6c7d';
+    await outbox.enqueue(
+      businessId: tenantId,
+      entityType: 'product',
+      localEntityId: '10',
+      action: 'create',
+      payload: {'name': 'منتج 10'},
+    );
+    final latestFor10 = await outbox.enqueue(
+      businessId: tenantId,
+      entityType: 'product',
+      localEntityId: '10',
+      action: 'update',
+      payload: {'name': 'منتج 10 محدث'},
+    );
+    final latestFor11 = await outbox.enqueue(
+      businessId: tenantId,
+      entityType: 'product',
+      localEntityId: '11',
+      action: 'create',
+      payload: {'name': 'منتج 11'},
+    );
+
+    final dependencies = await outbox.latestUnfinishedEventIdsForCurrentBusiness(
+      executor: database,
+      entityType: 'product',
+      localEntityIds: ['10', '11', '10'],
+    );
+    expect(dependencies.toSet(), {latestFor10, latestFor11});
+    expect(dependencies, hasLength(2));
   });
 
   test('a failed parent blocks its dependent event while parent retry remains pending', () async {

@@ -24,7 +24,7 @@ void main() {
       columns: ['version'],
       orderBy: 'version ASC',
     );
-    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+    expect(versions.map((row) => row['version']), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
 
     final tables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
@@ -35,7 +35,7 @@ void main() {
     final saleItemColumns = await database.rawQuery('PRAGMA table_info(sale_items)');
     expect(saleItemColumns.map((row) => row['name']), containsAll(['returned_quantity', 'returned_minor', 'returned_cost_minor']));
     expect(saleColumns.map((row) => row['name']), containsAll(['warehouse_id', 'customer_id']));
-    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries', 'supplier_returns', 'supplier_return_items', 'customer_returns', 'customer_return_items', 'sales_cancellations', 'cash_sessions', 'sync_metadata', 'sync_outbox', 'sync_entity_map', 'sync_cursors', 'sync_conflicts']));
+    expect(names, containsAll(['products', 'sales', 'sale_items', 'expenses', 'product_categories', 'product_units', 'branches', 'warehouses', 'product_warehouse_stock', 'suppliers', 'purchases', 'purchase_items', 'customers', 'supplier_account_entries', 'customer_account_entries', 'supplier_returns', 'supplier_return_items', 'customer_returns', 'customer_return_items', 'sales_cancellations', 'cash_sessions', 'sync_metadata', 'sync_outbox', 'sync_outbox_dependencies', 'sync_entity_map', 'sync_cursors', 'sync_conflicts']));
     final outboxColumns = await database.rawQuery('PRAGMA table_info(sync_outbox)');
     expect(outboxColumns.map((row) => row['name']), contains('depends_on_event_id'));
     final units = await database.query('product_units');

@@ -151,7 +151,7 @@ class SyncOutboxRepository {
       columns: ['event_id'],
       where: "business_id = ? AND entity_type = ? AND local_entity_id = ? AND status IN ('pending', 'processing', 'failed', 'conflict')",
       whereArgs: [businessId, entityType, localEntityId],
-      orderBy: 'created_at DESC, event_id DESC',
+      orderBy: 'rowid DESC',
       limit: 1,
     );
     return rows.isEmpty ? null : rows.single['event_id'] as String;
@@ -186,7 +186,7 @@ class SyncOutboxRepository {
       columns: ['event_id', 'local_entity_id'],
       where: "business_id = ? AND entity_type = ? AND local_entity_id IN ($placeholders) AND status IN ('pending', 'processing', 'failed', 'conflict')",
       whereArgs: [businessId, entityType, ...ids],
-      orderBy: 'local_entity_id ASC, created_at DESC, event_id DESC',
+      orderBy: 'local_entity_id ASC, rowid DESC',
     );
     final seen = <String>{};
     return rows
