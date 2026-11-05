@@ -210,11 +210,89 @@ void main() {
     );
 
     final parent = (await outbox.claimPendingBatch(businessId: 'business-a')).single;
-    await outbox.markFailed(parent.eventId, StateError('temporary failure'));
+    await outbox.markFailed(
+      parent.eventId,
+      StateError('temporary failure'),
+      baseRetryDelay: Duration.zero,
+    );
     final retryBatch = await outbox.claimPendingBatch(businessId: 'business-a');
     expect(retryBatch, hasLength(1));
     expect(retryBatch.single.eventId, parentId);
     expect(retryBatch.any((event) => event.eventId == childId), isFalse);
+  });
+
+  test('failed events use exponential retry delays and expose exhausted attempts', () async {
+    final start = DateTime.utc(2026, 11, 5, 10);
+    final eventId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: 'retry-1',
+      action: 'create',
+      payload: {'name': 'اختبار إعادة المحاولة'},
+    );
+
+    final first = (await outbox.claimPendingBatch(
+      businessId: 'business-a',
+      now: start,
+    )).single;
+    await outbox.markFailed(
+      first.eventId,
+      StateError('temporary network failure'),
+      now: start,
+      baseRetryDelay: const Duration(seconds: 30),
+      maxRetryDelay: const Duration(minutes: 2),
+    );
+
+    var stored = (await database.query(
+      'sync_outbox',
+      where: 'event_id = ?',
+      whereArgs: [eventId],
+    )).single;
+    expect(stored['next_attempt_at'], start.add(const Duration(seconds: 30)).toIso8601String());
+    expect(stored['last_attempt_at'], start.toIso8601String());
+    expect(
+      await outbox.claimPendingBatch(
+        businessId: 'business-a',
+        now: start.add(const Duration(seconds: 29)),
+      ),
+      isEmpty,
+    );
+
+    final second = (await outbox.claimPendingBatch(
+      businessId: 'business-a',
+      now: start.add(const Duration(seconds: 30)),
+      maxAttempts: 2,
+    )).single;
+    expect(second.attempts, 2);
+    await outbox.markFailed(
+      second.eventId,
+      StateError('still offline'),
+      now: start.add(const Duration(seconds: 30)),
+      baseRetryDelay: const Duration(seconds: 30),
+      maxRetryDelay: const Duration(minutes: 2),
+    );
+
+    stored = (await database.query(
+      'sync_outbox',
+      where: 'event_id = ?',
+      whereArgs: [eventId],
+    )).single;
+    expect(stored['next_attempt_at'], start.add(const Duration(seconds: 90)).toIso8601String());
+    expect(
+      await outbox.retryExhaustedCount(
+        businessId: 'business-a',
+        maxAttempts: 2,
+      ),
+      1,
+    );
+    expect(
+      await outbox.claimPendingBatch(
+        businessId: 'business-a',
+        maxAttempts: 2,
+        now: start.add(const Duration(minutes: 3)),
+      ),
+      isEmpty,
+    );
   });
 
   test('a conflicted parent remains a dependency anchor for later local events', () async {
