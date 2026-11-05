@@ -8,6 +8,7 @@ import 'sync_outbox_dependency_edges_schema.dart';
 import 'sync_outbox_retry_schedule_schema.dart';
 import 'sync_outbox_schema.dart';
 import 'branch_cash_drawers_schema.dart';
+import 'branch_scoped_payments_schema.dart';
 
 /// Applies every schema migration after [oldVersion] in the same order on
 /// Android and desktop. Keep this list aligned with the database version.
@@ -39,5 +40,8 @@ Future<void> upgradeLocalDatabaseSchema(
   if (oldVersion < 19) await createSyncOutboxRetryScheduleSchema(db);
   if (oldVersion < 20 && newVersion >= 20) {
     await createBranchCashDrawersSchema(db);
+  }
+  if (oldVersion < 21 && newVersion >= 21) {
+    await createBranchScopedPaymentsSchema(db);
   }
 }
