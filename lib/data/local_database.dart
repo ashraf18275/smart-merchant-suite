@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'business_database_identity.dart';
+import 'local_database_path.dart';
 import 'migrations/local_schema.dart';
 import 'migrations/payment_methods_schema.dart';
 import 'migrations/cash_sessions_schema.dart';
@@ -11,10 +15,16 @@ import 'migrations/sync_outbox_schema.dart';
 
 /// Opens the app's private local database on Android and desktop.
 /// Desktop uses SQLite FFI; mobile uses the platform SQLite plugin.
-Future<sqflite.Database> openLocalDatabase() async {
+Future<sqflite.Database> openLocalDatabase({String? businessId}) async {
   final supportDirectory = await getApplicationSupportDirectory();
   await supportDirectory.create(recursive: true);
-  final databasePath = p.join(supportDirectory.path, 'smart_merchant_suite.db');
+  final databasePath = LocalDatabasePath.resolve(
+    supportDirectory.path,
+    businessId: businessId,
+  );
+  if (businessId != null) {
+    await Directory(p.dirname(databasePath)).create(recursive: true);
+  }
 
   final isMobile = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
