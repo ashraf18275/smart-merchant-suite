@@ -393,6 +393,39 @@ class _CashbookPageState extends State<CashbookPage>
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Text('الفرع', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              initialValue: data.branchId,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'اختر الفرع لعرض صندوقه',
+              ),
+              items: data.branches.map((branch) => DropdownMenuItem<int>(
+                value: branch.id, child: Text(branch.name),
+              )).toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _selectedBranchId = value;
+                  _data = _load();
+                });
+              },
+            ),
+            if (data.branches.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('لا توجد فروع نشطة لإدارة الصندوق.'),
+              )
+            else if (data.branchId == null)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('اختر الفرع أولًا. لن يتم دمج أرصدة الفروع أو الأدراج.'),
+              )
+            else ...[
+            Text('درج هذا الجهاز: ${data.drawerLabel}',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 8),
             Card(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: const Padding(
@@ -548,6 +581,7 @@ class _CashbookPageState extends State<CashbookPage>
                     ),
                   ),
                 ),
+            ],
           ],
         ),
       );
@@ -557,6 +591,10 @@ class _CashbookPageState extends State<CashbookPage>
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const Text(
+              'سجل النشاط عام لقاعدة بيانات النشاط، ولا يمثل رصيد درج نقدية بعينه.',
+            ),
+            const SizedBox(height: 8),
             Text('آخر العمليات المسجلة',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
