@@ -813,3 +813,36 @@ Workflow: `.github/workflows/flutter-ci.yml`
 - يجب اختبار حالات عدم وجود mapping، ومخزن تابع لفرع مختلف، وإعادة المحاولة بنفس operation_id، ومنع تكرار الحركة.
 - بقية عمليات المبيعات والمشتريات والمصروفات والحسابات والصندوق غير موصولة بـ Outbox.
 - لا دمج إلى `main`، لا نشر، ولا تغيير بيانات حقيقية.
+
+
+---
+
+## تحديث التنفيذ — محول RPC لحركات المخزون (5 نوفمبر 2026)
+
+### التنفيذ
+
+- Commit المصدر المختبر: `51ba7dc490aece65d0b50747f90a3f5bf442b720`.
+- ملف جديد: `lib/cloud/cloud_inventory_write_repository.dart`.
+- ملف اختبارات جديد: `test/cloud_inventory_write_repository_test.dart`.
+- أضيف `CloudInventoryRpcClient` و`SupabaseCloudInventoryRpcClient).
+- `adjustFromEvent` يقبل فقط `inventory_movement/adjust` بإصدار payload 1.
+- يتحقق من tenant UUID وoperation UUID ومعرف حركة SQLite والمنتج والمخزن المحليين، ومن أن المنتج والفرع والمخزن المحليين نشطون.
+- يستخرج remote product/branch/warehouse UUIDs من `sync_entity_map`، ويرفض التنفيذ إذا غاب أي mapping أو لم يكن UUID صالحًا.
+- يتحقق من أن الحدث الأب موجود في النشاط نفسه وحالته `synced` قبل استدعاء RPC.
+- يستدعي `adjust_cloud_inventory` بمعاملات النشاط والفرع والمخزن والمنتج والكمية والسبب وoperation_id. عقد الخادم warehouse-aware وidempotent، وبصمة الطلب تمنع تكرار حركة مختلفة بنفس المفتاح.
+- الاختبارات تستخدم Fake RPC client ولا تتصل بـ Supabase.
+
+### التحقق
+
+- Flutter CI run #664: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41958752192
+- Flutter Analyze: `No issues found!`
+- الاختبارات: **230 tests passed**.
+- Android وWindows builds: `skipped`؛ لم يتغير كود خاص بالمنصة ولا حاجة لإعادة بناء الملفات التنفيذية.
+
+### الحدود والخطوة التالية
+
+- لا يوجد عامل Push/Pull؛ لا تُرسل أحداث المنتج أو المخزون تلقائيًا.
+- إنشاء المنتج يجب أن يكتمل ويحفظ mapping المنتج قبل اعتماد حركة المخزون التابعة له؛ عامل المستقبل يجب أن ينفذ `upsertEntityMapping` قبل `markSynced`.
+- بقية المستندات التشغيلية (المبيعات والمشتريات والمرتجعات والمصروفات والحسابات والصندوق) لم تُوصل بعد إلى Outbox.
+- الخطوة التالية: فحص معاملة البيع المحلية وعقد البيع السحابي، ثم إضافة التقاط ذري لحدث البيع ومحول RPC بعد حل mappings العميل/المنتجات/الفرع/المخزن والصندوق.
+- لا دمج إلى `main`، لا نشر، ولا تغيير بيانات حقيقية.

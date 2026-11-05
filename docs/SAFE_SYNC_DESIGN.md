@@ -204,4 +204,15 @@
 - يتحقق المستودع من هوية قاعدة النشاط، ومن وجود المواقع المحلية والسحابية ونشاطها، ويمنع الربط العابر للأنشطة أو مشاركة UUID سحابي بين موقعين محليين.
 - الربط يُحفظ محليًا في `sync_entity_map` فقط؛ لا تُنشأ أو تُعدل مواقع على الخادم ولا تنتقل بيانات.
 - Flutter CI run #660: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41958115260 — Analyze نجح و**224 tests passed**.
-- لا يوجد عامل مزامنة؛ ربط المواقع لا يرسل أحداث المخزون.
+- أضيف محول `CloudInventoryWriteRepository` لعقد `adjust_cloud_inventory`؛ يتحقق من هوية النشاط، وmapping المنتج والفرع والمخزن، وحالة المواقع والمنتج، واكتمال الحدث الأب. اختُبر بعميل RPC وهمي، ولا يوجد عامل مزامنة أو إرسال فعلي.
+
+
+## 16. محول RPC لحركات المخزون — 5 نوفمبر 2026
+
+- أضيف `lib/cloud/cloud_inventory_write_repository.dart` لتحويل حدث `inventory_movement/adjust` إلى RPC `adjust_cloud_inventory` ذي النطاق branch/warehouse.
+- يتحقق من UUID النشاط والعملية، وإصدار الحمولة، ومعرفات SQLite المحلية، وحالة المنتج والفرع والمخزن.
+- يحل UUID المنتج والفرع والمخزن من `sync_entity_map` فقط؛ لا يرسل أي رقم SQLite كمعرف سحابي.
+- يشترط أن يكون الحدث الأب `synced` قبل استدعاء RPC، ويمنع التنفيذ عند غياب أي mapping.
+- عقد الخادم idempotent ويتحقق من بصمة الطلب؛ اختبارات PostgreSQL السابقة تغطي إعادة العملية بالمفتاح نفسه ورفض الحمولة المختلفة.
+- Flutter CI run #664: https://github.com/ashraf18275/smart-merchant-suite/actions/runs/41958752192 — Analyze نجح و**230 tests passed**.
+- الاختبارات تستخدم Fake RPC client؛ لم يحدث اتصال فعلي أو تعديل مخزون على الخادم.
