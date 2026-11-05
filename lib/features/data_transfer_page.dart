@@ -235,7 +235,7 @@ final _legacyV15Tables = <_ExportTable>[
 ];
 
 // Version 20 adds branch-scoped expenses and device-owned cash drawers.
-final _tables = <_ExportTable>[
+final _legacyV20Tables = <_ExportTable>[
   ..._legacyV15Tables.where((spec) =>
       !{'expenses', 'cash_sessions', 'cash_transactions'}.contains(spec.table)),
   const _ExportTable('المصروفات', 'expenses', [
@@ -254,6 +254,15 @@ final _tables = <_ExportTable>[
     'id', 'direction', 'category', 'amount_minor', 'source_type',
     'source_id', 'cash_session_id', 'branch_id', 'cash_drawer_id',
     'note', 'created_at',
+  ]),
+];
+
+// Version 21 adds an explicit branch to non-cash and cash settlement records.
+final _tables = <_ExportTable>[
+  ..._legacyV20Tables.where((spec) => spec.table != 'payment_records'),
+  const _ExportTable('المدفوعات', 'payment_records', [
+    'id', 'direction', 'payment_method', 'amount_minor',
+    'source_type', 'source_id', 'note', 'created_at', 'branch_id',
   ]),
 ];
 
@@ -396,10 +405,12 @@ class _DataTransferPageState extends State<DataTransferPage> {
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion >= 20
+      final restoreTables = schemaVersion >= 21
           ? _tables
-          : schemaVersion >= 15
-              ? _legacyV15Tables
+          : schemaVersion >= 20
+              ? _legacyV20Tables
+              : schemaVersion >= 15
+                  ? _legacyV15Tables
           : schemaVersion >= 14
               ? _legacyV14Tables
               : schemaVersion >= 13
@@ -518,6 +529,11 @@ class _DataTransferPageState extends State<DataTransferPage> {
           ...row,
           'branch_id': null,
           'cash_drawer_id': null,
+        }).toList(growable: false);
+      }
+      if (schemaVersion < 21) {
+        data['payment_records'] = data['payment_records']!.map((row) => {
+          ...row, 'branch_id': null,
         }).toList(growable: false);
       }
       if (schemaVersion < 12) {
