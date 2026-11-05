@@ -53,7 +53,17 @@ void main() {
         'quantity': 2000,
         'updated_at': stamp,
       });
+      final cashDrawerId = await source.insert('cash_drawers', {
+        'branch_id': branch['id'],
+        'device_id': 'snapshot-device',
+        'label': 'درج النسخة',
+        'created_at': stamp,
+      });
       final cashSessionId = await source.insert('cash_sessions', {
+        'branch_id': branch['id'],
+        'cash_drawer_id': cashDrawerId,
+        'device_id': 'snapshot-device',
+        'opened_by_user_id': 'snapshot-user',
         'opened_at': stamp,
         'opening_balance_minor': 3000,
         'opening_note': 'وردية تجريبية',
@@ -77,6 +87,7 @@ void main() {
       await source.insert('expenses', {
         'description': 'مصروف النسخة',
         'category': 'تشغيل',
+        'branch_id': branch['id'],
         'amount_minor': 50,
         'created_at': stamp,
       });
@@ -133,6 +144,8 @@ void main() {
         'source_type': 'sale',
         'source_id': saleId,
         'cash_session_id': cashSessionId,
+        'branch_id': branch['id'],
+        'cash_drawer_id': cashDrawerId,
         'note': 'تحصيل نقدي تجريبي',
         'created_at': stamp,
       });
