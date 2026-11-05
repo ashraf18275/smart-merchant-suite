@@ -103,6 +103,7 @@ class AccountRepository {
     note: note,
     balanceLabel: 'مديونية العميل',
     paymentMethod: paymentMethod,
+    branchId: branchId,
   );
 
   Future<int> _recordPayment({
