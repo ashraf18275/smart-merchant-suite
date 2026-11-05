@@ -216,8 +216,8 @@ final _legacyV14Tables = <_ExportTable>[
   ]),
 ];
 
-// Version 15 adds cash sessions and associates new cash movements with a shift.
-final _tables = <_ExportTable>[
+// Version 15 introduced cash sessions. Keep its exact layout for old backups.
+final _legacyV15Tables = <_ExportTable>[
   ..._legacyV13Tables.where((spec) => spec.table != 'cash_transactions'),
   const _ExportTable('ورديات الصندوق', 'cash_sessions', [
     'id', 'opened_at', 'opening_balance_minor', 'opening_note',
@@ -231,6 +231,29 @@ final _tables = <_ExportTable>[
   const _ExportTable('المدفوعات', 'payment_records', [
     'id', 'direction', 'payment_method', 'amount_minor',
     'source_type', 'source_id', 'note', 'created_at',
+  ]),
+];
+
+// Version 20 adds branch-scoped expenses and device-owned cash drawers.
+final _tables = <_ExportTable>[
+  ..._legacyV15Tables.where((spec) =>
+      !{'expenses', 'cash_sessions', 'cash_transactions'}.contains(spec.table)),
+  const _ExportTable('المصروفات', 'expenses', [
+    'id', 'description', 'category', 'amount_minor', 'branch_id', 'created_at',
+  ]),
+  const _ExportTable('درج النقدية', 'cash_drawers', [
+    'id', 'branch_id', 'device_id', 'label', 'is_active', 'created_at',
+  ]),
+  const _ExportTable('ورديات الصندوق', 'cash_sessions', [
+    'id', 'opened_at', 'opening_balance_minor', 'opening_note',
+    'closed_at', 'expected_balance_minor', 'counted_balance_minor',
+    'difference_minor', 'closing_note', 'status', 'branch_id',
+    'cash_drawer_id', 'device_id', 'opened_by_user_id',
+  ]),
+  const _ExportTable('حركة الصندوق', 'cash_transactions', [
+    'id', 'direction', 'category', 'amount_minor', 'source_type',
+    'source_id', 'cash_session_id', 'branch_id', 'cash_drawer_id',
+    'note', 'created_at',
   ]),
 ];
 
@@ -368,13 +391,15 @@ class _DataTransferPageState extends State<DataTransferPage> {
           : (versionRows.first['user_version'] as num?)?.toInt() ?? 0;
       if (!BackupSchema.supports(schemaVersion)) {
         throw AppException(
-          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 18).',
+          'إصدار قاعدة البيانات غير مدعوم (الإصدار المكتشف: $schemaVersion، المدعوم: 3 إلى 20).',
         );
       }
 
       final data = <String, List<Map<String, Object?>>>{};
-      final restoreTables = schemaVersion >= 15
+      final restoreTables = schemaVersion >= 20
           ? _tables
+          : schemaVersion >= 15
+              ? _legacyV15Tables
           : schemaVersion >= 14
               ? _legacyV14Tables
               : schemaVersion >= 13
@@ -472,6 +497,27 @@ class _DataTransferPageState extends State<DataTransferPage> {
         data['cash_sessions'] = [];
         data['cash_transactions'] = data['cash_transactions']!.map((row) => {
           ...row, 'cash_session_id': null,
+        }).toList(growable: false);
+      }
+
+      // Version 20 introduced explicit branch/drawer ownership. Historical
+      // backups cannot reveal those owners, so preserve rows as unassigned.
+      if (schemaVersion < 20) {
+        data['expenses'] = data['expenses']!.map((row) => {
+          ...row, 'branch_id': null,
+        }).toList(growable: false);
+        data['cash_drawers'] = [];
+        data['cash_sessions'] = data['cash_sessions']!.map((row) => {
+          ...row,
+          'branch_id': null,
+          'cash_drawer_id': null,
+          'device_id': null,
+          'opened_by_user_id': null,
+        }).toList(growable: false);
+        data['cash_transactions'] = data['cash_transactions']!.map((row) => {
+          ...row,
+          'branch_id': null,
+          'cash_drawer_id': null,
         }).toList(growable: false);
       }
       if (schemaVersion < 12) {
