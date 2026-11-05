@@ -60,7 +60,9 @@ void main() {
   });
 
   test('upgrades a legacy version 19 database without assigning historical rows', () async {
-    final legacy = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    await database.close();
+    database = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    final legacy = database;
     try {
       await legacy.execute('''
         CREATE TABLE schema_migrations (
@@ -159,7 +161,7 @@ void main() {
       expect(await legacy.query('schema_migrations',
         where: 'version = ?', whereArgs: [20]), hasLength(1));
     } finally {
-      await legacy.close();
+      // The shared test teardown closes the replacement in-memory database.
     }
   });
 
