@@ -13,11 +13,13 @@ abstract interface class ProductCatalog {
   Future<List<Product>> all({
     String search = '',
     bool includeInactive = false,
+    int? warehouseId,
   });
 
   Future<void> changeStock({
     required int productId,
     required int quantityDelta,
     required String reason,
+    int? warehouseId,
   });
 }
