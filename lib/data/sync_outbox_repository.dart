@@ -59,8 +59,10 @@ class SyncOutboxRepository {
   final Database _db;
   static const _uuid = Uuid();
 
-  Future<String> ensureDeviceId({DatabaseExecutor? executor}) async {
-    final db = executor ?? _db;
+  Future<String> ensureDeviceId({DatabaseExecutor? executor}) =>
+      ensureDeviceIdFor(executor ?? _db);
+
+  static Future<String> ensureDeviceIdFor(DatabaseExecutor db) async {
     final rows = await db.query(
       'sync_metadata',
       columns: ['value'],
