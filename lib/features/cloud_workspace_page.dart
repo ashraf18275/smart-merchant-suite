@@ -9,6 +9,7 @@ import '../cloud/cloud_business.dart';
 import '../cloud/cloud_location_repository.dart';
 import '../cloud/cloud_workspace_context.dart';
 import '../data/local_database.dart';
+import '../data/local_workspace_context.dart';
 import 'home_dashboard.dart' as local_dashboard;
 import 'cloud_locations_page.dart';
 import 'cloud_location_mapping_page.dart';
@@ -220,11 +221,50 @@ class _CloudWorkspacePageState extends State<CloudWorkspacePage> {
   }
 
   Future<void> _openLocalBusinessData() async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => local_dashboard.HomeDashboard(
+    final selection = _selection;
+    if (selection == null || selection.warehouseId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('اختر فرعًا ومخزنًا نشطين أولًا.'),
+        ),
+      );
+      return;
+    }
+
+    Database? businessDatabase;
+    try {
+      businessDatabase = await openLocalDatabase(
         businessId: widget.business.id,
-      ),
-    ));
+      );
+      final localContext = await LocalWorkspaceContext.resolveFromCloudSelection(
+        database: businessDatabase,
+        businessId: widget.business.id,
+        cloudBranchId: selection.branchId,
+        cloudWarehouseId: selection.warehouseId!,
+      );
+      await businessDatabase.close();
+      businessDatabase = null;
+
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => local_dashboard.HomeDashboard(
+          businessId: widget.business.id,
+          initialBranchId: localContext.branchId,
+          initialWarehouseId: localContext.warehouseId,
+        ),
+      ));
+    } catch (error) {
+      if (businessDatabase != null) await businessDatabase.close();
+      if (!mounted) return;
+      final message = error.toString().contains('local_location_mapping_required')
+          ? 'يجب ربط الفرع والمخزن المحليين بالمقابلين السحابيين من شاشة «ربط الفروع والمخازن» قبل فتح بيانات النشاط.'
+          : error.toString().contains('local_location_mapping_mismatch')
+              ? 'الربط الحالي لا يطابق الفرع والمخزن المختارين. راجع شاشة الربط قبل المتابعة.'
+              : 'تعذر فتح قاعدة بيانات هذا النشاط بأمان. لم يتم استخدام قاعدة بيانات نشاط آخر.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   Future<void> _openMembers() async {
