@@ -271,7 +271,7 @@ void main() {
     expect(cashColumns.map((row) => row['name']), contains('cash_session_id'));
     expect(await database.query('cash_sessions'), isEmpty);
     final index = await database.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_cash_sessions_single_open'",
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_cash_sessions_single_open_drawer'",
     );
     expect(index, hasLength(1));
     expect(await database.query('schema_migrations',
