@@ -22,10 +22,19 @@ import 'purchases_page.dart';
 import 'sales_page.dart';
 
 class HomeDashboard extends StatelessWidget {
-  const HomeDashboard({super.key, this.cloudEnabled = false, this.businessId, this.onOpenCloud});
+  const HomeDashboard({
+    super.key,
+    this.cloudEnabled = false,
+    this.businessId,
+    this.initialBranchId,
+    this.initialWarehouseId,
+    this.onOpenCloud,
+  });
 
   final bool cloudEnabled;
   final String? businessId;
+  final int? initialBranchId;
+  final int? initialWarehouseId;
   final VoidCallback? onOpenCloud;
 
   static const modules = <({IconData icon, String title, String subtitle})>[
@@ -58,15 +67,21 @@ class HomeDashboard extends StatelessWidget {
               sales: SalesApplicationService(SalesRepository(database)),
               warehouseStore: WarehouseRepository(database),
               accountRepository: AccountRepository(database),
+              initialWarehouseId: initialWarehouseId,
             ),
           2 => PurchasesPage(
               purchases: PurchaseRepository(database),
               products: ProductRepository(database),
               warehouses: WarehouseRepository(database),
+              initialWarehouseId: initialWarehouseId,
             ),
           3 => ExpensesPage(repository: ExpenseApplicationService(ExpenseRepository(database))),
           4 => DataTransferPage(database: database),
-          5 => BranchWarehousePage(store: WarehouseRepository(database)),
+          5 => BranchWarehousePage(
+              store: WarehouseRepository(database),
+              initialBranchId: initialBranchId,
+              initialWarehouseId: initialWarehouseId,
+            ),
           6 => AccountsPage(
               accounts: AccountRepository(database),
               purchases: PurchaseRepository(database),
