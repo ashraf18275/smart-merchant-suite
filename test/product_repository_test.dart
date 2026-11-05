@@ -166,6 +166,46 @@ void main() {
     expect((await products.all()).single.stockQuantity, 6000);
   });
 
+  test('scopes product listing and stock adjustment to the selected warehouse', () async {
+    final store = WarehouseRepository(database);
+    final branchId = await store.addBranch(name: 'فرع سياق النشاط');
+    final warehouseId = await store.addWarehouse(
+      branchId: branchId,
+      name: 'مخزن سياق النشاط',
+    );
+    final productId = await products.add(const Product(
+      name: 'منتج حسب المخزن',
+      costMinor: 100,
+      priceMinor: 150,
+      stockQuantity: 3000,
+    ));
+
+    await products.changeStock(
+      productId: productId,
+      quantityDelta: 2000,
+      reason: 'تسوية في المخزن المحدد',
+      warehouseId: warehouseId,
+    );
+
+    final selectedWarehouseProduct =
+        (await products.all(warehouseId: warehouseId)).single;
+    expect(selectedWarehouseProduct.defaultWarehouseStock, 2000);
+    expect(selectedWarehouseProduct.stockQuantity, 5000);
+    expect(
+      (await store.stock(warehouseId: warehouseId))
+          .singleWhere((row) => row.productId == productId)
+          .quantity,
+      2000,
+    );
+    expect(
+      (await store.stock(warehouseId: (await store.warehouses())
+              .firstWhere((item) => item.name == 'المخزن الرئيسي').id))
+          .singleWhere((row) => row.productId == productId)
+          .quantity,
+      3000,
+    );
+  });
+
   test('prevents deactivating branches or warehouses that still contain active stock', () async {
     final store = WarehouseRepository(database);
     final branchId = await store.addBranch(name: 'فرع تجريبي');
