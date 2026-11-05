@@ -2028,7 +2028,8 @@ begin
       'Unauthorized Product',
       'RPC-UNAUTHORIZED',
       1,
-      2
+      2,
+      true
     );
     raise exception 'product permission regression: read-only member created a product';
   exception when insufficient_privilege then
@@ -2046,7 +2047,8 @@ begin
       'Cross Tenant Product',
       'RPC-CROSS-TENANT',
       1,
-      2
+      2,
+      true
     );
     raise exception 'product tenant regression: owner created product in another business';
   exception when insufficient_privilege then
