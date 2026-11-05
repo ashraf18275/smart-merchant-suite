@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_error.dart';
 import '../data/account_repository.dart';
 import '../data/purchase_repository.dart';
+import '../domain/branch.dart';
 import '../domain/payment_method.dart';
 
 /// Local customer and supplier ledgers. Balances are always derived from
@@ -24,6 +25,8 @@ class AccountsPage extends StatefulWidget {
 class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   List<Map<String, Object?>> _suppliers = [];
+  List<Branch> _branches = [];
+  int? _branchId;
   List<Map<String, Object?>> _customers = [];
   List<Map<String, Object?>> _entries = [];
   int? _supplierId;
@@ -87,10 +90,18 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     try {
       final suppliers = await widget.purchases.suppliers();
       final customers = await widget.accounts.customers();
+      final branches = await widget.accounts.branches();
       if (!mounted) return;
       setState(() {
         _suppliers = suppliers;
         _customers = customers;
+        _branches = branches;
+        if (_branchId != null && !branches.any((branch) => branch.id == _branchId)) {
+          _branchId = null;
+        }
+        if (_branchId == null && branches.length == 1) {
+          _branchId = branches.single.id;
+        }
         if (!_suppliers.any((item) => item['id'] == _supplierId)) {
           _supplierId = _suppliers.isEmpty ? null : _suppliers.first['id'] as int;
         }
@@ -282,7 +293,8 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
 
   Future<void> _recordPayment() async {
     final id = _selectedId;
-    if (id == null || _saving) return;
+    final branchId = _branchId;
+    if (id == null || branchId == null || _saving) return;
     var amountText = '';
     var note = '';
     var paymentMethod = PaymentMethod.cash;
@@ -348,11 +360,11 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     try {
       if (isSupplier) {
         await widget.accounts.recordSupplierPayment(
-          supplierId: id, amountMinor: amount, note: note,
+          supplierId: id, amountMinor: amount, branchId: branchId, note: note,
           paymentMethod: selectedPaymentMethod);
       } else {
         await widget.accounts.recordCustomerReceipt(
-          customerId: id, amountMinor: amount, note: note,
+          customerId: id, amountMinor: amount, branchId: branchId, note: note,
           paymentMethod: selectedPaymentMethod);
       }
       await _loadLedger();
@@ -416,6 +428,25 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  Text('فرع تنفيذ الدفعات', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<int>(
+                    initialValue: _branchId,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'اختر الفرع الذي تتم منه الحركة',
+                    ),
+                    items: _branches.map((branch) => DropdownMenuItem<int>(
+                      value: branch.id, child: Text(branch.name),
+                    )).toList(),
+                    onChanged: (value) => setState(() => _branchId = value),
+                  ),
+                  if (_branchId == null)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('اختر الفرع قبل تسجيل سداد أو تحصيل حتى تُسجل الحركة في درج الجهاز الصحيح.'),
+                    ),
+                  const SizedBox(height: 10),
                   DropdownButtonFormField<int>(
                     key: ValueKey('account-${_tabs.index}-${_selectedId ?? 0}'),
                     initialValue: _selectedId,
@@ -461,7 +492,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                   ),
                   const SizedBox(height: 8),
                   FilledButton.icon(
-                    onPressed: _selectedId == null || _balance <= 0 || _saving
+                    onPressed: _selectedId == null || _branchId == null || _balance <= 0 || _saving
                         ? null : _recordPayment,
                     icon: _saving
                         ? const SizedBox(width: 18, height: 18,
