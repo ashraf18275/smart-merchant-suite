@@ -61,6 +61,7 @@ class HomeDashboard extends StatelessWidget {
           0 => ProductsPage(
               repository: ProductApplicationService(ProductRepository(database)),
               catalog: ProductRepository(database),
+              initialWarehouseId: initialWarehouseId,
             ),
           1 => SalesPage(
               products: ProductApplicationService(ProductRepository(database)),
