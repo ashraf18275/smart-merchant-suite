@@ -136,6 +136,39 @@ void main() {
     expect(retryBatch.any((event) => event.eventId == childId), isFalse);
   });
 
+  test('a conflicted parent remains a dependency anchor for later local events', () async {
+    final parentId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'product',
+      localEntityId: '45',
+      action: 'create',
+      payload: {'name': 'ممحاة'},
+    );
+    final parent = (await outbox.claimPendingBatch(businessId: 'business-a')).single;
+    await outbox.recordConflict(
+      eventId: parent.eventId,
+      conflictType: 'duplicate_sku',
+    );
+
+    final childId = await outbox.enqueue(
+      businessId: 'business-a',
+      entityType: 'inventory_movement',
+      localEntityId: 'movement-5',
+      action: 'adjust',
+      payload: {'local_product_id': '45'},
+      dependsOnEventId: parentId,
+    );
+
+    expect(await outbox.claimPendingBatch(businessId: 'business-a'), isEmpty);
+    final child = (await database.query(
+      'sync_outbox',
+      where: 'event_id = ?',
+      whereArgs: [childId],
+    )).single;
+    expect(child['status'], 'pending');
+    expect(child['depends_on_event_id'], parentId);
+  });
+
   test('dependency cannot cross tenant boundaries or point to a missing event', () async {
     final parentId = await outbox.enqueue(
       businessId: 'business-a',

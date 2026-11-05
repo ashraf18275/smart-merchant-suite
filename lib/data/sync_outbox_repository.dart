@@ -124,7 +124,7 @@ class SyncOutboxRepository {
   }
 
   /// Returns the latest unfinished event for this local entity in the current tenant.
-  /// Conflict events are excluded because they require an explicit resolution path.
+  /// Conflicts remain dependency anchors until explicitly resolved.
   Future<String?> latestUnfinishedEventIdForCurrentBusiness({
     required DatabaseExecutor executor,
     required String entityType,
@@ -147,7 +147,7 @@ class SyncOutboxRepository {
     final rows = await executor.query(
       'sync_outbox',
       columns: ['event_id'],
-      where: "business_id = ? AND entity_type = ? AND local_entity_id = ? AND status IN ('pending', 'processing', 'failed')",
+      where: "business_id = ? AND entity_type = ? AND local_entity_id = ? AND status IN ('pending', 'processing', 'failed', 'conflict')",
       whereArgs: [businessId, entityType, localEntityId],
       orderBy: 'created_at DESC, event_id DESC',
       limit: 1,
@@ -188,9 +188,6 @@ class SyncOutboxRepository {
       if (parents.isEmpty) throw StateError('Outbox dependency does not exist');
       if (parents.single['business_id'] != businessId) {
         throw StateError('Outbox dependency belongs to another business');
-      }
-      if (parents.single['status'] == 'conflict') {
-        throw StateError('A conflicted event cannot be a dependency');
       }
     }
     final now = DateTime.now().toUtc().toIso8601String();
