@@ -280,11 +280,11 @@ class PurchaseRepository {
       }
 
       final outbox = SyncOutboxRepository(_db);
-      final dependencies = await outbox.latestUnfinishedEventIdsForCurrentBusiness(
+      final dependencies = [...await outbox.latestUnfinishedEventIdsForCurrentBusiness(
         executor: txn,
         entityType: 'product',
         localEntityIds: prepared.map((item) => item['productId']!.toString()).toList(),
-      );
+      )];
       if (cashSessionId != null) {
         final sessionDependency = await outbox.latestUnfinishedEventIdForCurrentBusiness(
           executor: txn,
