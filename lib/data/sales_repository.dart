@@ -213,6 +213,15 @@ class SalesRepository implements SalesStore {
         entityType: 'product',
         localEntityIds: quantities.keys.map((id) => id.toString()).toList(),
       )];
+      for (final productId in quantities.keys) {
+        dependencies.addAll(
+          await outbox.unfinishedEventIdsReferencingPayload(
+            executor: txn,
+            payloadKey: 'local_product_id',
+            payloadValue: productId.toString(),
+          ),
+        );
+      }
       if (cashSessionId != null) {
         final sessionDependency = await outbox.latestUnfinishedEventIdForCurrentBusiness(
           executor: txn,
