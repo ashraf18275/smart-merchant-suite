@@ -691,6 +691,57 @@ class SyncOutboxRepository {
     return rows.isEmpty ? null : rows.single['cursor_value'] as String?;
   }
 
+  /// Finds unfinished events whose JSON payload references a local entity.
+  /// Used to keep a cash session open until its queued movements are pushed.
+  Future<List<String>> unfinishedEventIdsReferencingPayload({
+    required DatabaseExecutor executor,
+    required String payloadKey,
+    required String payloadValue,
+  }) async {
+    if (payloadKey.trim().isEmpty || payloadValue.trim().isEmpty) {
+      throw ArgumentError('Payload reference key and value are required');
+    }
+    final identityRows = await executor.query(
+      'sync_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['database_business_id'],
+      limit: 1,
+    );
+    if (identityRows.isEmpty) return const [];
+    final businessId = (identityRows.single['value']! as String).trim().toLowerCase();
+    if (!RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    return _db.rawQuery(
+      "SELECT COUNT(*) AS count FROM sync_outbox WHERE status IN ('pending', 'failed', 'processing') AND (? IS NULL OR business_id = ?)",
+      [businessId, businessId],
+    ).then((rows) => rows.single['count']! as int);
+  }
+}
+,
+    ).hasMatch(businessId)) {
+      throw StateError('invalid_database_business_identity');
+    }
+    final rows = await executor.query(
+      'sync_outbox',
+      columns: ['event_id', 'payload_json'],
+      where: "business_id = ? AND status IN ('pending', 'processing', 'failed', 'conflict')",
+      whereArgs: [businessId],
+      orderBy: 'created_at ASC, rowid ASC',
+    );
+    final matches = <String>[];
+    for (final row in rows) {
+      final decoded = jsonDecode(row['payload_json']! as String);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Sync event payload must be a JSON object');
+      }
+      if (decoded[payloadKey]?.toString() == payloadValue) {
+        matches.add(row['event_id']! as String);
+      }
+    }
+    return matches;
+  }
+
   Future<int> pendingCount({String? businessId}) async {
     return _db.rawQuery(
       "SELECT COUNT(*) AS count FROM sync_outbox WHERE status IN ('pending', 'failed', 'processing') AND (? IS NULL OR business_id = ?)",
