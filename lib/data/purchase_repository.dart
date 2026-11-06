@@ -4,6 +4,7 @@ import '../core/app_error.dart';
 import 'audit_cash_writer.dart';
 import '../core/quantity.dart';
 import '../domain/payment_method.dart';
+import 'sync_outbox_repository.dart';
 
 class PurchaseLineInput {
   const PurchaseLineInput({
@@ -104,6 +105,34 @@ class PurchaseRepository {
       ''', [warehouseId]);
       if (warehouses.isEmpty) throw AppException('المخزن المحدد غير موجود أو غير نشط');
       final branchId = warehouses.single['branch_id']! as int;
+      final cloudIdentity = await txn.query(
+        'sync_metadata',
+        columns: ['value'],
+        where: 'key = ?',
+        whereArgs: ['database_business_id'],
+        limit: 1,
+      );
+      final isCloudBusiness = cloudIdentity.isNotEmpty;
+      int? cashDrawerId;
+      int? cashSessionId;
+      if (isCloudBusiness && paidMinor > 0 && paymentMethod == PaymentMethod.cash) {
+        final drawer = await ensureCashDrawerForCurrentDevice(
+          txn,
+          branchId: branchId,
+        );
+        cashDrawerId = drawer['id']! as int;
+        final sessions = await txn.query(
+          'cash_sessions',
+          columns: ['id'],
+          where: "branch_id = ? AND cash_drawer_id = ? AND status = 'open'",
+          whereArgs: [branchId, cashDrawerId],
+          limit: 1,
+        );
+        if (sessions.isEmpty) {
+          throw AppException('افتح وردية الصندوق لهذا الجهاز قبل مزامنة سداد المشتريات نقدًا');
+        }
+        cashSessionId = sessions.single['id']! as int;
+      }
 
       final prepared = <Map<String, int>>[];
       final seen = <int>{};
@@ -193,6 +222,8 @@ class PurchaseRepository {
         createdAt: stamp,
         paymentMethod: paymentMethod,
         branchId: branchId,
+        cashSessionId: cashSessionId,
+        cashDrawerId: cashDrawerId,
       );
       for (final item in prepared) {
         final productId = item['productId']!;
@@ -247,6 +278,42 @@ class PurchaseRepository {
           'created_at': stamp,
         });
       }
+
+      final outbox = SyncOutboxRepository(_db);
+      final dependencies = await outbox.latestUnfinishedEventIdsForCurrentBusiness(
+        executor: txn,
+        entityType: 'product',
+        localEntityIds: prepared.map((item) => item['productId']!.toString()).toList(),
+      );
+      if (cashSessionId != null) {
+        final sessionDependency = await outbox.latestUnfinishedEventIdForCurrentBusiness(
+          executor: txn,
+          entityType: 'cash_session',
+          localEntityId: cashSessionId.toString(),
+        );
+        if (sessionDependency != null) dependencies.add(sessionDependency);
+      }
+      await outbox.enqueueForCurrentBusiness(
+        executor: txn,
+        entityType: 'purchase',
+        localEntityId: purchaseId.toString(),
+        action: 'create',
+        payload: {
+          'payload_schema_version': 1,
+          'local_branch_id': branchId,
+          'local_warehouse_id': warehouseId,
+          'local_supplier_id': supplierId,
+          'paid_minor': paidMinor,
+          'payment_method': paymentMethod,
+          'local_cash_session_id': cashSessionId,
+          'items': prepared.map((item) => {
+            'local_product_id': item['productId'],
+            'quantity_scaled': item['quantity'],
+            'unit_cost_minor': item['unitCost'],
+          }).toList(),
+        },
+        dependsOnEventIds: dependencies,
+      );
       return purchaseId;
     });
   }
