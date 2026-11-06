@@ -81,6 +81,10 @@ void main() {
       'sync_outbox',
       where: "entity_type = 'cash_session' AND action = 'create'",
     )).single;
+    final openingStockEvent = (await database.query(
+      'sync_outbox',
+      where: "entity_type = 'inventory_movement' AND action = 'adjust'",
+    )).single;
 
     final saleId = await sales.createSale(
       quantities: {productId: 2000},
@@ -105,7 +109,7 @@ void main() {
     expect(event['payload_json'], contains('"unit_cost_minor":700'));
     expect(
       await dependenciesOf(event['event_id']! as String),
-      {productEvent['event_id'], sessionEvent['event_id']},
+      {productEvent['event_id'], openingStockEvent['event_id'], sessionEvent['event_id']},
     );
   });
 
@@ -122,6 +126,20 @@ void main() {
     final sessionEvent = (await database.query(
       'sync_outbox',
       where: "entity_type = 'cash_session' AND action = 'create'",
+    )).single;
+    final openingStockEvent = (await database.query(
+      'sync_outbox',
+      where: "entity_type = 'inventory_movement' AND action = 'adjust'",
+    )).single;
+    final priorSaleId = await sales.createSale(
+      quantities: {productId: 1000},
+      paidMinor: 1500,
+      warehouseId: warehouseId,
+    );
+    final priorSaleEvent = (await database.query(
+      'sync_outbox',
+      where: 'entity_type = ? AND local_entity_id = ?',
+      whereArgs: ['sale', priorSaleId.toString()],
     )).single;
 
     final purchaseId = await purchases.createPurchase(
@@ -151,7 +169,7 @@ void main() {
     expect(event['payload_json'], contains('"quantity_scaled":1000'));
     expect(
       await dependenciesOf(event['event_id']! as String),
-      {productEvent['event_id'], sessionEvent['event_id']},
+      {productEvent['event_id'], openingStockEvent['event_id'], sessionEvent['event_id'], priorSaleEvent['event_id']},
     );
   });
 
