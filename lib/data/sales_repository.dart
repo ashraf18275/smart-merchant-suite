@@ -208,11 +208,11 @@ class SalesRepository implements SalesStore {
       }
 
       final outbox = SyncOutboxRepository(_db);
-      final dependencies = await outbox.latestUnfinishedEventIdsForCurrentBusiness(
+      final dependencies = [...await outbox.latestUnfinishedEventIdsForCurrentBusiness(
         executor: txn,
         entityType: 'product',
         localEntityIds: quantities.keys.map((id) => id.toString()).toList(),
-      );
+      )];
       if (cashSessionId != null) {
         final sessionDependency = await outbox.latestUnfinishedEventIdForCurrentBusiness(
           executor: txn,
@@ -237,6 +237,8 @@ class SalesRepository implements SalesStore {
           'items': items.map((item) => {
             'local_product_id': item['productId'],
             'quantity_scaled': item['quantity'],
+            'unit_price_minor': item['price'],
+            'unit_cost_minor': item['cost'],
           }).toList(),
         },
         dependsOnEventIds: dependencies,
