@@ -75,6 +75,9 @@ jobs:
       - name: Run PostgreSQL security regression tests
         run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/security_regression.sql
 
+      - name: Verify branch-scoped cloud expenses
+        run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/cloud_expense_branch_scope.sql
+
       - name: Verify cloud product stock read permissions
         run: psql -h localhost -U postgres -d smart_merchant_test -v ON_ERROR_STOP=1 -f backend/supabase/tests/cloud_product_stock_read_permission.sql
 
