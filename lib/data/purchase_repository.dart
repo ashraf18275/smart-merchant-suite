@@ -285,6 +285,15 @@ class PurchaseRepository {
         entityType: 'product',
         localEntityIds: prepared.map((item) => item['productId']!.toString()).toList(),
       )];
+      for (final productId in prepared.map((item) => item['productId']!)) {
+        dependencies.addAll(
+          await outbox.unfinishedEventIdsReferencingPayload(
+            executor: txn,
+            payloadKey: 'local_product_id',
+            payloadValue: productId.toString(),
+          ),
+        );
+      }
       if (cashSessionId != null) {
         final sessionDependency = await outbox.latestUnfinishedEventIdForCurrentBusiness(
           executor: txn,
