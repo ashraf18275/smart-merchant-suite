@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
+import 'package:smart_merchant_suite/data/cashbook_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/domain/payment_method.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -9,6 +10,8 @@ void main() {
   late Database db;
   late ExpenseRepository expenses;
   late int branchId;
+  late int drawerId;
+  late int sessionId;
 
   setUpAll(sqfliteFfiInit);
   setUp(() async {
@@ -16,8 +19,35 @@ void main() {
     await createLocalSchema(db);
     expenses = ExpenseRepository(db);
     branchId = (await db.query('branches', columns: ['id'], limit: 1)).single['id']! as int;
+    final cashbook = CashbookRepository(db);
+    drawerId = (await cashbook.ensureDrawer(branchId: branchId))['id']! as int;
+    sessionId = await cashbook.openSession(
+      branchId: branchId,
+      cashDrawerId: drawerId,
+      openingBalanceMinor: 0,
+    );
   });
   tearDown(() async => db.close());
+
+  test('requires an open drawer session before recording a cash expense', () async {
+    await CashbookRepository(db).closeSession(
+      branchId: branchId,
+      cashDrawerId: drawerId,
+      sessionId: sessionId,
+      countedBalanceMinor: 0,
+    );
+    await expectLater(
+      expenses.add(
+        description: 'مصروف نقدي',
+        category: 'تشغيل',
+        amountMinor: 100,
+        branchId: branchId,
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(await db.query('expenses'), isEmpty);
+    expect(await db.query('payment_records'), isEmpty);
+  });
 
   test('records a valid expense with trimmed text', () async {
     final id = await expenses.add(
