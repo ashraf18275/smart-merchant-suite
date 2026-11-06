@@ -717,8 +717,22 @@ void main() {
     await database.update('sales', {'created_at': '2025-01-10T12:00:00.000Z'});
     await database.update('sale_items', {'quantity': 2000});
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
-    await expenses.add(description: 'مصروف داخل الفترة', category: 'أخرى', amountMinor: 300, branchId: await mainBranchId());
-    await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700, branchId: await mainBranchId());
+    final expenseBranchId = await mainBranchId();
+    final cashbook = CashbookRepository(database);
+    final expenseDrawerId =
+        (await cashbook.ensureDrawer(branchId: expenseBranchId))['id']! as int;
+    await cashbook.openSession(
+      branchId: expenseBranchId,
+      cashDrawerId: expenseDrawerId,
+      openingBalanceMinor: 0,
+    );
+    await expenses.add(
+      description: 'مصروف داخل الفترة',
+      category: 'أخرى',
+      amountMinor: 300,
+      branchId: expenseBranchId,
+    );
+    await expenses.add(description: 'مصروف خارج الفترة', category: 'أخرى', amountMinor: 700, branchId: expenseBranchId);
     await database.update('expenses', {'created_at': '2025-01-10T09:00:00.000Z'},
       where: 'description = ?', whereArgs: ['مصروف داخل الفترة']);
     await database.update('expenses', {'created_at': '2025-01-11T09:00:00.000Z'},
