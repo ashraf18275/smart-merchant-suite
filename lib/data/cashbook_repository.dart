@@ -2,6 +2,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../domain/branch.dart';
 import 'audit_cash_writer.dart';
+import 'sync_outbox_repository.dart';
 
 class CashbookRepository {
   CashbookRepository(this._db);
@@ -79,6 +80,7 @@ class CashbookRepository {
         throw StateError('توجد وردية مفتوحة بالفعل على درج هذا الجهاز');
       }
       final stamp = DateTime.now().toUtc().toIso8601String();
+      final deviceId = drawer['device_id']! as String;
       final id = await txn.insert('cash_sessions', {
         'opened_at': stamp,
         'opening_balance_minor': openingBalanceMinor,
@@ -86,8 +88,23 @@ class CashbookRepository {
         'status': 'open',
         'branch_id': branchId,
         'cash_drawer_id': cashDrawerId,
-        'device_id': drawer['device_id'],
+        'device_id': deviceId,
       });
+      final outbox = SyncOutboxRepository(_db);
+      await outbox.enqueueForCurrentBusiness(
+        executor: txn,
+        entityType: 'cash_session',
+        localEntityId: id.toString(),
+        action: 'create',
+        payload: {
+          'payload_schema_version': 1,
+          'local_branch_id': branchId,
+          'local_cash_drawer_id': cashDrawerId,
+          'device_id': deviceId,
+          'opening_balance_minor': openingBalanceMinor,
+          'note': _optional(note),
+        },
+      );
       await writeAuditEvent(txn,
         action: 'cash_session_opened',
         entityType: 'cash_session',
@@ -130,16 +147,54 @@ class CashbookRepository {
           incoming - outgoing;
       final difference = countedBalanceMinor - expected;
       final stamp = DateTime.now().toUtc().toIso8601String();
+      final cleanNote = _optional(note);
       await txn.update('cash_sessions', {
         'closed_at': stamp,
         'expected_balance_minor': expected,
         'counted_balance_minor': countedBalanceMinor,
         'difference_minor': difference,
-        'closing_note': _optional(note),
+        'closing_note': cleanNote,
         'status': 'closed',
       }, where: "id = ? AND branch_id = ? AND cash_drawer_id = ? AND status = 'open'",
           whereArgs: [sessionId, branchId, cashDrawerId]);
-      final cleanNote = _optional(note);
+
+      final outbox = SyncOutboxRepository(_db);
+      final pendingOpenEvent = await outbox.latestUnfinishedEventIdForCurrentBusiness(
+        executor: txn,
+        entityType: 'cash_session',
+        localEntityId: sessionId.toString(),
+      );
+      final sessionMapping = await txn.query(
+        'sync_entity_map',
+        columns: ['remote_entity_id'],
+        where: 'entity_type = ? AND local_entity_id = ? AND business_id = (SELECT value FROM sync_metadata WHERE key = ?)',
+        whereArgs: ['cash_session', sessionId.toString(), 'database_business_id'],
+        limit: 1,
+      );
+      if (pendingOpenEvent != null || sessionMapping.isNotEmpty) {
+        final pendingMovements = await outbox.unfinishedEventIdsReferencingPayload(
+          executor: txn,
+          payloadKey: 'local_cash_session_id',
+          payloadValue: sessionId.toString(),
+        );
+        await outbox.enqueueForCurrentBusiness(
+          executor: txn,
+          entityType: 'cash_session',
+          localEntityId: sessionId.toString(),
+          action: 'update',
+          payload: {
+            'payload_schema_version': 1,
+            'local_branch_id': branchId,
+            'local_cash_drawer_id': cashDrawerId,
+            'counted_balance_minor': countedBalanceMinor,
+            'note': cleanNote,
+          },
+          dependsOnEventIds: [
+            if (pendingOpenEvent != null) pendingOpenEvent,
+            ...pendingMovements,
+          ],
+        );
+      }
       await writeAuditEvent(txn,
         action: 'cash_session_closed',
         entityType: 'cash_session',
