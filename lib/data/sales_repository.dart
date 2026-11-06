@@ -7,6 +7,7 @@ import '../domain/sale_record.dart';
 import '../core/quantity.dart';
 import '../domain/sale_return_line.dart';
 import '../domain/payment_method.dart';
+import 'sync_outbox_repository.dart';
 
 class SalesRepository implements SalesStore {
   SalesRepository(this._db);
@@ -53,6 +54,34 @@ class SalesRepository implements SalesStore {
         throw AppException('المخزن المحدد أو الفرع التابع له غير موجود أو غير نشط');
       }
       final branchId = selectedWarehouses.single['branch_id']! as int;
+      final cloudIdentity = await txn.query(
+        'sync_metadata',
+        columns: ['value'],
+        where: 'key = ?',
+        whereArgs: ['database_business_id'],
+        limit: 1,
+      );
+      final isCloudBusiness = cloudIdentity.isNotEmpty;
+      int? cashDrawerId;
+      int? cashSessionId;
+      if (isCloudBusiness && paidMinor > 0 && paymentMethod == PaymentMethod.cash) {
+        final drawer = await ensureCashDrawerForCurrentDevice(
+          txn,
+          branchId: branchId,
+        );
+        cashDrawerId = drawer['id']! as int;
+        final sessions = await txn.query(
+          'cash_sessions',
+          columns: ['id'],
+          where: "branch_id = ? AND cash_drawer_id = ? AND status = 'open'",
+          whereArgs: [branchId, cashDrawerId],
+          limit: 1,
+        );
+        if (sessions.isEmpty) {
+          throw AppException('افتح وردية الصندوق لهذا الجهاز قبل مزامنة تحصيل البيع النقدي');
+        }
+        cashSessionId = sessions.single['id']! as int;
+      }
       final items = <Map<String, int>>[];
       var total = 0;
       for (final entry in quantities.entries) {
@@ -144,6 +173,8 @@ class SalesRepository implements SalesStore {
         createdAt: createdAt,
         paymentMethod: paymentMethod,
         branchId: branchId,
+        cashSessionId: cashSessionId,
+        cashDrawerId: cashDrawerId,
       );
       for (final item in items) {
         final productId = item['productId']!;
@@ -175,6 +206,41 @@ class SalesRepository implements SalesStore {
           'created_at': createdAt,
         });
       }
+
+      final outbox = SyncOutboxRepository(_db);
+      final dependencies = await outbox.latestUnfinishedEventIdsForCurrentBusiness(
+        executor: txn,
+        entityType: 'product',
+        localEntityIds: quantities.keys.map((id) => id.toString()).toList(),
+      );
+      if (cashSessionId != null) {
+        final sessionDependency = await outbox.latestUnfinishedEventIdForCurrentBusiness(
+          executor: txn,
+          entityType: 'cash_session',
+          localEntityId: cashSessionId.toString(),
+        );
+        if (sessionDependency != null) dependencies.add(sessionDependency);
+      }
+      await outbox.enqueueForCurrentBusiness(
+        executor: txn,
+        entityType: 'sale',
+        localEntityId: saleId.toString(),
+        action: 'create',
+        payload: {
+          'payload_schema_version': 1,
+          'local_branch_id': branchId,
+          'local_warehouse_id': warehouseId,
+          'local_customer_id': customerId,
+          'paid_minor': paidMinor,
+          'payment_method': paymentMethod,
+          'local_cash_session_id': cashSessionId,
+          'items': items.map((item) => {
+            'local_product_id': item['productId'],
+            'quantity_scaled': item['quantity'],
+          }).toList(),
+        },
+        dependsOnEventIds: dependencies,
+      );
       return saleId;
     });
   }
