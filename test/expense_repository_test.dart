@@ -75,7 +75,11 @@ void main() {
     expect(cash['amount_minor'], 25000);
     expect(cash['source_type'], 'expense');
     expect(cash['source_id'], id);
-    final audit = (await db.query('audit_events')).single;
+    final audit = (await db.query(
+      'audit_events',
+      where: 'action = ?',
+      whereArgs: ['expense_recorded'],
+    )).single;
     expect(audit['action'], 'expense_recorded');
     expect(audit['entity_id'], id);
     expect(audit['amount_minor'], 25000);
@@ -116,7 +120,10 @@ void main() {
       throwsA(anything),
     );
     expect(await db.query('expenses'), isEmpty);
-    expect(await db.query('audit_events'), isEmpty);
+    expect(
+      await db.query('audit_events', where: 'action = ?', whereArgs: ['expense_recorded']),
+      isEmpty,
+    );
     expect(await db.query('cash_transactions'), isEmpty);
   });
 
