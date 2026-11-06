@@ -4,6 +4,7 @@ import 'package:smart_merchant_suite/application/services/product_application_se
 import 'package:smart_merchant_suite/application/services/sales_application_service.dart';
 import 'package:smart_merchant_suite/core/app_error.dart';
 import 'package:smart_merchant_suite/data/expense_repository.dart';
+import 'package:smart_merchant_suite/data/cashbook_repository.dart';
 import 'package:smart_merchant_suite/data/account_repository.dart';
 import 'package:smart_merchant_suite/data/migrations/local_schema.dart';
 import 'package:smart_merchant_suite/data/product_repository.dart';
@@ -632,7 +633,21 @@ void main() {
       warehouseId: (await WarehouseRepository(database).warehouses()).first.id,
     );
     final expenses = ExpenseApplicationService(ExpenseRepository(database));
-    await expenses.add(description: 'إيجار المحل', category: 'إيجار', amountMinor: 4000, branchId: await mainBranchId());
+    final expenseBranchId = await mainBranchId();
+    final cashbook = CashbookRepository(database);
+    final expenseDrawerId =
+        (await cashbook.ensureDrawer(branchId: expenseBranchId))['id']! as int;
+    await cashbook.openSession(
+      branchId: expenseBranchId,
+      cashDrawerId: expenseDrawerId,
+      openingBalanceMinor: 0,
+    );
+    await expenses.add(
+      description: 'إيجار المحل',
+      category: 'إيجار',
+      amountMinor: 4000,
+      branchId: expenseBranchId,
+    );
     final branchId = await mainBranchId();
     final s = await expenses.summary(branchId: branchId);
     expect(s.salesMinor, 1800);
