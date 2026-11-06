@@ -7,6 +7,7 @@ import '../domain/expense_record.dart';
 import '../domain/profit_summary.dart';
 import '../domain/payment_method.dart';
 import 'audit_cash_writer.dart';
+import 'sync_outbox_repository.dart';
 
 class ExpenseRepository implements ExpenseStore {
   ExpenseRepository(this._db);
@@ -66,6 +67,29 @@ class ExpenseRepository implements ExpenseStore {
           limit: 1);
       if (branch.isEmpty) throw const AppException('اختر فرعًا نشطًا صالحًا');
 
+      int? cashDrawerId;
+      int? cashSessionId;
+      if (paymentMethod == PaymentMethod.cash) {
+        final drawer = await ensureCashDrawerForCurrentDevice(
+          txn,
+          branchId: branchId,
+        );
+        cashDrawerId = drawer['id']! as int;
+        final sessions = await txn.query(
+          'cash_sessions',
+          columns: ['id'],
+          where: "branch_id = ? AND cash_drawer_id = ? AND status = 'open'",
+          whereArgs: [branchId, cashDrawerId],
+          limit: 1,
+        );
+        if (sessions.isEmpty) {
+          throw const AppException(
+            'افتح وردية الصندوق لهذا الجهاز قبل تسجيل مصروف نقدي',
+          );
+        }
+        cashSessionId = sessions.single['id']! as int;
+      }
+
       final stamp = DateTime.now().toUtc().toIso8601String();
       final id = await txn.insert('expenses', {
         'description': d,
@@ -90,7 +114,35 @@ class ExpenseRepository implements ExpenseStore {
           note: '$c — $d',
           createdAt: stamp,
           paymentMethod: paymentMethod,
-          branchId: branchId);
+          branchId: branchId,
+          cashSessionId: cashSessionId,
+          cashDrawerId: cashDrawerId);
+
+      final outbox = SyncOutboxRepository(_db);
+      final sessionDependency = cashSessionId == null
+          ? null
+          : await outbox.latestUnfinishedEventIdForCurrentBusiness(
+              executor: txn,
+              entityType: 'cash_session',
+              localEntityId: cashSessionId.toString(),
+            );
+      await outbox.enqueueForCurrentBusiness(
+        executor: txn,
+        entityType: 'expense',
+        localEntityId: id.toString(),
+        action: 'create',
+        payload: {
+          'payload_schema_version': 1,
+          'local_branch_id': branchId,
+          'description': d,
+          'category': c,
+          'amount_minor': amountMinor,
+          'payment_method': paymentMethod,
+          if (cashSessionId != null)
+            'local_cash_session_id': cashSessionId,
+        },
+        dependsOnEventId: sessionDependency,
+      );
       return id;
     });
   }
