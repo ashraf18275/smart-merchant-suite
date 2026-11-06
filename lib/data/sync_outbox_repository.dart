@@ -709,23 +709,19 @@ class SyncOutboxRepository {
       limit: 1,
     );
     if (identityRows.isEmpty) return const [];
-    final businessId = (identityRows.single['value']! as String).trim().toLowerCase();
-    if (!RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-    return _db.rawQuery(
-      "SELECT COUNT(*) AS count FROM sync_outbox WHERE status IN ('pending', 'failed', 'processing') AND (? IS NULL OR business_id = ?)",
-      [businessId, businessId],
-    ).then((rows) => rows.single['count']! as int);
-  }
-}
-,
-    ).hasMatch(businessId)) {
+    final businessId =
+        (identityRows.single['value']! as String).trim().toLowerCase();
+    final isUuid = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    ).hasMatch(businessId);
+    if (!isUuid) {
       throw StateError('invalid_database_business_identity');
     }
     final rows = await executor.query(
       'sync_outbox',
       columns: ['event_id', 'payload_json'],
-      where: "business_id = ? AND status IN ('pending', 'processing', 'failed', 'conflict')",
+      where:
+          "business_id = ? AND status IN ('pending', 'processing', 'failed', 'conflict')",
       whereArgs: [businessId],
       orderBy: 'created_at ASC, rowid ASC',
     );
