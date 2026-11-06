@@ -731,7 +731,14 @@ class SyncOutboxRepository {
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Sync event payload must be a JSON object');
       }
-      if (decoded[payloadKey]?.toString() == payloadValue) {
+      var matchesReference = decoded[payloadKey]?.toString() == payloadValue;
+      final items = decoded['items'];
+      if (!matchesReference && items is List) {
+        matchesReference = items.any((item) =>
+            item is Map<String, dynamic> &&
+            item[payloadKey]?.toString() == payloadValue);
+      }
+      if (matchesReference) {
         matches.add(row['event_id']! as String);
       }
     }
